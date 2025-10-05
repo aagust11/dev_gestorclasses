@@ -91,23 +91,64 @@ function ensureClassEntry(entryId) {
     return state.classEntries[entryId];
 }
 
-function ensureStudentAnnotation(entry, studentId) {
+function ensureStudentAnnotation(entry, studentId, entryId = null) {
     if (!entry.annotations[studentId]) {
         entry.annotations[studentId] = createEmptyStudentAnnotation();
         return entry.annotations[studentId];
     }
 
-    if (typeof entry.annotations[studentId] === 'string') {
-        entry.annotations[studentId] = normalizeStudentAnnotation(entry.annotations[studentId]);
+    if (typeof entry.annotations[studentId] === 'string' || typeof entry.annotations[studentId] === 'object') {
+        entry.annotations[studentId] = normalizeStudentAnnotation(entry.annotations[studentId], entryId);
         return entry.annotations[studentId];
     }
 
     const current = entry.annotations[studentId];
-    current.note = typeof current.note === 'string' ? current.note : '';
     current.attendance = current.attendance || null;
     current.positives = Array.isArray(current.positives) ? current.positives : [];
     current.incidents = Array.isArray(current.incidents) ? current.incidents : [];
+    current.comments = Array.isArray(current.comments) ? current.comments : [];
     return current;
+}
+
+function createAnnotationRecord(content, entryId) {
+    return {
+        id: crypto.randomUUID(),
+        content,
+        createdAt: new Date().toISOString(),
+        entryId
+    };
+}
+
+function handleRecordEdit(array, recordId, result) {
+    if (!result || !recordId) return false;
+
+    if (result.action === 'delete') {
+        const next = array.filter(record => record.id !== recordId);
+        if (next.length !== array.length) {
+            array.splice(0, array.length, ...next);
+            return true;
+        }
+        return false;
+    }
+
+    if (result.action === 'confirm') {
+        if (!result.value) {
+            const next = array.filter(record => record.id !== recordId);
+            if (next.length !== array.length) {
+                array.splice(0, array.length, ...next);
+                return true;
+            }
+            return false;
+        }
+
+        const record = array.find(item => item.id === recordId);
+        if (record && record.content !== result.value) {
+            record.content = result.value;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 export const actionHandlers = {
@@ -421,12 +462,65 @@ export const actionHandlers = {
             saveState();
         }
     },
-    'edit-session-annotation': (id, element) => {
-        const { entryId, studentId } = element.dataset;
+    'edit-positive-record': async (id, element) => {
+        const { entryId, studentId, recordId } = element.dataset;
+        if (!entryId || !studentId || !recordId) return;
         const entry = ensureClassEntry(entryId);
-        const studentAnnotation = ensureStudentAnnotation(entry, studentId);
-        studentAnnotation.note = element.value;
-        saveState();
+        const studentAnnotation = ensureStudentAnnotation(entry, studentId, entryId);
+        const targetRecord = studentAnnotation.positives.find(record => record.id === recordId);
+        if (!targetRecord) return;
+
+        const result = await showTextInputModal({
+            title: t('edit_positive_record'),
+            label: t('positive_record_prompt'),
+            defaultValue: targetRecord.content,
+            confirmLabel: t('modal_save'),
+            allowDelete: true
+        });
+
+        if (handleRecordEdit(studentAnnotation.positives, recordId, result)) {
+            saveState();
+        }
+    },
+    'edit-incident-record': async (id, element) => {
+        const { entryId, studentId, recordId } = element.dataset;
+        if (!entryId || !studentId || !recordId) return;
+        const entry = ensureClassEntry(entryId);
+        const studentAnnotation = ensureStudentAnnotation(entry, studentId, entryId);
+        const targetRecord = studentAnnotation.incidents.find(record => record.id === recordId);
+        if (!targetRecord) return;
+
+        const result = await showTextInputModal({
+            title: t('edit_incident_record'),
+            label: t('incident_record_prompt'),
+            defaultValue: targetRecord.content,
+            confirmLabel: t('modal_save'),
+            allowDelete: true
+        });
+
+        if (handleRecordEdit(studentAnnotation.incidents, recordId, result)) {
+            saveState();
+        }
+    },
+    'edit-comment-record': async (id, element) => {
+        const { entryId, studentId, recordId } = element.dataset;
+        if (!entryId || !studentId || !recordId) return;
+        const entry = ensureClassEntry(entryId);
+        const studentAnnotation = ensureStudentAnnotation(entry, studentId, entryId);
+        const targetRecord = studentAnnotation.comments.find(record => record.id === recordId);
+        if (!targetRecord) return;
+
+        const result = await showTextInputModal({
+            title: t('edit_comment_record'),
+            label: t('comment_record_prompt'),
+            defaultValue: targetRecord.content,
+            confirmLabel: t('modal_save'),
+            allowDelete: true
+        });
+
+        if (handleRecordEdit(studentAnnotation.comments, recordId, result)) {
+            saveState();
+        }
     },
     'set-student-timeline-filter': (id, element) => {
         const { filter } = element.dataset;
@@ -955,20 +1049,12 @@ export const actionHandlers = {
         entry.completed = element.value;
         saveState();
     },
-    'annotation-change': (id, element) => {
-        const { studentId } = element.dataset;
-        const entryId = `${state.selectedActivity.id}_${state.selectedActivity.date}`;
-        const entry = ensureClassEntry(entryId);
-        const studentAnnotation = ensureStudentAnnotation(entry, studentId);
-        studentAnnotation.note = element.value;
-        saveState();
-    },
     'toggle-attendance-status': (id, element) => {
         const { studentId, status } = element.dataset;
         if (!studentId || !status) return;
         const entryId = `${state.selectedActivity.id}_${state.selectedActivity.date}`;
         const entry = ensureClassEntry(entryId);
-        const studentAnnotation = ensureStudentAnnotation(entry, studentId);
+        const studentAnnotation = ensureStudentAnnotation(entry, studentId, entryId);
         studentAnnotation.attendance = studentAnnotation.attendance === status ? null : status;
         saveState();
     },
@@ -977,20 +1063,16 @@ export const actionHandlers = {
         if (!studentId) return;
         const entryId = `${state.selectedActivity.id}_${state.selectedActivity.date}`;
         const entry = ensureClassEntry(entryId);
-        const studentAnnotation = ensureStudentAnnotation(entry, studentId);
-        const content = await showTextInputModal({
+        const studentAnnotation = ensureStudentAnnotation(entry, studentId, entryId);
+        const result = await showTextInputModal({
             title: t('add_positive_record'),
-            label: t('positive_record_prompt')
+            label: t('positive_record_prompt'),
+            confirmLabel: t('modal_save')
         });
 
-        if (!content) return;
+        if (!result || result.action !== 'confirm' || !result.value) return;
 
-        studentAnnotation.positives.push({
-            id: crypto.randomUUID(),
-            content,
-            createdAt: new Date().toISOString(),
-            entryId
-        });
+        studentAnnotation.positives.push(createAnnotationRecord(result.value, entryId));
         saveState();
     },
     'add-incident-record': async (id, element) => {
@@ -998,20 +1080,33 @@ export const actionHandlers = {
         if (!studentId) return;
         const entryId = `${state.selectedActivity.id}_${state.selectedActivity.date}`;
         const entry = ensureClassEntry(entryId);
-        const studentAnnotation = ensureStudentAnnotation(entry, studentId);
-        const content = await showTextInputModal({
+        const studentAnnotation = ensureStudentAnnotation(entry, studentId, entryId);
+        const result = await showTextInputModal({
             title: t('add_incident_record'),
-            label: t('incident_record_prompt')
+            label: t('incident_record_prompt'),
+            confirmLabel: t('modal_save')
         });
 
-        if (!content) return;
+        if (!result || result.action !== 'confirm' || !result.value) return;
 
-        studentAnnotation.incidents.push({
-            id: crypto.randomUUID(),
-            content,
-            createdAt: new Date().toISOString(),
-            entryId
+        studentAnnotation.incidents.push(createAnnotationRecord(result.value, entryId));
+        saveState();
+    },
+    'add-comment-record': async (id, element) => {
+        const { studentId } = element.dataset;
+        if (!studentId) return;
+        const entryId = `${state.selectedActivity.id}_${state.selectedActivity.date}`;
+        const entry = ensureClassEntry(entryId);
+        const studentAnnotation = ensureStudentAnnotation(entry, studentId, entryId);
+        const result = await showTextInputModal({
+            title: t('add_comment_record'),
+            label: t('comment_record_prompt'),
+            confirmLabel: t('modal_save')
         });
+
+        if (!result || result.action !== 'confirm' || !result.value) return;
+
+        studentAnnotation.comments.push(createAnnotationRecord(result.value, entryId));
         saveState();
     },
     // --- Data Management Actions ---

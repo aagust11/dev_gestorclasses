@@ -12,35 +12,76 @@ export const STUDENT_ATTENDANCE_STATUS = {
     LATE_LONG: 'late_long'
 };
 
+function generateAnnotationId(prefix = 'annotation') {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    const random = Math.random().toString(16).slice(2, 10);
+    return `${prefix}-${Date.now()}-${random}`;
+}
+
 export function createEmptyStudentAnnotation() {
     return {
-        note: '',
         attendance: null,
         positives: [],
-        incidents: []
+        incidents: [],
+        comments: []
     };
 }
 
-export function normalizeStudentAnnotation(rawAnnotation) {
+export function normalizeStudentAnnotation(rawAnnotation, entryId = null) {
     if (!rawAnnotation) {
         return createEmptyStudentAnnotation();
     }
 
     if (typeof rawAnnotation === 'string') {
+        const trimmed = rawAnnotation.trim();
+        const comments = trimmed ? [{
+            id: generateAnnotationId(),
+            content: trimmed,
+            createdAt: new Date().toISOString(),
+            entryId
+        }] : [];
         return {
-            note: rawAnnotation,
             attendance: null,
             positives: [],
-            incidents: []
+            incidents: [],
+            comments
         };
     }
 
-    return {
-        note: typeof rawAnnotation.note === 'string' ? rawAnnotation.note : '',
+    const normalized = {
         attendance: rawAnnotation.attendance || null,
-        positives: Array.isArray(rawAnnotation.positives) ? rawAnnotation.positives : [],
-        incidents: Array.isArray(rawAnnotation.incidents) ? rawAnnotation.incidents : []
+        positives: Array.isArray(rawAnnotation.positives) ? rawAnnotation.positives.filter(Boolean).map(record => ({
+            id: record.id || generateAnnotationId(),
+            content: record.content || '',
+            createdAt: record.createdAt || new Date().toISOString(),
+            entryId: record.entryId || entryId || null
+        })) : [],
+        incidents: Array.isArray(rawAnnotation.incidents) ? rawAnnotation.incidents.filter(Boolean).map(record => ({
+            id: record.id || generateAnnotationId(),
+            content: record.content || '',
+            createdAt: record.createdAt || new Date().toISOString(),
+            entryId: record.entryId || entryId || null
+        })) : [],
+        comments: Array.isArray(rawAnnotation.comments) ? rawAnnotation.comments.filter(Boolean).map(record => ({
+            id: record.id || generateAnnotationId(),
+            content: record.content || '',
+            createdAt: record.createdAt || new Date().toISOString(),
+            entryId: record.entryId || entryId || null
+        })) : []
     };
+
+    if (typeof rawAnnotation.note === 'string' && rawAnnotation.note.trim() !== '') {
+        normalized.comments.push({
+            id: generateAnnotationId('legacy-comment'),
+            content: rawAnnotation.note.trim(),
+            createdAt: new Date().toISOString(),
+            entryId: entryId || null
+        });
+    }
+
+    return normalized;
 }
 
 export function darkenColor(hex, percent) {
@@ -255,7 +296,7 @@ export function showModal(title, content, onConfirm) {
     modalCloseBtn.onclick = close;
 }
 
-export function showTextInputModal({ title, label, placeholder = '', defaultValue = '' }) {
+export function showTextInputModal({ title, label, placeholder = '', defaultValue = '', confirmLabel = t('modal_confirm'), allowDelete = false, deleteLabel = t('modal_delete') }) {
     const modalContainer = document.getElementById('modal-container');
     const modalTitle = document.getElementById('modal-title');
     const modalBody = document.getElementById('modal-body');
@@ -268,9 +309,12 @@ export function showTextInputModal({ title, label, placeholder = '', defaultValu
         modalBody.innerHTML = `
             <label for="${textareaId}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">${label}</label>
             <textarea id="${textareaId}" placeholder="${placeholder}" class="mt-2 w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md h-32"></textarea>
-            <div class="flex justify-end gap-4 mt-6">
-                <button id="modal-cancel" class="px-4 py-2 bg-gray-200 text-gray-800 dark:text-gray-900 rounded-md hover:bg-gray-300">${t('modal_cancel')}</button>
-                <button id="modal-confirm" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">${t('modal_confirm')}</button>
+            <div class="flex flex-wrap items-center gap-4 mt-6">
+                ${allowDelete ? `<button id="modal-delete" class="px-4 py-2 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-200 rounded-md hover:bg-red-200 dark:hover:bg-red-900/50">${deleteLabel}</button>` : ''}
+                <div class="ml-auto flex gap-4">
+                    <button id="modal-cancel" class="px-4 py-2 bg-gray-200 text-gray-800 dark:text-gray-900 rounded-md hover:bg-gray-300">${t('modal_cancel')}</button>
+                    <button id="modal-confirm" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">${confirmLabel}</button>
+                </div>
             </div>`;
 
         const textarea = modalBody.querySelector('textarea');
@@ -284,9 +328,12 @@ export function showTextInputModal({ title, label, placeholder = '', defaultValu
             resolve(result);
         };
 
-        document.getElementById('modal-confirm').onclick = () => close(textarea.value.trim());
-        document.getElementById('modal-cancel').onclick = () => close(null);
-        modalCloseBtn.onclick = () => close(null);
+        document.getElementById('modal-confirm').onclick = () => close({ action: 'confirm', value: textarea.value.trim() });
+        document.getElementById('modal-cancel').onclick = () => close({ action: 'cancel' });
+        modalCloseBtn.onclick = () => close({ action: 'cancel' });
+        if (allowDelete) {
+            document.getElementById('modal-delete').onclick = () => close({ action: 'delete' });
+        }
 
         modalContainer.classList.remove('hidden');
         setTimeout(() => textarea.focus(), 0);
