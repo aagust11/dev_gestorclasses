@@ -469,8 +469,8 @@ export function renderCompetencyDetailView() {
                     <button data-action="delete-competency" data-activity-id="${activity.id}" data-competency-id="${competency.id}" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2"><i data-lucide="trash-2" class="w-4 h-4"></i>${t('delete_competency')}</button>
                 </div>
             </div>
-            <div class="grid lg:grid-cols-2 gap-6 items-start">
-                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md space-y-4">
+            <div class="grid lg:grid-cols-2 gap-6 items-stretch">
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md space-y-4 h-full">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('competency_identifier_label')}</label>
                         <input type="text" value="${competency.code || ''}" data-action="update-competency-code" data-activity-id="${activity.id}" data-competency-id="${competency.id}" placeholder="${t('competency_identifier_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md">
@@ -480,12 +480,12 @@ export function renderCompetencyDetailView() {
                         <textarea data-action="update-competency-description" data-activity-id="${activity.id}" data-competency-id="${competency.id}" placeholder="${t('competency_description_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-32">${competency.description || ''}</textarea>
                     </div>
                 </div>
-                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md flex flex-col h-full">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">${t('criteria_list_title')}</h3>
                         <button data-action="add-criterion" data-activity-id="${activity.id}" data-competency-id="${competency.id}" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center gap-2"><i data-lucide="plus" class="w-4 h-4"></i>${t('add_criterion')}</button>
                     </div>
-                    <div class="space-y-4 max-h-80 overflow-y-auto pr-1">
+                    <div class="space-y-4 overflow-y-auto pr-1 flex-1 min-h-0">
                         ${criteriaHtml}
                     </div>
                 </div>
