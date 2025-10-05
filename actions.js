@@ -64,6 +64,66 @@ function getNextCriterionCode(competency) {
     return `CA${nextIndex}`;
 }
 
+function getNextCompetencyCode(activity) {
+    const competencies = Array.isArray(activity?.competencies) ? activity.competencies : [];
+
+    let defaultPrefix = '';
+    let maxNumber = 0;
+    let maxDigits = 2;
+
+    competencies.forEach(competency => {
+        const code = competency?.code;
+        if (typeof code !== 'string') {
+            return;
+        }
+
+        const trimmed = code.trim();
+        if (!trimmed) {
+            return;
+        }
+
+        const baseIdentifier = getCompetencyBaseIdentifier(trimmed);
+        if (baseIdentifier) {
+            const match = baseIdentifier.match(/^(.*?)(\d+)$/);
+            if (match) {
+                const [, prefix, digits] = match;
+                const value = parseInt(digits, 10);
+                if (!Number.isNaN(value)) {
+                    if (value >= maxNumber) {
+                        defaultPrefix = prefix;
+                    }
+                    maxNumber = Math.max(maxNumber, value);
+                    maxDigits = Math.max(maxDigits, digits.length);
+                    return;
+                }
+            }
+
+            if (!defaultPrefix) {
+                defaultPrefix = baseIdentifier;
+            }
+        }
+
+        const trailingDigitsMatch = trimmed.match(/^(CE.*?)(\d+)$/i);
+        if (trailingDigitsMatch) {
+            const [, prefixWithCe, digits] = trailingDigitsMatch;
+            const value = parseInt(digits, 10);
+            if (!Number.isNaN(value)) {
+                const prefix = prefixWithCe.replace(/^CE/i, '');
+                if (value >= maxNumber) {
+                    defaultPrefix = prefix;
+                }
+                maxNumber = Math.max(maxNumber, value);
+                maxDigits = Math.max(maxDigits, digits.length);
+            }
+        }
+    });
+
+    const nextNumber = (maxNumber || 0) + 1;
+    const padded = String(nextNumber).padStart(maxDigits, '0');
+    const prefix = defaultPrefix || '';
+    return `CE${prefix}${padded}`;
+}
+
 function showImportSummary(data) {
     const title = t('import_summary_title');
     const content = `
@@ -566,27 +626,10 @@ export const actionHandlers = {
         const activity = state.activities.find(a => a.id === activityId);
         if (!activity) return;
 
-        const codeInput = document.getElementById(`new-competency-code-${activityId}`);
-        const descriptionInput = document.getElementById(`new-competency-description-${activityId}`);
-
-        const rawCode = codeInput ? codeInput.value.trim() : '';
-        const description = descriptionInput ? descriptionInput.value.trim() : '';
-
-        if (!rawCode && !description) {
-            return;
-        }
-
-        let code = rawCode;
-        if (!code) {
-            code = 'CE';
-        } else if (!code.toLowerCase().startsWith('ce')) {
-            code = `CE${code}`;
-        }
-
         const newCompetency = {
             id: crypto.randomUUID(),
-            code,
-            description,
+            code: getNextCompetencyCode(activity),
+            description: '',
             criteria: []
         };
 
@@ -595,9 +638,6 @@ export const actionHandlers = {
         }
 
         activity.competencies.push(newCompetency);
-
-        if (codeInput) codeInput.value = '';
-        if (descriptionInput) descriptionInput.value = '';
 
         saveState();
     },
