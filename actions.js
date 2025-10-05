@@ -64,6 +64,16 @@ export const actionHandlers = {
                 state.courseStartDate = data.courseStartDate || '';
                 state.courseEndDate = data.courseEndDate || '';
                 state.terms = data.terms || [];
+                state.activities.forEach(activity => {
+                    if (!activity.competencies) {
+                        activity.competencies = [];
+                    }
+                    activity.competencies.forEach(competency => {
+                        if (!competency.criteria) {
+                            competency.criteria = [];
+                        }
+                    });
+                });
                 saveState();
                 showImportSummary(data);
             } catch (error) {
@@ -77,6 +87,20 @@ export const actionHandlers = {
         const activityId = element.value;
         if (activityId) {
             const card = document.getElementById(`class-card-${activityId}`);
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                card.style.transition = 'outline 0.1s ease-in-out';
+                card.style.outline = '3px solid #3b82f6';
+                setTimeout(() => {
+                    card.style.outline = 'none';
+                }, 1500);
+            }
+        }
+    },
+    'go-to-competency-card': (id, element) => {
+        const activityId = element.value;
+        if (activityId) {
+            const card = document.getElementById(`competency-card-${activityId}`);
             if (card) {
                 card.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 card.style.transition = 'outline 0.1s ease-in-out';
@@ -168,6 +192,175 @@ export const actionHandlers = {
             }
         }
     },
+    // --- Competency Actions ---
+    'add-competency': (id, element) => {
+        const activityId = element.dataset.activityId;
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity) return;
+
+        const codeInput = document.getElementById(`new-competency-code-${activityId}`);
+        const descriptionInput = document.getElementById(`new-competency-description-${activityId}`);
+
+        const rawCode = codeInput ? codeInput.value.trim() : '';
+        const description = descriptionInput ? descriptionInput.value.trim() : '';
+
+        if (!rawCode && !description) {
+            return;
+        }
+
+        let code = rawCode;
+        if (!code) {
+            code = 'CE';
+        } else if (!code.toUpperCase().startsWith('CE')) {
+            code = `CE${code}`;
+        }
+        code = code.toUpperCase();
+
+        const newCompetency = {
+            id: crypto.randomUUID(),
+            code,
+            description,
+            criteria: []
+        };
+
+        if (!Array.isArray(activity.competencies)) {
+            activity.competencies = [];
+        }
+
+        activity.competencies.push(newCompetency);
+
+        if (codeInput) codeInput.value = '';
+        if (descriptionInput) descriptionInput.value = '';
+
+        saveState();
+    },
+    'select-competency': (id, element) => {
+        const activityId = element.dataset.activityId;
+        const competencyId = element.dataset.competencyId;
+        if (!activityId || !competencyId) return;
+
+        state.selectedCompetency = { activityId, competencyId };
+        state.activeView = 'competencyDetail';
+    },
+    'back-to-competencies': () => {
+        state.selectedCompetency = null;
+        state.activeView = 'settings';
+        state.settingsActiveTab = 'competencies';
+    },
+    'update-competency-code': (id, element) => {
+        const { activityId, competencyId } = element.dataset;
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity) return;
+
+        const competency = activity.competencies?.find(c => c.id === competencyId);
+        if (!competency) return;
+
+        let value = element.value.trim();
+        if (!value) {
+            competency.code = '';
+        } else {
+            if (!value.toUpperCase().startsWith('CE')) {
+                value = `CE${value}`;
+            }
+            competency.code = value.toUpperCase();
+        }
+        saveState();
+    },
+    'update-competency-description': (id, element) => {
+        const { activityId, competencyId } = element.dataset;
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity) return;
+
+        const competency = activity.competencies?.find(c => c.id === competencyId);
+        if (!competency) return;
+
+        competency.description = element.value;
+        saveState();
+    },
+    'delete-competency': (id, element) => {
+        const { activityId, competencyId } = element.dataset;
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity) return;
+
+        if (Array.isArray(activity.competencies)) {
+            activity.competencies = activity.competencies.filter(c => c.id !== competencyId);
+        }
+
+        if (state.selectedCompetency?.competencyId === competencyId) {
+            state.selectedCompetency = null;
+            state.activeView = 'settings';
+            state.settingsActiveTab = 'competencies';
+        }
+
+        saveState();
+    },
+    'add-criterion': (id, element) => {
+        const { activityId, competencyId } = element.dataset;
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity) return;
+
+        const competency = activity.competencies?.find(c => c.id === competencyId);
+        if (!competency) return;
+
+        if (!Array.isArray(competency.criteria)) {
+            competency.criteria = [];
+        }
+
+        competency.criteria.push({
+            id: crypto.randomUUID(),
+            code: 'CA',
+            description: ''
+        });
+
+        saveState();
+    },
+    'update-criterion-code': (id, element) => {
+        const { activityId, competencyId, criterionId } = element.dataset;
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity) return;
+
+        const competency = activity.competencies?.find(c => c.id === competencyId);
+        if (!competency) return;
+
+        const criterion = competency.criteria?.find(cr => cr.id === criterionId);
+        if (!criterion) return;
+
+        let value = element.value.trim();
+        if (!value) {
+            criterion.code = '';
+        } else {
+            if (!value.toUpperCase().startsWith('CA')) {
+                value = `CA${value}`;
+            }
+            criterion.code = value.toUpperCase();
+        }
+        saveState();
+    },
+    'update-criterion-description': (id, element) => {
+        const { activityId, competencyId, criterionId } = element.dataset;
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity) return;
+
+        const competency = activity.competencies?.find(c => c.id === competencyId);
+        if (!competency) return;
+
+        const criterion = competency.criteria?.find(cr => cr.id === criterionId);
+        if (!criterion) return;
+
+        criterion.description = element.value;
+        saveState();
+    },
+    'delete-criterion': (id, element) => {
+        const { activityId, competencyId, criterionId } = element.dataset;
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity) return;
+
+        const competency = activity.competencies?.find(c => c.id === competencyId);
+        if (!competency) return;
+
+        competency.criteria = competency.criteria?.filter(cr => cr.id !== criterionId) || [];
+        saveState();
+    },
     'export-student-docx': () => {
         const student = state.students.find(s => s.id === state.selectedStudentId);
         if (!student) return;
@@ -258,14 +451,15 @@ export const actionHandlers = {
         const name = nameInput.value.trim();
         const type = document.querySelector('input[name="activityType"]:checked').value;
         if (name) {
-            state.activities.push({ 
-                id: crypto.randomUUID(), 
-                name, 
-                type, 
+            state.activities.push({
+                id: crypto.randomUUID(),
+                name,
+                type,
                 studentIds: [],
                 color: getRandomPastelColor(),
                 startDate: state.courseStartDate,
-                endDate: state.courseEndDate
+                endDate: state.courseEndDate,
+                competencies: []
             });
             nameInput.value = '';
             saveState();
@@ -597,6 +791,16 @@ export const actionHandlers = {
                     state.terms = data.terms || [];
                     state.selectedTermId = data.selectedTermId || 'all';
                     state.holidays = data.holidays || [];
+                    state.activities.forEach(activity => {
+                        if (!activity.competencies) {
+                            activity.competencies = [];
+                        }
+                        activity.competencies.forEach(competency => {
+                            if (!competency.criteria) {
+                                competency.criteria = [];
+                            }
+                        });
+                    });
                     saveState();
                     showImportSummary(data);
                 } catch (error) {
@@ -621,7 +825,17 @@ export const actionHandlers = {
                     state.courseStartDate = data.courseStartDate || '';
                     state.courseEndDate = data.courseEndDate || '';
                     state.terms = data.terms || [];
-                    
+                    state.activities.forEach(activity => {
+                        if (!activity.competencies) {
+                            activity.competencies = [];
+                        }
+                        activity.competencies.forEach(competency => {
+                            if (!competency.criteria) {
+                                competency.criteria = [];
+                            }
+                        });
+                    });
+
                     state.students = [];
                     state.classEntries = {};
                     

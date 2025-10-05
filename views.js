@@ -417,6 +417,83 @@ export function renderStudentDetailView() {
     `;
 }
 
+export function renderCompetencyDetailView() {
+    renderMobileHeaderActions([
+        { action: 'back-to-competencies', label: t('back_to_competencies'), icon: 'arrow-left' }
+    ]);
+
+    const selection = state.selectedCompetency;
+    if (!selection) {
+        return `<div class="p-6"><p class="text-red-500">${t('competency_not_found')}</p><button data-action="back-to-competencies" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md">${t('back_to_competencies')}</button></div>`;
+    }
+
+    const activity = state.activities.find(a => a.id === selection.activityId);
+    if (!activity) {
+        return `<div class="p-6"><p class="text-red-500">${t('competency_not_found')}</p><button data-action="back-to-competencies" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md">${t('back_to_competencies')}</button></div>`;
+    }
+
+    const competency = activity.competencies?.find(c => c.id === selection.competencyId);
+    if (!competency) {
+        return `<div class="p-6"><p class="text-red-500">${t('competency_not_found')}</p><button data-action="back-to-competencies" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md">${t('back_to_competencies')}</button></div>`;
+    }
+
+    const criteria = competency.criteria || [];
+
+    const criteriaHtml = criteria.length > 0
+        ? criteria.map(criterion => `
+            <div class="border border-gray-200 dark:border-gray-700 rounded-md p-4 space-y-3">
+                <div class="flex items-start gap-2">
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('criterion_identifier_label')}</label>
+                        <input type="text" value="${criterion.code || ''}" data-action="update-criterion-code" data-activity-id="${activity.id}" data-competency-id="${competency.id}" data-criterion-id="${criterion.id}" placeholder="${t('criterion_identifier_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md">
+                    </div>
+                    <button data-action="delete-criterion" data-activity-id="${activity.id}" data-competency-id="${competency.id}" data-criterion-id="${criterion.id}" class="text-red-500 hover:text-red-700 mt-6"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('criterion_description_label')}</label>
+                    <textarea data-action="update-criterion-description" data-activity-id="${activity.id}" data-competency-id="${competency.id}" data-criterion-id="${criterion.id}" placeholder="${t('criterion_description_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-20">${criterion.description || ''}</textarea>
+                </div>
+            </div>
+        `).join('')
+        : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('no_criteria_defined')}</p>`;
+
+    return `
+        <div class="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900/50 min-h-full space-y-6">
+            <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200">${competency.code || t('competency_identifier_label')}</h2>
+                    <p class="text-gray-500 dark:text-gray-400">${t('competency_class_label')}: ${activity.name}</p>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <button data-action="back-to-competencies" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center gap-2"><i data-lucide="arrow-left" class="w-4 h-4"></i>${t('back_to_competencies')}</button>
+                    <button data-action="delete-competency" data-activity-id="${activity.id}" data-competency-id="${competency.id}" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2"><i data-lucide="trash-2" class="w-4 h-4"></i>${t('delete_competency')}</button>
+                </div>
+            </div>
+            <div class="grid lg:grid-cols-2 gap-6 items-start">
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('competency_identifier_label')}</label>
+                        <input type="text" value="${competency.code || ''}" data-action="update-competency-code" data-activity-id="${activity.id}" data-competency-id="${competency.id}" placeholder="${t('competency_identifier_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('competency_description_label')}</label>
+                        <textarea data-action="update-competency-description" data-activity-id="${activity.id}" data-competency-id="${competency.id}" placeholder="${t('competency_description_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-32">${competency.description || ''}</textarea>
+                    </div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">${t('criteria_list_title')}</h3>
+                        <button data-action="add-criterion" data-activity-id="${activity.id}" data-competency-id="${competency.id}" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center gap-2"><i data-lucide="plus" class="w-4 h-4"></i>${t('add_criterion')}</button>
+                    </div>
+                    <div class="space-y-4 max-h-80 overflow-y-auto pr-1">
+                        ${criteriaHtml}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 export function renderSettingsView() {
     renderMobileHeaderActions([]);
     
@@ -424,6 +501,7 @@ export function renderSettingsView() {
         { id: 'calendar', labelKey: 'settings_tab_calendar', icon: 'calendar-days' },
         { id: 'schedule', labelKey: 'settings_tab_schedule', icon: 'clock' },
         { id: 'activities', labelKey: 'settings_tab_activities', icon: 'users' },
+        { id: 'competencies', labelKey: 'settings_tab_competencies', icon: 'target' },
         { id: 'data', labelKey: 'settings_tab_data', icon: 'database' }
     ];
 
@@ -728,6 +806,79 @@ export function renderSettingsView() {
         </div>
     `;
 
+    // --- Competencies Tab Content ---
+    const classesWithStudents = state.activities.filter(a => a.type === 'class').sort((a, b) => a.name.localeCompare(b.name));
+
+    const competencySelectOptions = classesWithStudents.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+    const competencyCardsHtml = classesWithStudents.map(c => {
+        const competencies = c.competencies || [];
+        const competencyCount = competencies.length;
+
+        const competenciesHtml = competencies.map(comp => `
+            <button
+                data-action="select-competency"
+                data-activity-id="${c.id}"
+                data-competency-id="${comp.id}"
+                class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+                <div class="flex items-center justify-between gap-2">
+                    <span class="font-semibold">${comp.code || t('competency_without_code')}</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                        <i data-lucide="list-checks" class="w-4 h-4"></i>
+                        ${(comp.criteria?.length || 0)} ${t('criteria_label')}
+                    </span>
+                </div>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">${comp.description || t('competency_without_description')}</p>
+            </button>
+        `).join('');
+
+        return `
+            <div id="competency-card-${c.id}" class="bg-white dark:bg-gray-800 rounded-lg shadow-md flex flex-col">
+                <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-t-lg">
+                    <h3 class="text-xl font-bold" style="color: ${darkenColor(c.color, 40)}">${c.name}</h3>
+                    <div class="text-sm text-gray-600 dark:text-gray-400 mt-2 flex items-center gap-2">
+                        <i data-lucide="target" class="w-4 h-4"></i>
+                        <span>${competencyCount} ${t('competencies_short_label')}</span>
+                    </div>
+                </div>
+                <div class="p-4 flex flex-col gap-4 flex-grow">
+                    <div class="space-y-2 max-h-48 overflow-y-auto">
+                        ${competenciesHtml || `<p class=\"text-sm text-gray-500 dark:text-gray-400\">${t('no_competencies_in_class')}</p>`}
+                    </div>
+                    <div class="flex flex-col gap-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+                        <input type="text" id="new-competency-code-${c.id}" placeholder="${t('add_competency_identifier_placeholder')}" class="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md">
+                        <textarea id="new-competency-description-${c.id}" placeholder="${t('add_competency_description_placeholder')}" class="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-20"></textarea>
+                        <button data-action="add-competency" data-activity-id="${c.id}" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center justify-center gap-2">
+                            <i data-lucide="plus" class="w-5 h-5"></i>
+                            ${t('add_competency')}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    const competenciesTabContent = classesWithStudents.length === 0
+        ? `<div class="p-6 text-gray-500 dark:text-gray-400">${t('no_classes_created')}</div>`
+        : `
+            <div class="space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                    <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200">${t('competencies_tab_title')}</h3>
+                    <div class="flex-shrink-0 w-full sm:w-64">
+                        <label for="competency-quick-nav" class="sr-only">${t('quick_nav_to_class')}</label>
+                        <select id="competency-quick-nav" data-action="go-to-competency-card" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm">
+                            <option value="">${t('quick_nav_to_class')}</option>
+                            ${competencySelectOptions}
+                        </select>
+                    </div>
+                </div>
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    ${competencyCardsHtml}
+                </div>
+            </div>
+        `;
+
     // --- Data Tab Content ---
     const dataTabContent = `
         <div class="max-w-xl mx-auto">
@@ -750,6 +901,7 @@ export function renderSettingsView() {
         case 'calendar': activeTabContent = calendarTabContent; break;
         case 'schedule': activeTabContent = scheduleTabContent; break;
         case 'activities': activeTabContent = activitiesTabContent; break;
+        case 'competencies': activeTabContent = competenciesTabContent; break;
         case 'data': activeTabContent = dataTabContent; break;
         default: activeTabContent = calendarTabContent;
     }
