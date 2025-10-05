@@ -230,7 +230,7 @@ export function renderScheduleView() {
 export function renderClassesView() {
     renderMobileHeaderActions([]);
     const classes = state.activities.filter(a => a.type === 'class').sort((a, b) => a.name.localeCompare(b.name));
-    
+
     if (classes.length === 0) {
         return `<div class="p-4 sm:p-6"><h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-6">${t('classes_view_title')}</h2><p class="text-gray-500 dark:text-gray-400">${t('no_classes_created')}</p></div>`;
     }
@@ -294,6 +294,223 @@ export function renderClassesView() {
             </div>
             <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 ${classesHtml}
+            </div>
+        </div>
+    `;
+}
+
+export function renderActivitiesView() {
+    renderMobileHeaderActions([]);
+    const classes = state.activities
+        .filter(a => a.type === 'class')
+        .map(c => ({
+            ...c,
+            classActivities: Array.isArray(c.classActivities) ? c.classActivities : [],
+            competencies: Array.isArray(c.competencies) ? c.competencies : []
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (classes.length === 0) {
+        return `<div class="p-4 sm:p-6"><h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-6">${t('activities_view_title')}</h2><p class="text-gray-500 dark:text-gray-400">${t('activities_view_no_classes')}</p></div>`;
+    }
+
+    const cardsHtml = classes.map(cls => {
+        const isFormOpen = state.classActivityFormFor === cls.id;
+        const classActivities = cls.classActivities;
+        const competencies = cls.competencies;
+
+        const addFormHtml = isFormOpen ? `
+            <div class="mt-4 p-4 border border-blue-200 dark:border-blue-700 rounded-lg bg-blue-50/60 dark:bg-blue-900/30">
+                <div class="grid gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('class_activity_title_label')}</label>
+                        <input type="text" id="new-class-activity-title-${cls.id}" placeholder="${t('class_activity_title_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('class_activity_description_label')}</label>
+                        <textarea id="new-class-activity-description-${cls.id}" placeholder="${t('class_activity_description_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md h-28"></textarea>
+                    </div>
+                </div>
+                <div class="mt-4 flex flex-col sm:flex-row justify-end gap-2">
+                    <button data-action="cancel-class-activity-form" class="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600">${t('class_activity_cancel')}</button>
+                    <button data-action="create-class-activity" data-activity-id="${cls.id}" class="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2">
+                        <i data-lucide="save" class="w-4 h-4"></i>
+                        <span>${t('class_activity_create')}</span>
+                    </button>
+                </div>
+            </div>
+        ` : '';
+
+        const classActivitiesHtml = classActivities.length > 0
+            ? classActivities.map(activity => {
+                const assignedCriteria = (activity.assignedCriteria || []).map(selection => {
+                    const competency = competencies.find(comp => comp.id === selection.competencyId);
+                    const criterion = competency?.criteria?.find(cr => cr.id === selection.criterionId);
+                    if (!competency || !criterion) return null;
+                    const competencyCode = competency.code || t('competency_without_code');
+                    const criterionCode = criterion.code || t('criterion_without_code');
+                    const criterionDescription = criterion.description || t('criterion_without_description');
+                    return `
+                        <li class="p-3 bg-gray-100 dark:bg-gray-700/60 rounded-md border border-gray-200 dark:border-gray-600">
+                            <div class="flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-100">
+                                <i data-lucide="check-circle" class="w-4 h-4 text-green-600"></i>
+                                <span>${criterionCode}</span>
+                                <span class="text-xs text-gray-500 dark:text-gray-400">(${competencyCode})</span>
+                            </div>
+                            <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">${criterionDescription}</p>
+                        </li>
+                    `;
+                }).filter(Boolean);
+
+                const assignedCriteriaHtml = assignedCriteria.length > 0
+                    ? `<ul class="space-y-2">${assignedCriteria.join('')}</ul>`
+                    : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('class_activity_no_criteria')}</p>`;
+
+                const competencySelectors = competencies.length > 0
+                    ? competencies.map(competency => {
+                        const compCriteria = Array.isArray(competency.criteria) ? competency.criteria : [];
+                        if (compCriteria.length === 0) return '';
+
+                        const compCode = competency.code || t('competency_without_code');
+                        const compDescription = competency.description || t('competency_without_description');
+
+                        const checkboxes = compCriteria.map(criterion => {
+                            const criterionCode = criterion.code || t('criterion_without_code');
+                            const criterionDescription = criterion.description || t('criterion_without_description');
+                            const isChecked = (activity.assignedCriteria || []).some(selection => selection.competencyId === competency.id && selection.criterionId === criterion.id);
+                            return `
+                                <label class="flex items-start gap-2 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
+                                    <input type="checkbox" ${isChecked ? 'checked' : ''} data-action="toggle-class-activity-criterion" data-activity-id="${cls.id}" data-class-activity-id="${activity.id}" data-competency-id="${competency.id}" data-criterion-id="${criterion.id}" class="mt-1">
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-800 dark:text-gray-200">${criterionCode}</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">${criterionDescription}</p>
+                                    </div>
+                                </label>
+                            `;
+                        }).join('');
+
+                        if (!checkboxes) return '';
+
+                        return `
+                            <details class="border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 overflow-hidden">
+                                <summary class="flex items-center justify-between gap-2 px-3 py-2 cursor-pointer text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                    <span>${compCode}</span>
+                                    <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                                </summary>
+                                <div class="p-3 space-y-2 bg-gray-50 dark:bg-gray-900/40">
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">${compDescription}</p>
+                                    ${checkboxes}
+                                </div>
+                            </details>
+                        `;
+                    }).filter(Boolean).join('')
+                    : '';
+
+                const selectorsHtml = competencySelectors && competencySelectors.trim().length > 0
+                    ? competencySelectors
+                    : `<p class="text-sm text-gray-500 dark:text-gray-400">${competencies.length === 0 ? t('class_activity_no_competencies') : t('class_activity_no_defined_criteria')}</p>`;
+
+                return `
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-800/60">
+                        <div class="flex justify-between items-start gap-3">
+                            <div class="flex-1 space-y-2">
+                                <div>
+                                    <label class="block text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">${t('class_activity_title_label')}</label>
+                                    <input type="text" value="${activity.title || ''}" data-action="update-class-activity-title" data-activity-id="${cls.id}" data-class-activity-id="${activity.id}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md" placeholder="${t('class_activity_title_placeholder')}">
+                                </div>
+                                <div>
+                                    <label class="block text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">${t('class_activity_description_label')}</label>
+                                    <textarea data-action="update-class-activity-description" data-activity-id="${cls.id}" data-class-activity-id="${activity.id}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md h-24" placeholder="${t('class_activity_description_placeholder')}">${activity.description || ''}</textarea>
+                                </div>
+                            </div>
+                            <button data-action="delete-class-activity" data-activity-id="${cls.id}" data-class-activity-id="${activity.id}" class="text-red-500 hover:text-red-700">
+                                <i data-lucide="trash-2" class="w-5 h-5"></i>
+                                <span class="sr-only">${t('class_activity_delete')}</span>
+                            </button>
+                        </div>
+                        <div class="mt-4">
+                            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                                <i data-lucide="list-checks" class="w-4 h-4"></i>
+                                <span>${t('class_activity_assigned_criteria')}</span>
+                            </h4>
+                            <div class="mt-2">
+                                ${assignedCriteriaHtml}
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <p class="text-sm text-gray-600 dark:text-gray-300 mb-2 flex items-center gap-2"><i data-lucide="sparkles" class="w-4 h-4"></i>${t('class_activity_select_criteria_hint')}</p>
+                            <div class="space-y-3">
+                                ${selectorsHtml}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('')
+            : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('class_activity_list_empty')}</p>`;
+
+        const referenceHtml = competencies.length > 0
+            ? `
+                <details class="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
+                    <summary class="px-4 py-2 cursor-pointer text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                        <i data-lucide="book-open-check" class="w-4 h-4"></i>
+                        <span>${t('class_activity_reference_title')}</span>
+                    </summary>
+                    <div class="p-4 space-y-4 bg-gray-50 dark:bg-gray-900/40">
+                        ${competencies.map(competency => {
+                            const compCode = competency.code || t('competency_without_code');
+                            const compDescription = competency.description || t('competency_without_description');
+                            const compCriteria = Array.isArray(competency.criteria) ? competency.criteria : [];
+                            const criteriaList = compCriteria.length > 0
+                                ? compCriteria.map(criterion => {
+                                    const criterionCode = criterion.code || t('criterion_without_code');
+                                    const criterionDescription = criterion.description || t('criterion_without_description');
+                                    return `<li class="pl-2 border-l border-gray-200 dark:border-gray-700"><p class="text-sm font-medium text-gray-800 dark:text-gray-200">${criterionCode}</p><p class="text-xs text-gray-500 dark:text-gray-400">${criterionDescription}</p></li>`;
+                                }).join('')
+                                : `<li class="text-xs text-gray-500 dark:text-gray-400">${t('class_activity_no_defined_criteria')}</li>`;
+
+                            return `
+                                <div class="space-y-2">
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-800 dark:text-gray-200">${compCode}</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">${compDescription}</p>
+                                    </div>
+                                    <ul class="space-y-2">${criteriaList}</ul>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </details>
+            `
+            : `<p class="mt-4 text-sm text-gray-500 dark:text-gray-400">${t('class_activity_reference_empty')}</p>`;
+
+        return `
+            <div id="class-activities-card-${cls.id}" class="bg-white dark:bg-gray-800 rounded-lg shadow-md flex flex-col">
+                <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-t-lg flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="text-xl font-bold" style="color: ${darkenColor(cls.color, 40)}">${cls.name}</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">${classActivities.length} ${t('class_activity_count_label')}</p>
+                    </div>
+                    <button data-action="open-class-activity-form" data-activity-id="${cls.id}" class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2">
+                        <i data-lucide="file-plus-2" class="w-4 h-4"></i>
+                        <span class="text-sm font-medium">${t('class_activity_add_button')}</span>
+                    </button>
+                </div>
+                <div class="p-4 space-y-4 flex-1 flex flex-col">
+                    ${addFormHtml}
+                    <div class="space-y-4 flex-1">${classActivitiesHtml}</div>
+                    ${referenceHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900/50 min-h-full">
+            <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
+                <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200">${t('activities_view_title')}</h2>
+            </div>
+            <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+                ${cardsHtml}
             </div>
         </div>
     `;

@@ -79,6 +79,32 @@ function showImportSummary(data) {
     });
 }
 
+function ensureActivityIntegrity(activity) {
+    if (!activity.competencies) {
+        activity.competencies = [];
+    }
+
+    if (!activity.classActivities) {
+        activity.classActivities = [];
+    }
+
+    activity.competencies.forEach(competency => {
+        if (!competency.criteria) {
+            competency.criteria = [];
+        }
+    });
+
+    activity.classActivities.forEach(classActivity => {
+        if (!classActivity.assignedCriteria) {
+            classActivity.assignedCriteria = [];
+        }
+    });
+}
+
+function normalizeActivities(activities) {
+    (activities || []).forEach(ensureActivityIntegrity);
+}
+
 export const actionHandlers = {
     // --- Settings Tab Action ---
     'select-settings-tab': (id, element) => {
@@ -124,16 +150,7 @@ export const actionHandlers = {
                 state.courseStartDate = data.courseStartDate || '';
                 state.courseEndDate = data.courseEndDate || '';
                 state.terms = data.terms || [];
-                state.activities.forEach(activity => {
-                    if (!activity.competencies) {
-                        activity.competencies = [];
-                    }
-                    activity.competencies.forEach(competency => {
-                        if (!competency.criteria) {
-                            competency.criteria = [];
-                        }
-                    });
-                });
+                normalizeActivities(state.activities);
                 saveState();
                 showImportSummary(data);
             } catch (error) {
@@ -518,11 +535,109 @@ export const actionHandlers = {
                 color: getRandomPastelColor(),
                 startDate: state.courseStartDate,
                 endDate: state.courseEndDate,
-                competencies: []
+                competencies: [],
+                classActivities: []
             });
             nameInput.value = '';
             saveState();
         }
+    },
+    'open-class-activity-form': (id, element) => {
+        const activityId = element?.dataset?.activityId;
+        if (!activityId) return;
+        state.classActivityFormFor = state.classActivityFormFor === activityId ? null : activityId;
+    },
+    'cancel-class-activity-form': () => {
+        state.classActivityFormFor = null;
+    },
+    'create-class-activity': (id, element) => {
+        const activityId = element?.dataset?.activityId;
+        if (!activityId) return;
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity) return;
+
+        ensureActivityIntegrity(activity);
+
+        const titleInput = document.getElementById(`new-class-activity-title-${activityId}`);
+        const descriptionInput = document.getElementById(`new-class-activity-description-${activityId}`);
+        if (!titleInput || !descriptionInput) return;
+
+        const title = titleInput.value.trim();
+        const description = descriptionInput.value.trim();
+        if (!title) {
+            titleInput.focus();
+            return;
+        }
+
+        activity.classActivities.push({
+            id: crypto.randomUUID(),
+            title,
+            description,
+            assignedCriteria: []
+        });
+
+        titleInput.value = '';
+        descriptionInput.value = '';
+        state.classActivityFormFor = null;
+        saveState();
+    },
+    'update-class-activity-title': (id, element) => {
+        const { activityId, classActivityId } = element.dataset;
+        if (!activityId || !classActivityId) return;
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity) return;
+        ensureActivityIntegrity(activity);
+        const classActivity = activity.classActivities.find(act => act.id === classActivityId);
+        if (!classActivity) return;
+        classActivity.title = element.value;
+        saveState();
+    },
+    'update-class-activity-description': (id, element) => {
+        const { activityId, classActivityId } = element.dataset;
+        if (!activityId || !classActivityId) return;
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity) return;
+        ensureActivityIntegrity(activity);
+        const classActivity = activity.classActivities.find(act => act.id === classActivityId);
+        if (!classActivity) return;
+        classActivity.description = element.value;
+        saveState();
+    },
+    'toggle-class-activity-criterion': (id, element) => {
+        const { activityId, classActivityId, competencyId, criterionId } = element.dataset;
+        if (!activityId || !classActivityId || !competencyId || !criterionId) return;
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity) return;
+        ensureActivityIntegrity(activity);
+        const classActivity = activity.classActivities.find(act => act.id === classActivityId);
+        if (!classActivity) return;
+
+        if (!Array.isArray(classActivity.assignedCriteria)) {
+            classActivity.assignedCriteria = [];
+        }
+
+        const existingIndex = classActivity.assignedCriteria.findIndex(selection =>
+            selection.competencyId === competencyId && selection.criterionId === criterionId
+        );
+
+        if (element.checked && existingIndex === -1) {
+            classActivity.assignedCriteria.push({ competencyId, criterionId });
+        }
+
+        if (!element.checked && existingIndex !== -1) {
+            classActivity.assignedCriteria.splice(existingIndex, 1);
+        }
+
+        saveState();
+    },
+    'delete-class-activity': (id, element) => {
+        const { activityId, classActivityId } = element.dataset;
+        if (!activityId || !classActivityId) return;
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity) return;
+        ensureActivityIntegrity(activity);
+        activity.classActivities = activity.classActivities.filter(act => act.id !== classActivityId);
+        saveState();
     },
     'delete-activity': (id) => {
         showModal(t('delete_activity_confirm_title'), t('delete_activity_confirm_text'), () => {
@@ -850,16 +965,7 @@ export const actionHandlers = {
                     state.terms = data.terms || [];
                     state.selectedTermId = data.selectedTermId || 'all';
                     state.holidays = data.holidays || [];
-                    state.activities.forEach(activity => {
-                        if (!activity.competencies) {
-                            activity.competencies = [];
-                        }
-                        activity.competencies.forEach(competency => {
-                            if (!competency.criteria) {
-                                competency.criteria = [];
-                            }
-                        });
-                    });
+                    normalizeActivities(state.activities);
                     saveState();
                     showImportSummary(data);
                 } catch (error) {
@@ -884,16 +990,7 @@ export const actionHandlers = {
                     state.courseStartDate = data.courseStartDate || '';
                     state.courseEndDate = data.courseEndDate || '';
                     state.terms = data.terms || [];
-                    state.activities.forEach(activity => {
-                        if (!activity.competencies) {
-                            activity.competencies = [];
-                        }
-                        activity.competencies.forEach(competency => {
-                            if (!competency.criteria) {
-                                competency.criteria = [];
-                            }
-                        });
-                    });
+                    normalizeActivities(state.activities);
 
                     state.students = [];
                     state.classEntries = {};

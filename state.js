@@ -22,6 +22,7 @@ export const state = {
     selectedCompetency: null,
     editingTimeSlotId: null,
     editingActivityId: null,
+    classActivityFormFor: null,
     settingsActiveTab: 'calendar', // NUEVO: Pestaña activa en la vista de configuración
 };
 
@@ -86,10 +87,22 @@ export function loadState() {
             activity.competencies = [];
         }
 
+        if (!activity.classActivities) {
+            activity.classActivities = [];
+        }
+
         activity.competencies.forEach(competency => {
             if (!competency.criteria) {
                 competency.criteria = [];
             }
         });
+
+        activity.classActivities.forEach(classActivity => {
+            if (!classActivity.assignedCriteria) {
+                classActivity.assignedCriteria = [];
+            }
+        });
     });
+
+    state.classActivityFormFor = null;
 }

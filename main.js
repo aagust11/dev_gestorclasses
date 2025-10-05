@@ -21,6 +21,7 @@ function render() {
     switch (state.activeView) {
         case 'schedule': viewContent = views.renderScheduleView(); break;
         case 'classes': viewContent = views.renderClassesView(); break;
+        case 'activities': viewContent = views.renderActivitiesView(); break;
         case 'settings': viewContent = views.renderSettingsView(); break;
         case 'competencyDetail': viewContent = views.renderCompetencyDetailView(); break;
         case 'activityDetail': viewContent = views.renderActivityDetailView(); break;
@@ -38,6 +39,7 @@ function updateMobileHeader() {
     const keyMap = {
         schedule: 'schedule_view_title',
         classes: 'classes_view_title',
+        activities: 'activities_view_title',
         settings: 'settings_view_title',
         activityDetail: 'activity_detail_view_title',
         studentDetail: 'student_detail_view_title',
@@ -80,7 +82,9 @@ function handleAction(action, element, event) {
         'go-to-class-session', 'add-term', 'delete-term', 'select-term', 'go-to-week',
         'add-holiday', 'delete-holiday', 'select-settings-tab',
         'add-competency', 'delete-competency', 'add-criterion', 'delete-criterion',
-        'select-competency', 'back-to-competencies'
+        'select-competency', 'back-to-competencies', 'open-class-activity-form',
+        'cancel-class-activity-form', 'create-class-activity', 'delete-class-activity',
+        'toggle-class-activity-criterion'
     ];
     
     if (actionHandlers[action]) {
