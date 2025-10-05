@@ -652,6 +652,7 @@ export function renderStudentDetailView() {
 
     let positivesTotal = 0;
     let incidentsTotal = 0;
+    let commentsTotal = 0;
 
     const annotationsByClass = {};
     const studentEntries = [];
@@ -662,13 +663,13 @@ export function renderStudentDetailView() {
             return;
         }
 
-        const normalized = normalizeStudentAnnotation(rawAnnotation);
-        const hasNote = typeof normalized.note === 'string' && normalized.note.trim() !== '';
+        const normalized = normalizeStudentAnnotation(rawAnnotation, entryId);
         const hasAttendance = Boolean(normalized.attendance);
         const hasPositives = Array.isArray(normalized.positives) && normalized.positives.length > 0;
         const hasIncidents = Array.isArray(normalized.incidents) && normalized.incidents.length > 0;
+        const hasComments = Array.isArray(normalized.comments) && normalized.comments.length > 0;
 
-        if (!hasNote && !hasAttendance && !hasPositives && !hasIncidents) {
+        if (!hasAttendance && !hasPositives && !hasIncidents && !hasComments) {
             return;
         }
 
@@ -691,10 +692,10 @@ export function renderStudentDetailView() {
         const annotationEntry = {
             entryId,
             date,
-            note: normalized.note || '',
             attendance: normalized.attendance || null,
             positives: Array.isArray(normalized.positives) ? normalized.positives : [],
-            incidents: Array.isArray(normalized.incidents) ? normalized.incidents : []
+            incidents: Array.isArray(normalized.incidents) ? normalized.incidents : [],
+            comments: Array.isArray(normalized.comments) ? normalized.comments : []
         };
 
         annotationsByClass[activityId].annotations.push(annotationEntry);
@@ -705,6 +706,7 @@ export function renderStudentDetailView() {
         }
         positivesTotal += annotationEntry.positives.length;
         incidentsTotal += annotationEntry.incidents.length;
+        commentsTotal += annotationEntry.comments.length;
     });
 
     for (const activityId in annotationsByClass) {
@@ -716,7 +718,7 @@ export function renderStudentDetailView() {
     const totalEntries = studentEntries.length;
     const attendanceSessions = Object.values(attendanceCounts).reduce((sum, value) => sum + value, 0);
 
-    const validFilters = ['all', 'positive', 'incident'];
+    const validFilters = ['all', 'positive', 'comment', 'incident'];
     const timelineFilter = validFilters.includes(state.studentTimelineFilter) ? state.studentTimelineFilter : 'all';
     state.studentTimelineFilter = timelineFilter;
 
@@ -743,6 +745,7 @@ export function renderStudentDetailView() {
     const filterButtonsHtml = [
         { key: 'all', label: `${t('student_records_filter_all')} (${totalEntries})` },
         { key: 'positive', label: `${t('student_records_filter_positive')} (${positivesTotal})` },
+        { key: 'comment', label: `${t('student_records_filter_comment')} (${commentsTotal})` },
         { key: 'incident', label: `${t('student_records_filter_incident')} (${incidentsTotal})` }
     ].map(filter => {
         const isActive = timelineFilter === filter.key;
@@ -801,6 +804,9 @@ export function renderStudentDetailView() {
             if (timelineFilter === 'incident') {
                 return item.incidents.length > 0;
             }
+            if (timelineFilter === 'comment') {
+                return item.comments.length > 0;
+            }
             return true;
         });
 
@@ -838,9 +844,30 @@ export function renderStudentDetailView() {
                             </p>
                             <ul class="space-y-1">
                                 ${item.positives.map(record => `
-                                    <li class="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/40 rounded-md p-2 text-xs text-gray-700 dark:text-gray-200">
-                                        <p>${record.content}</p>
-                                        ${formatRecordTimestamp(record) ? `<p class="text-[10px] text-green-600 dark:text-green-300 mt-1">${formatRecordTimestamp(record)}</p>` : ''}
+                                    <li>
+                                        <button type="button" data-action="edit-positive-record" data-entry-id="${item.entryId}" data-student-id="${student.id}" data-record-id="${record.id}" class="w-full text-left bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/40 rounded-md p-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-green-100 dark:hover:bg-green-900/30 focus:outline-none focus:ring-2 focus:ring-green-400/60">
+                                            <p>${record.content}</p>
+                                            ${formatRecordTimestamp(record) ? `<p class="text-[10px] text-green-600 dark:text-green-300 mt-1">${formatRecordTimestamp(record)}</p>` : ''}
+                                        </button>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    ` : '';
+
+                    const commentsSection = item.comments.length > 0 ? `
+                        <div class="space-y-1">
+                            <p class="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                                <i data-lucide="message-square-more" class="w-3 h-3"></i>
+                                ${t('comment_record_label')}
+                            </p>
+                            <ul class="space-y-1">
+                                ${item.comments.map(record => `
+                                    <li>
+                                        <button type="button" data-action="edit-comment-record" data-entry-id="${item.entryId}" data-student-id="${student.id}" data-record-id="${record.id}" class="w-full text-left bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40 rounded-md p-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-100 dark:hover:bg-blue-900/30 focus:outline-none focus:ring-2 focus:ring-blue-400/60">
+                                            <p>${record.content}</p>
+                                            ${formatRecordTimestamp(record) ? `<p class="text-[10px] text-blue-600 dark:text-blue-300 mt-1">${formatRecordTimestamp(record)}</p>` : ''}
+                                        </button>
                                     </li>
                                 `).join('')}
                             </ul>
@@ -855,9 +882,11 @@ export function renderStudentDetailView() {
                             </p>
                             <ul class="space-y-1">
                                 ${item.incidents.map(record => `
-                                    <li class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 rounded-md p-2 text-xs text-gray-700 dark:text-gray-200">
-                                        <p>${record.content}</p>
-                                        ${formatRecordTimestamp(record) ? `<p class="text-[10px] text-red-600 dark:text-red-300 mt-1">${formatRecordTimestamp(record)}</p>` : ''}
+                                    <li>
+                                        <button type="button" data-action="edit-incident-record" data-entry-id="${item.entryId}" data-student-id="${student.id}" data-record-id="${record.id}" class="w-full text-left bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 rounded-md p-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-red-100 dark:hover:bg-red-900/30 focus:outline-none focus:ring-2 focus:ring-red-400/60">
+                                            <p>${record.content}</p>
+                                            ${formatRecordTimestamp(record) ? `<p class="text-[10px] text-red-600 dark:text-red-300 mt-1">${formatRecordTimestamp(record)}</p>` : ''}
+                                        </button>
                                     </li>
                                 `).join('')}
                             </ul>
@@ -870,8 +899,8 @@ export function renderStudentDetailView() {
                             <p class="text-xs text-gray-500 dark:text-gray-400">${item.date.toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                             ${attendanceInfo}
                             ${positivesSection}
+                            ${commentsSection}
                             ${incidentsSection}
-                            <textarea data-action="edit-session-annotation" data-entry-id="${item.entryId}" data-student-id="${student.id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 h-24">${item.note}</textarea>
                         </div>
                     `;
                 }).join('')}
@@ -1440,22 +1469,25 @@ export function renderActivityDetailView() {
 
     const attendanceOptions = [
         {
-            status: STUDENT_ATTENDANCE_STATUS.ABSENCE,
-            icon: 'circle-x',
-            label: t('attendance_absence'),
-            activeClasses: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-200 dark:border-red-700'
-        },
-        {
             status: STUDENT_ATTENDANCE_STATUS.LATE_SHORT,
             icon: 'clock-2',
             label: t('attendance_late_short'),
+            shortLabel: t('attendance_late_short_short'),
             activeClasses: 'bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-900/40 dark:text-yellow-200 dark:border-yellow-700'
         },
         {
             status: STUDENT_ATTENDANCE_STATUS.LATE_LONG,
             icon: 'clock-alert',
             label: t('attendance_late_long'),
+            shortLabel: t('attendance_late_long_short'),
             activeClasses: 'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/40 dark:text-orange-200 dark:border-orange-700'
+        },
+        {
+            status: STUDENT_ATTENDANCE_STATUS.ABSENCE,
+            icon: 'circle-x',
+            label: t('attendance_absence'),
+            shortLabel: t('attendance_absence_short'),
+            activeClasses: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-200 dark:border-red-700'
         }
     ];
 
@@ -1466,21 +1498,24 @@ export function renderActivityDetailView() {
     const locale = document.documentElement.lang || 'es';
 
     const annotationsHtml = studentsInClass.length > 0 ? studentsInClass.map(student => {
-        const annotationData = normalizeStudentAnnotation(entryAnnotations[student.id]);
+        const annotationData = normalizeStudentAnnotation(entryAnnotations[student.id], entryId);
         const attendanceButtons = attendanceOptions.map(option => {
             const isActive = annotationData.attendance === option.status;
             const buttonClasses = `${basePillClass} ${isActive ? option.activeClasses : inactivePillClass}`;
             return `
                 <button type="button" data-action="toggle-attendance-status" data-student-id="${student.id}" data-status="${option.status}" class="${buttonClasses}" aria-pressed="${isActive}" title="${option.label}" aria-label="${option.label}">
                     <i data-lucide="${option.icon}" class="w-4 h-4"></i>
-                    <span class="hidden lg:inline">${option.label}</span>
+                    <span class="hidden sm:inline">${option.label}</span>
+                    <span class="sm:hidden font-semibold">${option.shortLabel}</span>
                 </button>
             `;
         }).join('');
 
-        const positivesCount = annotationData.positives.length;
-        const incidentsCount = annotationData.incidents.length;
+        const positivesCount = Array.isArray(annotationData.positives) ? annotationData.positives.length : 0;
+        const commentsCount = Array.isArray(annotationData.comments) ? annotationData.comments.length : 0;
+        const incidentsCount = Array.isArray(annotationData.incidents) ? annotationData.incidents.length : 0;
         const positiveButtonClasses = `${basePillClass} ${positivesCount > 0 ? 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/40 dark:text-green-200 dark:border-green-700' : inactivePillClass}`;
+        const commentButtonClasses = `${basePillClass} ${commentsCount > 0 ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-200 dark:border-blue-700' : inactivePillClass}`;
         const incidentButtonClasses = `${basePillClass} ${incidentsCount > 0 ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-200 dark:border-red-700' : inactivePillClass}`;
 
         const formatRecordTimestamp = (record) => {
@@ -1511,10 +1546,31 @@ export function renderActivityDetailView() {
                     ${t('positive_record_label')}
                 </p>
                 <ul class="space-y-1">
-                    ${annotationData.positives.map(record => `
-                        <li class="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/40 rounded-md p-2 text-xs text-gray-700 dark:text-gray-200">
-                            <p>${record.content}</p>
-                            ${formatRecordTimestamp(record) ? `<p class="text-[10px] text-green-600 dark:text-green-300 mt-1">${formatRecordTimestamp(record)}</p>` : ''}
+                    ${(Array.isArray(annotationData.positives) ? annotationData.positives : []).map(record => `
+                        <li>
+                            <button type="button" data-action="edit-positive-record" data-entry-id="${entryId}" data-student-id="${student.id}" data-record-id="${record.id}" class="w-full text-left bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/40 rounded-md p-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-green-100 dark:hover:bg-green-900/30 focus:outline-none focus:ring-2 focus:ring-green-400/60">
+                                <p>${record.content}</p>
+                                ${formatRecordTimestamp(record) ? `<p class="text-[10px] text-green-600 dark:text-green-300 mt-1">${formatRecordTimestamp(record)}</p>` : ''}
+                            </button>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        ` : '';
+
+        const commentsInfo = commentsCount > 0 ? `
+            <div class="space-y-1">
+                <p class="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                    <i data-lucide="message-square-more" class="w-3 h-3"></i>
+                    ${t('comment_record_label')}
+                </p>
+                <ul class="space-y-1">
+                    ${(Array.isArray(annotationData.comments) ? annotationData.comments : []).map(record => `
+                        <li>
+                            <button type="button" data-action="edit-comment-record" data-entry-id="${entryId}" data-student-id="${student.id}" data-record-id="${record.id}" class="w-full text-left bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40 rounded-md p-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-blue-100 dark:hover:bg-blue-900/30 focus:outline-none focus:ring-2 focus:ring-blue-400/60">
+                                <p>${record.content}</p>
+                                ${formatRecordTimestamp(record) ? `<p class="text-[10px] text-blue-600 dark:text-blue-300 mt-1">${formatRecordTimestamp(record)}</p>` : ''}
+                            </button>
                         </li>
                     `).join('')}
                 </ul>
@@ -1528,17 +1584,19 @@ export function renderActivityDetailView() {
                     ${t('incident_record_label')}
                 </p>
                 <ul class="space-y-1">
-                    ${annotationData.incidents.map(record => `
-                        <li class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 rounded-md p-2 text-xs text-gray-700 dark:text-gray-200">
-                            <p>${record.content}</p>
-                            ${formatRecordTimestamp(record) ? `<p class="text-[10px] text-red-600 dark:text-red-300 mt-1">${formatRecordTimestamp(record)}</p>` : ''}
+                    ${(Array.isArray(annotationData.incidents) ? annotationData.incidents : []).map(record => `
+                        <li>
+                            <button type="button" data-action="edit-incident-record" data-entry-id="${entryId}" data-student-id="${student.id}" data-record-id="${record.id}" class="w-full text-left bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 rounded-md p-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-red-100 dark:hover:bg-red-900/30 focus:outline-none focus:ring-2 focus:ring-red-400/60">
+                                <p>${record.content}</p>
+                                ${formatRecordTimestamp(record) ? `<p class="text-[10px] text-red-600 dark:text-red-300 mt-1">${formatRecordTimestamp(record)}</p>` : ''}
+                            </button>
                         </li>
                     `).join('')}
                 </ul>
             </div>
         ` : '';
 
-        const extraInfo = [attendanceInfo, positivesInfo, incidentsInfo].filter(Boolean).join('');
+        const extraInfo = [attendanceInfo, positivesInfo, commentsInfo, incidentsInfo].filter(Boolean).join('');
 
         return `
             <div id="student-annotation-${student.id}" class="p-3 border border-gray-200 dark:border-gray-700 rounded-md space-y-3 bg-gray-50/60 dark:bg-gray-900/40">
@@ -1553,18 +1611,25 @@ export function renderActivityDetailView() {
                         <div class="flex items-center gap-2 ml-2">
                             <button type="button" data-action="add-positive-record" data-student-id="${student.id}" class="${positiveButtonClasses}" title="${t('add_positive_record')}" aria-label="${t('add_positive_record')}">
                                 <i data-lucide="shield-plus" class="w-4 h-4"></i>
-                                <span class="hidden lg:inline">${t('positive_record_label')}</span>
+                                <span class="hidden sm:inline">${t('positive_record_label')}</span>
+                                <span class="sm:hidden font-semibold">${t('positive_record_short')}</span>
                                 ${positivesCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-green-900/60 text-xs font-semibold">${positivesCount}</span>` : ''}
+                            </button>
+                            <button type="button" data-action="add-comment-record" data-student-id="${student.id}" class="${commentButtonClasses}" title="${t('add_comment_record')}" aria-label="${t('add_comment_record')}">
+                                <i data-lucide="message-square-more" class="w-4 h-4"></i>
+                                <span class="hidden sm:inline">${t('comment_record_label')}</span>
+                                <span class="sm:hidden font-semibold">${t('comment_record_short')}</span>
+                                ${commentsCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-blue-900/60 text-xs font-semibold">${commentsCount}</span>` : ''}
                             </button>
                             <button type="button" data-action="add-incident-record" data-student-id="${student.id}" class="${incidentButtonClasses}" title="${t('add_incident_record')}" aria-label="${t('add_incident_record')}">
                                 <i data-lucide="clock-alert" class="w-4 h-4"></i>
-                                <span class="hidden lg:inline">${t('incident_record_label')}</span>
+                                <span class="hidden sm:inline">${t('incident_record_label')}</span>
+                                <span class="sm:hidden font-semibold">${t('incident_record_short')}</span>
                                 ${incidentsCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-red-900/60 text-xs font-semibold">${incidentsCount}</span>` : ''}
                             </button>
                         </div>
                     </div>
                 </div>
-                <textarea data-action="annotation-change" data-student-id="${student.id}" placeholder="${t('student_notes_placeholder')}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md h-24">${annotationData.note || ''}</textarea>
                 ${extraInfo ? `<div class="space-y-2">${extraInfo}</div>` : ''}
             </div>
         `;
