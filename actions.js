@@ -271,10 +271,9 @@ export const actionHandlers = {
         let code = rawCode;
         if (!code) {
             code = 'CE';
-        } else if (!code.toUpperCase().startsWith('CE')) {
+        } else if (!code.toLowerCase().startsWith('ce')) {
             code = `CE${code}`;
         }
-        code = code.toUpperCase();
 
         const newCompetency = {
             id: crypto.randomUUID(),
@@ -319,10 +318,10 @@ export const actionHandlers = {
         if (!value) {
             competency.code = '';
         } else {
-            if (!value.toUpperCase().startsWith('CE')) {
+            if (!value.toLowerCase().startsWith('ce')) {
                 value = `CE${value}`;
             }
-            competency.code = value.toUpperCase();
+            competency.code = value;
         }
         saveState();
     },
@@ -389,10 +388,10 @@ export const actionHandlers = {
         if (!value) {
             criterion.code = '';
         } else {
-            if (!value.toUpperCase().startsWith('CA')) {
+            if (!value.toLowerCase().startsWith('ca')) {
                 value = `CA${value}`;
             }
-            criterion.code = value.toUpperCase();
+            criterion.code = value;
         }
         saveState();
     },
