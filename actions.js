@@ -4,6 +4,66 @@ import { state, saveState, getRandomPastelColor } from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange } from './utils.js';
 import { t } from './i18n.js';
 
+function escapeRegExp(str) {
+    return str.replace(/[-/\^$*+?.()|[\]{}]/g, '\$&');
+}
+
+function getCompetencyBaseIdentifier(code) {
+    if (typeof code !== 'string') {
+        return '';
+    }
+
+    let trimmedCode = code.trim();
+    if (!trimmedCode) {
+        return '';
+    }
+
+    if (trimmedCode.toUpperCase().startsWith('CE')) {
+        trimmedCode = trimmedCode.slice(2);
+    }
+
+    return trimmedCode.replace(/^[-_.\s]+/, '').trim();
+}
+
+function getNextCriterionCode(competency) {
+    const baseIdentifier = getCompetencyBaseIdentifier(competency?.code);
+    const criteria = Array.isArray(competency?.criteria) ? competency.criteria : [];
+
+    let maxIndex = 0;
+    const pattern = baseIdentifier ? new RegExp(`^CA${escapeRegExp(baseIdentifier)}\\.(\\d+)$`, 'i') : null;
+
+    criteria.forEach(criterion => {
+        if (!criterion?.code) {
+            return;
+        }
+
+        const code = criterion.code.trim();
+        if (!code) {
+            return;
+        }
+
+        let match = pattern ? code.match(pattern) : null;
+        if (!match) {
+            match = code.match(/\.([0-9]+)$/) || code.match(/([0-9]+)$/);
+        }
+
+        if (match && match[1]) {
+            const value = parseInt(match[1], 10);
+            if (!Number.isNaN(value)) {
+                maxIndex = Math.max(maxIndex, value);
+            }
+        }
+    });
+
+    const nextIndex = (maxIndex || 0) + 1;
+
+    if (baseIdentifier) {
+        return `CA${baseIdentifier}.${nextIndex}`;
+    }
+
+    return `CA${nextIndex}`;
+}
+
 function showImportSummary(data) {
     const title = t('import_summary_title');
     const content = `
@@ -308,7 +368,7 @@ export const actionHandlers = {
 
         competency.criteria.push({
             id: crypto.randomUUID(),
-            code: 'CA',
+            code: getNextCriterionCode(competency),
             description: ''
         });
 
