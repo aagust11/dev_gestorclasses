@@ -1,48 +1,60 @@
-// state.js: Estat global i persistència de l'aplicació.
+// state.js: Gestiona el estado global y la persistencia de datos.
 
-const STORAGE_KEY = 'gestorClassesData';
+const pastelColors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A0C4FF', '#BDB2FF', '#FFC6FF'];
 
-const today = new Date();
-const formattedToday = today.toISOString().slice(0, 10);
-
+// El estado central de la aplicación.
 export const state = {
-    activeView: 'subjects',
-    subjects: [],
+    activeView: 'schedule',
+    activities: [],
     students: [],
-    sharedConfigs: [],
-    selectedSubjectId: null,
-    selectedEvaluationSubjectId: null,
-    selectedEvaluationActivityId: null,
-    evaluationViewMode: 'single',
-    selectedAttendanceSubjectId: null,
-    selectedAttendanceDate: formattedToday,
-    settings: {
-        evaluationMode: 'numeric',
-        qualitativeScale: ['NS', 'S', 'B', 'E'],
-        competencyCodeText: '',
-        criterionCodeText: ''
-    }
+    timeSlots: [],
+    schedule: {},
+    scheduleOverrides: [],
+    classEntries: {},
+    currentDate: new Date(),
+    courseStartDate: '', // Mantenido por retrocompatibilidad, pero los trimestres tienen prioridad.
+    courseEndDate: '',   // Mantenido por retrocompatibilidad.
+    terms: [], 
+    selectedTermId: 'all', 
+    holidays: [], 
+    selectedActivity: null,
+    selectedStudentId: null,
+    editingTimeSlotId: null,
+    editingActivityId: null,
+    settingsActiveTab: 'calendar', // NUEVO: Pestaña activa en la vista de configuración
 };
 
-let saveTimeout;
+export function getRandomPastelColor() {
+    const usedColors = state.activities.map(a => a.color);
+    const availableColors = pastelColors.filter(c => !usedColors.includes(c));
+    return availableColors.length > 0 ? availableColors[0] : pastelColors[Math.floor(Math.random() * pastelColors.length)];
+}
 
+let saveTimeout;
 export function saveState() {
     const dataToSave = {
-        subjects: state.subjects,
+        activities: state.activities,
         students: state.students,
-        sharedConfigs: state.sharedConfigs,
-        settings: state.settings
+        timeSlots: state.timeSlots,
+        schedule: state.schedule,
+        scheduleOverrides: state.scheduleOverrides,
+        classEntries: state.classEntries,
+        courseStartDate: state.courseStartDate,
+        courseEndDate: state.courseEndDate,
+        terms: state.terms, 
+        selectedTermId: state.selectedTermId,
+        holidays: state.holidays,
+        settingsActiveTab: state.settingsActiveTab // Guardar la pestaña activa
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-
+    localStorage.setItem('teacherDashboardData', JSON.stringify(dataToSave));
+    
     const indicator = document.getElementById('save-indicator');
     if (indicator) {
         indicator.classList.add('show');
-        if (window.lucide) {
-            window.lucide.createIcons({
-                nodes: [indicator.querySelector('i')]
-            });
-        }
+        lucide.createIcons({
+            nodes: [indicator.querySelector('i')]
+        });
+
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
             indicator.classList.remove('show');
@@ -51,24 +63,20 @@ export function saveState() {
 }
 
 export function loadState() {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) {
-        return;
-    }
-
-    try {
-        const parsed = JSON.parse(saved);
-        state.subjects = parsed.subjects || [];
-        state.students = parsed.students || [];
-        state.sharedConfigs = parsed.sharedConfigs || [];
-        state.settings = {
-            evaluationMode: 'numeric',
-            qualitativeScale: ['NS', 'S', 'B', 'E'],
-            competencyCodeText: '',
-            criterionCodeText: '',
-            ...parsed.settings
-        };
-    } catch (error) {
-        console.error('Error carregant les dades desades', error);
+    const savedData = localStorage.getItem('teacherDashboardData');
+    if (savedData) {
+        const parsedData = JSON.parse(savedData);
+        state.activities = parsedData.activities || [];
+        state.students = parsedData.students || [];
+        state.timeSlots = parsedData.timeSlots || [];
+        state.schedule = parsedData.schedule || {};
+        state.scheduleOverrides = parsedData.scheduleOverrides || [];
+        state.classEntries = parsedData.classEntries || {};
+        state.courseStartDate = parsedData.courseStartDate || '';
+        state.courseEndDate = parsedData.courseEndDate || '';
+        state.terms = parsedData.terms || []; 
+        state.selectedTermId = parsedData.selectedTermId || 'all';
+        state.holidays = parsedData.holidays || [];
+        state.settingsActiveTab = parsedData.settingsActiveTab || 'calendar'; // Cargar la pestaña activa
     }
 }
