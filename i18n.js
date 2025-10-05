@@ -1,7 +1,7 @@
 // i18n.js: Módulo para gestionar la internacionalización
 
 let translations = {};
-const supportedLangs = ['es', 'ca', 'en', 'gl', 'eu'];
+const supportedLangs = ['ca', 'es', 'en', 'gl', 'eu'];
 let renderCallback = () => {}; // Callback para re-renderizar la UI cuando cambia el idioma
 
 /**
@@ -17,8 +17,10 @@ async function loadTranslations(lang) {
         translations = await response.json();
     } catch (error) {
         console.error('Error al cargar las traducciones:', error);
-        // Si falla, se carga el español como idioma por defecto.
-        if (lang !== 'es') {
+        // Si falla, se intenta cargar el catalán como idioma por defecto y, como último recurso, el español.
+        if (lang !== 'ca' && lang !== 'es') {
+            await loadTranslations('ca');
+        } else if (lang === 'ca') {
             await loadTranslations('es');
         }
     }
@@ -40,7 +42,7 @@ export function t(key) {
 async function setLanguage(lang) {
     // Asegurarse de que el idioma esté soportado
     if (!supportedLangs.includes(lang)) {
-        lang = 'es';
+        lang = 'ca';
     }
     
     await loadTranslations(lang);
@@ -77,10 +79,8 @@ async function setLanguage(lang) {
 export async function initI18n(renderFunc) {
     renderCallback = renderFunc;
 
-    // Detectar el idioma a cargar: 1º guardado, 2º del navegador, 3º español por defecto.
-    const savedLang = localStorage.getItem('preferredLanguage');
-    const browserLang = navigator.language.split('-')[0];
-    const langToLoad = savedLang || (supportedLangs.includes(browserLang) ? browserLang : 'es');
+    // El idioma por defecto y de inicio siempre será el catalán.
+    const langToLoad = 'ca';
     
     // Añadir los eventos de clic a los botones de idioma
     document.querySelectorAll('.lang-switcher').forEach(btn => {
@@ -93,6 +93,7 @@ export async function initI18n(renderFunc) {
     // Cargar el idioma inicial y actualizar la UI estática.
     await loadTranslations(langToLoad);
     document.documentElement.lang = langToLoad;
+    localStorage.setItem('preferredLanguage', langToLoad);
     document.title = t('app_title'); // Traduce el título al iniciar
 
     // Actualiza el estilo de los botones del selector de idioma al cargar
