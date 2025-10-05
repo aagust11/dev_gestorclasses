@@ -80,19 +80,28 @@ function handleAction(action, element, event) {
         'go-to-class-session', 'add-term', 'delete-term', 'select-term', 'go-to-week',
         'add-holiday', 'delete-holiday', 'select-settings-tab',
         'add-competency', 'delete-competency', 'add-criterion', 'delete-criterion',
-        'select-competency', 'back-to-competencies'
+        'select-competency', 'back-to-competencies', 'toggle-attendance-status',
+        'add-positive-record', 'add-incident-record', 'set-student-timeline-filter'
     ];
-    
-    if (actionHandlers[action]) {
-        actionHandlers[action](id, element, event);
-    }
 
-    if (reRenderActions.includes(action)) {
-        render();
-        if (action === 'edit-activity') {
-            const targetElement = document.getElementById(`edit-activity-form-${id}`);
-            if (targetElement) {
-                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (actionHandlers[action]) {
+        const result = actionHandlers[action](id, element, event);
+
+        if (reRenderActions.includes(action)) {
+            const rerender = () => {
+                render();
+                if (action === 'edit-activity') {
+                    const targetElement = document.getElementById(`edit-activity-form-${id}`);
+                    if (targetElement) {
+                        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+            };
+
+            if (result && typeof result.then === 'function') {
+                result.then(rerender).catch(console.error);
+            } else {
+                rerender();
             }
         }
     }

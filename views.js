@@ -1,7 +1,7 @@
 // views.js: Contiene todas las funciones que generan el HTML de las vistas.
 
 import { state } from './state.js';
-import { darkenColor, getWeekStartDate, getWeekDateRange, formatDate, isSameDate, findNextSession, findPreviousSession, DAY_KEYS, findNextClassSession, getCurrentTermDateRange, getWeeksForCourse, isHoliday } from './utils.js';
+import { darkenColor, getWeekStartDate, getWeekDateRange, formatDate, isSameDate, findNextSession, findPreviousSession, DAY_KEYS, findNextClassSession, getCurrentTermDateRange, getWeeksForCourse, isHoliday, normalizeStudentAnnotation, STUDENT_ATTENDANCE_STATUS } from './utils.js';
 import { t } from './i18n.js';
 
 const sortStudentsByName = (studentA, studentB) => studentA.name.localeCompare(studentB.name);
@@ -313,34 +313,103 @@ export function renderStudentDetailView() {
 
     const termRange = getCurrentTermDateRange();
     
-    const annotationsByClass = Object.entries(state.classEntries).reduce((acc, [entryId, entryData]) => {
-        const annotation = entryData.annotations?.[student.id];
-        if (annotation && annotation.trim() !== '') {
-            const [activityId, dateString] = entryId.split('_');
-            const date = new Date(dateString + 'T00:00:00');
-
-            if (termRange && (date < termRange.start || date > termRange.end)) {
-                return acc;
-            }
-
-            const activity = state.activities.find(a => a.id === activityId);
-            if (!acc[activityId]) {
-                acc[activityId] = {
-                    name: activity ? activity.name : 'Clase eliminada',
-                    color: activity ? activity.color : '#cccccc',
-                    annotations: []
-                };
-            }
-            acc[activityId].annotations.push({ entryId, date, annotation });
+    const locale = document.documentElement.lang || 'es';
+    const attendanceMeta = [
+        {
+            status: STUDENT_ATTENDANCE_STATUS.ABSENCE,
+            icon: 'circle-x',
+            label: t('attendance_absence'),
+            badgeClasses: 'bg-red-100 text-red-700 border border-red-300 dark:bg-red-900/40 dark:text-red-200 dark:border-red-700'
+        },
+        {
+            status: STUDENT_ATTENDANCE_STATUS.LATE_SHORT,
+            icon: 'clock-2',
+            label: t('attendance_late_short'),
+            badgeClasses: 'bg-yellow-100 text-yellow-700 border border-yellow-300 dark:bg-yellow-900/40 dark:text-yellow-200 dark:border-yellow-700'
+        },
+        {
+            status: STUDENT_ATTENDANCE_STATUS.LATE_LONG,
+            icon: 'clock-alert',
+            label: t('attendance_late_long'),
+            badgeClasses: 'bg-orange-100 text-orange-700 border border-orange-300 dark:bg-orange-900/40 dark:text-orange-200 dark:border-orange-700'
         }
-        return acc;
-    }, {});
+    ];
+
+    const attendanceCounts = {
+        [STUDENT_ATTENDANCE_STATUS.ABSENCE]: 0,
+        [STUDENT_ATTENDANCE_STATUS.LATE_SHORT]: 0,
+        [STUDENT_ATTENDANCE_STATUS.LATE_LONG]: 0
+    };
+
+    let positivesTotal = 0;
+    let incidentsTotal = 0;
+
+    const annotationsByClass = {};
+    const studentEntries = [];
+
+    Object.entries(state.classEntries).forEach(([entryId, entryData]) => {
+        const rawAnnotation = entryData.annotations?.[student.id];
+        if (!rawAnnotation) {
+            return;
+        }
+
+        const normalized = normalizeStudentAnnotation(rawAnnotation);
+        const hasNote = typeof normalized.note === 'string' && normalized.note.trim() !== '';
+        const hasAttendance = Boolean(normalized.attendance);
+        const hasPositives = Array.isArray(normalized.positives) && normalized.positives.length > 0;
+        const hasIncidents = Array.isArray(normalized.incidents) && normalized.incidents.length > 0;
+
+        if (!hasNote && !hasAttendance && !hasPositives && !hasIncidents) {
+            return;
+        }
+
+        const [activityId, dateString] = entryId.split('_');
+        const date = new Date(dateString + 'T00:00:00');
+
+        if (termRange && (date < termRange.start || date > termRange.end)) {
+            return;
+        }
+
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!annotationsByClass[activityId]) {
+            annotationsByClass[activityId] = {
+                name: activity ? activity.name : 'Clase eliminada',
+                color: activity ? activity.color : '#cccccc',
+                annotations: []
+            };
+        }
+
+        const annotationEntry = {
+            entryId,
+            date,
+            note: normalized.note || '',
+            attendance: normalized.attendance || null,
+            positives: Array.isArray(normalized.positives) ? normalized.positives : [],
+            incidents: Array.isArray(normalized.incidents) ? normalized.incidents : []
+        };
+
+        annotationsByClass[activityId].annotations.push(annotationEntry);
+        studentEntries.push({ ...annotationEntry, activityId });
+
+        if (annotationEntry.attendance && attendanceCounts[annotationEntry.attendance] !== undefined) {
+            attendanceCounts[annotationEntry.attendance] += 1;
+        }
+        positivesTotal += annotationEntry.positives.length;
+        incidentsTotal += annotationEntry.incidents.length;
+    });
 
     for (const activityId in annotationsByClass) {
         annotationsByClass[activityId].annotations.sort((a, b) => b.date - a.date);
     }
-    
+
     const annotationClasses = Object.entries(annotationsByClass).sort(([, a], [, b]) => a.name.localeCompare(b.name));
+
+    const totalEntries = studentEntries.length;
+    const attendanceSessions = Object.values(attendanceCounts).reduce((sum, value) => sum + value, 0);
+
+    const validFilters = ['all', 'positive', 'incident'];
+    const timelineFilter = validFilters.includes(state.studentTimelineFilter) ? state.studentTimelineFilter : 'all';
+    state.studentTimelineFilter = timelineFilter;
 
     const classSelectorOptions = annotationClasses.map(([activityId, classData]) =>
         `<option value="${activityId}">${classData.name}</option>`
@@ -357,26 +426,152 @@ export function renderStudentDetailView() {
             </select>
         </div>
     ` : '';
-    
-    const annotationsHistoryHtml = annotationClasses.length > 0
-        ? annotationClasses.map(([activityId, classData]) => `
+
+    const baseFilterBtnClass = 'px-3 py-1.5 rounded-full text-sm border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600';
+    const inactiveFilterBtnClass = 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700';
+    const activeFilterBtnClass = 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500';
+
+    const filterButtonsHtml = [
+        { key: 'all', label: `${t('student_records_filter_all')} (${totalEntries})` },
+        { key: 'positive', label: `${t('student_records_filter_positive')} (${positivesTotal})` },
+        { key: 'incident', label: `${t('student_records_filter_incident')} (${incidentsTotal})` }
+    ].map(filter => {
+        const isActive = timelineFilter === filter.key;
+        const classes = `${baseFilterBtnClass} ${isActive ? activeFilterBtnClass : inactiveFilterBtnClass}`;
+        return `<button type="button" data-action="set-student-timeline-filter" data-filter="${filter.key}" class="${classes}" aria-pressed="${isActive}">${filter.label}</button>`;
+    }).join('');
+
+    const formatPercentage = (count) => {
+        if (!attendanceSessions) return '0';
+        const value = (count / attendanceSessions) * 100;
+        return value % 1 === 0 ? value.toFixed(0) : value.toFixed(1);
+    };
+
+    const attendanceSummaryHtml = attendanceSessions > 0
+        ? attendanceMeta.map(meta => {
+            const count = attendanceCounts[meta.status] || 0;
+            return `
+                <p class="text-sm text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${meta.badgeClasses}">
+                        <i data-lucide="${meta.icon}" class="w-3 h-3"></i>
+                        ${meta.label}
+                    </span>
+                    <span>${formatPercentage(count)}% (${count})</span>
+                </p>
+            `;
+        }).join('')
+        : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('attendance_summary_no_data')}</p>`;
+
+    const recordsSummaryHtml = `
+        <div class="mb-4">
+            <div class="p-4 bg-gray-100 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4">
+                <div>
+                    <p class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">${t('student_records_summary_title')}</p>
+                    <div class="flex flex-wrap gap-2">${filterButtonsHtml}</div>
+                </div>
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 font-semibold mb-2">${t('attendance_summary_title')}</p>
+                    <div class="space-y-1">${attendanceSummaryHtml}</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const formatRecordTimestamp = (record) => {
+        if (!record?.createdAt) return '';
+        const recordDate = new Date(record.createdAt);
+        if (Number.isNaN(recordDate.getTime())) return '';
+        return recordDate.toLocaleString(locale, { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const annotationsTimelineHtml = annotationClasses.map(([activityId, classData]) => {
+        const filteredAnnotations = classData.annotations.filter(item => {
+            if (timelineFilter === 'positive') {
+                return item.positives.length > 0;
+            }
+            if (timelineFilter === 'incident') {
+                return item.incidents.length > 0;
+            }
+            return true;
+        });
+
+        if (filteredAnnotations.length === 0) {
+            return '';
+        }
+
+        return `
             <div id="annotation-block-${activityId}" class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg mb-4">
                 <h4 class="flex items-center gap-2 mb-3 text-md font-semibold">
                     <span class="w-4 h-4 rounded-full" style="background-color: ${classData.color};"></span>
                     <span>${classData.name}</span>
                 </h4>
                 <div class="space-y-3 pl-6 border-l-2 border-gray-200 dark:border-gray-600">
-                ${classData.annotations.map(item => `
-                    <div class="relative">
-                         <span class="absolute -left-[31px] top-1 h-4 w-4 rounded-full bg-gray-300 dark:bg-gray-500 border-4 border-gray-50 dark:border-gray-700/50"></span>
-                         <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">${item.date.toLocaleDateString(document.documentElement.lang, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                         <textarea data-action="edit-session-annotation" data-entry-id="${item.entryId}" data-student-id="${student.id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 h-24">${item.annotation}</textarea>
-                    </div>
-                `).join('')}
+                ${filteredAnnotations.map(item => {
+                    const attendanceInfo = item.attendance ? (() => {
+                        const meta = attendanceMeta.find(opt => opt.status === item.attendance);
+                        if (!meta) return '';
+                        return `
+                            <div class="text-xs text-gray-600 dark:text-gray-300 flex items-center gap-2">
+                                <span class="font-semibold">${t('attendance_record_label')}</span>
+                                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold ${meta.badgeClasses}">
+                                    <i data-lucide="${meta.icon}" class="w-3 h-3"></i>
+                                    ${meta.label}
+                                </span>
+                            </div>
+                        `;
+                    })() : '';
+
+                    const positivesSection = item.positives.length > 0 ? `
+                        <div class="space-y-1">
+                            <p class="text-xs font-semibold text-green-700 dark:text-green-300 flex items-center gap-1">
+                                <i data-lucide="shield-plus" class="w-3 h-3"></i>
+                                ${t('positive_record_label')}
+                            </p>
+                            <ul class="space-y-1">
+                                ${item.positives.map(record => `
+                                    <li class="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/40 rounded-md p-2 text-xs text-gray-700 dark:text-gray-200">
+                                        <p>${record.content}</p>
+                                        ${formatRecordTimestamp(record) ? `<p class="text-[10px] text-green-600 dark:text-green-300 mt-1">${formatRecordTimestamp(record)}</p>` : ''}
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    ` : '';
+
+                    const incidentsSection = item.incidents.length > 0 ? `
+                        <div class="space-y-1">
+                            <p class="text-xs font-semibold text-red-700 dark:text-red-300 flex items-center gap-1">
+                                <i data-lucide="clock-alert" class="w-3 h-3"></i>
+                                ${t('incident_record_label')}
+                            </p>
+                            <ul class="space-y-1">
+                                ${item.incidents.map(record => `
+                                    <li class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 rounded-md p-2 text-xs text-gray-700 dark:text-gray-200">
+                                        <p>${record.content}</p>
+                                        ${formatRecordTimestamp(record) ? `<p class="text-[10px] text-red-600 dark:text-red-300 mt-1">${formatRecordTimestamp(record)}</p>` : ''}
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    ` : '';
+
+                    return `
+                        <div class="relative space-y-2">
+                            <span class="absolute -left-[31px] top-1 h-4 w-4 rounded-full bg-gray-300 dark:bg-gray-500 border-4 border-gray-50 dark:border-gray-700/50"></span>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">${item.date.toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                            ${attendanceInfo}
+                            ${positivesSection}
+                            ${incidentsSection}
+                            <textarea data-action="edit-session-annotation" data-entry-id="${item.entryId}" data-student-id="${student.id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 h-24">${item.note}</textarea>
+                        </div>
+                    `;
+                }).join('')}
                 </div>
             </div>
-        `).join('')
-        : `<p class="text-gray-500 dark:text-gray-400">${t('no_session_notes')}</p>`;
+        `;
+    }).filter(Boolean).join('');
+
+    const annotationsHistoryContent = annotationsTimelineHtml || `<p class="text-gray-500 dark:text-gray-400">${t('no_session_notes')}</p>`;
 
     return `
         <div class="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900/50 min-h-full">
@@ -409,7 +604,8 @@ export function renderStudentDetailView() {
                     <div class="border-t border-gray-200 dark:border-gray-700 pt-6">
                         <h3 class="text-lg font-medium text-gray-900 dark:text-gray-200 mb-3">${t('session_notes_history_title')}</h3>
                         ${classSelectorHtml}
-                        <div class="space-y-4 pr-2">${annotationsHistoryHtml}</div>
+                        ${recordsSummaryHtml}
+                        <div class="space-y-4 pr-2">${annotationsHistoryContent}</div>
                     </div>
                 </div>
             </div>
@@ -933,12 +1129,137 @@ export function renderActivityDetailView() {
         .filter(s => state.selectedActivity.studentIds?.includes(s.id))
         .sort(sortStudentsByName);
 
-    const annotationsHtml = studentsInClass.length > 0 ? studentsInClass.map(student => `
-        <div id="student-annotation-${student.id}" key="${student.id}">
-            <button data-action="select-student" data-student-id="${student.id}" class="text-left font-medium text-blue-600 dark:text-blue-400 hover:underline w-full">${student.name}</button>
-            <textarea data-action="annotation-change" data-student-id="${student.id}" placeholder="${t('student_notes_placeholder')}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md mt-1 h-24">${entry.annotations?.[student.id] || ''}</textarea>
-        </div>
-    `).join('') : `<p class="text-gray-500 dark:text-gray-400">${t('no_students_assigned')}</p>`;
+    const attendanceOptions = [
+        {
+            status: STUDENT_ATTENDANCE_STATUS.ABSENCE,
+            icon: 'circle-x',
+            label: t('attendance_absence'),
+            activeClasses: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-200 dark:border-red-700'
+        },
+        {
+            status: STUDENT_ATTENDANCE_STATUS.LATE_SHORT,
+            icon: 'clock-2',
+            label: t('attendance_late_short'),
+            activeClasses: 'bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-900/40 dark:text-yellow-200 dark:border-yellow-700'
+        },
+        {
+            status: STUDENT_ATTENDANCE_STATUS.LATE_LONG,
+            icon: 'clock-alert',
+            label: t('attendance_late_long'),
+            activeClasses: 'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/40 dark:text-orange-200 dark:border-orange-700'
+        }
+    ];
+
+    const basePillClass = 'px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-700';
+    const inactivePillClass = 'bg-gray-100 text-gray-600 border-transparent hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600';
+
+    const entryAnnotations = entry.annotations || {};
+    const locale = document.documentElement.lang || 'es';
+
+    const annotationsHtml = studentsInClass.length > 0 ? studentsInClass.map(student => {
+        const annotationData = normalizeStudentAnnotation(entryAnnotations[student.id]);
+        const attendanceButtons = attendanceOptions.map(option => {
+            const isActive = annotationData.attendance === option.status;
+            const buttonClasses = `${basePillClass} ${isActive ? option.activeClasses : inactivePillClass}`;
+            return `
+                <button type="button" data-action="toggle-attendance-status" data-student-id="${student.id}" data-status="${option.status}" class="${buttonClasses}" aria-pressed="${isActive}" title="${option.label}" aria-label="${option.label}">
+                    <i data-lucide="${option.icon}" class="w-4 h-4"></i>
+                    <span class="hidden lg:inline">${option.label}</span>
+                </button>
+            `;
+        }).join('');
+
+        const positivesCount = annotationData.positives.length;
+        const incidentsCount = annotationData.incidents.length;
+        const positiveButtonClasses = `${basePillClass} ${positivesCount > 0 ? 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/40 dark:text-green-200 dark:border-green-700' : inactivePillClass}`;
+        const incidentButtonClasses = `${basePillClass} ${incidentsCount > 0 ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-200 dark:border-red-700' : inactivePillClass}`;
+
+        const formatRecordTimestamp = (record) => {
+            if (!record?.createdAt) return '';
+            const recordDate = new Date(record.createdAt);
+            if (Number.isNaN(recordDate.getTime())) return '';
+            return recordDate.toLocaleString(locale, { hour: '2-digit', minute: '2-digit' });
+        };
+
+        const attendanceInfo = annotationData.attendance ? (() => {
+            const option = attendanceOptions.find(opt => opt.status === annotationData.attendance);
+            if (!option) return '';
+            return `
+                <div class="text-xs text-gray-600 dark:text-gray-300 flex items-center gap-2">
+                    <span class="font-semibold">${t('attendance_record_label')}</span>
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md ${option.activeClasses}">
+                        <i data-lucide="${option.icon}" class="w-3 h-3"></i>
+                        ${option.label}
+                    </span>
+                </div>
+            `;
+        })() : '';
+
+        const positivesInfo = positivesCount > 0 ? `
+            <div class="space-y-1">
+                <p class="text-xs font-semibold text-green-700 dark:text-green-300 flex items-center gap-1">
+                    <i data-lucide="shield-plus" class="w-3 h-3"></i>
+                    ${t('positive_record_label')}
+                </p>
+                <ul class="space-y-1">
+                    ${annotationData.positives.map(record => `
+                        <li class="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/40 rounded-md p-2 text-xs text-gray-700 dark:text-gray-200">
+                            <p>${record.content}</p>
+                            ${formatRecordTimestamp(record) ? `<p class="text-[10px] text-green-600 dark:text-green-300 mt-1">${formatRecordTimestamp(record)}</p>` : ''}
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        ` : '';
+
+        const incidentsInfo = incidentsCount > 0 ? `
+            <div class="space-y-1">
+                <p class="text-xs font-semibold text-red-700 dark:text-red-300 flex items-center gap-1">
+                    <i data-lucide="clock-alert" class="w-3 h-3"></i>
+                    ${t('incident_record_label')}
+                </p>
+                <ul class="space-y-1">
+                    ${annotationData.incidents.map(record => `
+                        <li class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 rounded-md p-2 text-xs text-gray-700 dark:text-gray-200">
+                            <p>${record.content}</p>
+                            ${formatRecordTimestamp(record) ? `<p class="text-[10px] text-red-600 dark:text-red-300 mt-1">${formatRecordTimestamp(record)}</p>` : ''}
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        ` : '';
+
+        const extraInfo = [attendanceInfo, positivesInfo, incidentsInfo].filter(Boolean).join('');
+
+        return `
+            <div id="student-annotation-${student.id}" class="p-3 border border-gray-200 dark:border-gray-700 rounded-md space-y-3 bg-gray-50/60 dark:bg-gray-900/40">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <button data-action="select-student" data-student-id="${student.id}" class="text-left font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                        ${student.name}
+                    </button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="flex flex-wrap items-center gap-2">
+                            ${attendanceButtons}
+                        </div>
+                        <div class="flex items-center gap-2 ml-2">
+                            <button type="button" data-action="add-positive-record" data-student-id="${student.id}" class="${positiveButtonClasses}" title="${t('add_positive_record')}" aria-label="${t('add_positive_record')}">
+                                <i data-lucide="shield-plus" class="w-4 h-4"></i>
+                                <span class="hidden lg:inline">${t('positive_record_label')}</span>
+                                ${positivesCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-green-900/60 text-xs font-semibold">${positivesCount}</span>` : ''}
+                            </button>
+                            <button type="button" data-action="add-incident-record" data-student-id="${student.id}" class="${incidentButtonClasses}" title="${t('add_incident_record')}" aria-label="${t('add_incident_record')}">
+                                <i data-lucide="clock-alert" class="w-4 h-4"></i>
+                                <span class="hidden lg:inline">${t('incident_record_label')}</span>
+                                ${incidentsCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-red-900/60 text-xs font-semibold">${incidentsCount}</span>` : ''}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <textarea data-action="annotation-change" data-student-id="${student.id}" placeholder="${t('student_notes_placeholder')}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md h-24">${annotationData.note || ''}</textarea>
+                ${extraInfo ? `<div class="space-y-2">${extraInfo}</div>` : ''}
+            </div>
+        `;
+    }).join('') : `<p class="text-gray-500 dark:text-gray-400">${t('no_students_assigned')}</p>`;
     
     const prevSession = findPreviousSession(activityId, new Date(date));
     const nextSession = findNextSession(activityId, new Date(date));
