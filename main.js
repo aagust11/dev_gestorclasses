@@ -30,10 +30,26 @@ function render() {
         default: viewContent = views.renderScheduleView();
     }
     mainContent.innerHTML = `<div class="animate-fade-in">${viewContent}</div>`;
-    
+
     updateMobileHeader();
     lucide.createIcons();
     attachEventListeners();
+
+    if (state.activeView === 'settings' && state.pendingCompetencyHighlightId) {
+        const targetId = state.pendingCompetencyHighlightId;
+        requestAnimationFrame(() => {
+            const card = document.getElementById(`competency-card-${targetId}`);
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                card.style.transition = 'outline 0.1s ease-in-out';
+                card.style.outline = '3px solid #3b82f6';
+                setTimeout(() => {
+                    card.style.outline = 'none';
+                }, 1500);
+            }
+            state.pendingCompetencyHighlightId = null;
+        });
+    }
 }
 
 function updateMobileHeader() {
@@ -89,7 +105,8 @@ function handleAction(action, element, event) {
         'add-positive-record', 'add-incident-record', 'set-student-timeline-filter',
         'open-learning-activity-editor', 'open-learning-activity-quick', 'back-to-activities',
         'save-learning-activity-draft', 'toggle-learning-activity-list', 'toggle-competency-guide',
-        'toggle-learning-activity-criterion'
+        'toggle-learning-activity-criterion', 'open-learning-activity-criteria',
+        'close-learning-activity-criteria', 'go-to-competency-settings'
     ];
 
     if (actionHandlers[action]) {

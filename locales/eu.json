@@ -122,6 +122,7 @@
   "activities_selected_criteria_label": "Esleitutako irizpideak",
   "activities_selected_criteria_help": "Jarduera honen bidez landuko diren ebaluazio-irizpideak hautatu.",
   "activities_selected_count_label": "hautatutako irizpideak",
+  "activities_go_to_competency_settings": "Konpetentzien konfigurazioa",
   "activities_no_criteria_selected": "Oraindik ez da jarduerari irizpiderik esleitu.",
   "activities_show_guide": "Kompetentzien gida erakutsi",
   "activities_hide_guide": "Kompetentzien gida ezkutatu",
