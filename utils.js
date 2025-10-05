@@ -240,7 +240,7 @@ export function showModal(title, content, onConfirm) {
     modalTitle.textContent = title;
     modalBody.innerHTML = `<p>${content}</p>
         <div class="flex justify-end gap-4 mt-6">
-            <button id="modal-cancel" class="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">${t('modal_cancel')}</button>
+            <button id="modal-cancel" class="px-4 py-2 bg-gray-200 text-gray-800 dark:text-gray-900 rounded-md hover:bg-gray-300">${t('modal_cancel')}</button>
             <button id="modal-confirm" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">${t('modal_confirm')}</button>
         </div>`;
     
@@ -269,7 +269,7 @@ export function showTextInputModal({ title, label, placeholder = '', defaultValu
             <label for="${textareaId}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">${label}</label>
             <textarea id="${textareaId}" placeholder="${placeholder}" class="mt-2 w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md h-32"></textarea>
             <div class="flex justify-end gap-4 mt-6">
-                <button id="modal-cancel" class="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">${t('modal_cancel')}</button>
+                <button id="modal-cancel" class="px-4 py-2 bg-gray-200 text-gray-800 dark:text-gray-900 rounded-md hover:bg-gray-300">${t('modal_cancel')}</button>
                 <button id="modal-confirm" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">${t('modal_confirm')}</button>
             </div>`;
 
