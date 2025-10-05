@@ -1,39 +1,25 @@
-# Diario de clase
+# Gestor de classes
 
-Una aplicación web de código abierto diseñada para ayudar a los profesores a gestionar su día a día en el aula.
+Aplicació web en català per organitzar totes les tasques relacionades amb les assignatures d'un docent. Funciona completament al navegador i desa automàticament la informació a l'emmagatzematge local.
 
-## Características
+## Funcionalitats principals
 
-* **Gestión de Horarios**: Visualiza y gestiona tu horario semanal.
-* **Anotaciones por Sesión**: Registra la planificación, el resumen y las anotaciones individuales de los estudiantes para cada clase.
-* **Seguimiento del Alumnado**: Mantén un registro detallado de cada estudiante, incluyendo notas generales y un historial completo de anotaciones.
-* **Multilingüe**: La interfaz está disponible en español, catalán, gallego, euskera e inglés.
-* **Gestión de Datos Local**: Todos los datos se almacenan localmente en tu navegador, garantizando la privacidad.
-* **Importación y Exportación**: Guarda y carga tus datos en formato JSON, permitiendo copias de seguridad y la transferencia entre dispositivos.
+* **Gestió d'assignatures**: crea tantes assignatures com calgui i defineix les seves dates d'inici i fi, els dies de classe i els períodes d'avaluació.
+* **Compartició de configuracions**: vincula assignatures perquè comparteixin automàticament competències, criteris, activitats i dies festius.
+* **Competències i criteris**: defineix competències específiques i ordena-les lliurement. Cada criteri rep un identificador automàtic del tipus `CA`. La configuració permet personalitzar el text que acompanya els codis `CE` i `CA`.
+* **Activitats avaluables**: crea activitats i assigna-hi criteris amb pesos numèrics per preparar rúbriques de qualificació.
+* **Alumnat**: registra l'alumnat i assigna'l a les diferents assignatures. Cada alumne pot tenir observacions generals.
+* **Assistència i seguiment**: registra assistència, retards, actitud i comentaris per sessió i alumne.
+* **Avaluació flexible**: avalua per criteris amb una graella interactiva. Es pot treballar amb notes numèriques o bé amb escales qualitatives personalitzables.
+* **Dies festius**: marca els dies sense classe per cada assignatura o conjunt d'assignatures vinculades.
+* **Desament automàtic**: qualsevol canvi es guarda automàticament sense necessitat d'exportar fitxers.
 
-## Ejemplos integrados
+## Funcionament
 
-Los archivos de traducción para el contenido de demostración se encuentran en el siguiente repositorio: [https://github.com/jjdeharo/gist/tree/main/diario/demo](https://github.com/jjdeharo/gist/tree/main/diario/demo)
+L'aplicació no necessita cap servidor. Només cal obrir `index.html` amb un navegador modern. Les dades es desen a l'emmagatzematge local del navegador, de manera que cadascú disposa de les seves pròpies configuracions i registres.
 
-## Empezando
+Per fer còpies de seguretat n'hi ha prou amb exportar el contingut de `localStorage` o utilitzar eines del navegador. També es pot clonar el repositori per adaptar la interfície o el flux de treball a necessitats específiques.
 
-1.  **Configuración Inicial**:
-    * Ve a **Configuración** para definir las fechas del curso, las franjas horarias y crear tus clases y actividades.
-    * Añade a tus estudiantes a cada clase, ya sea de forma individual o mediante la importación rápida.
-2.  **Uso Diario**:
-    * Utiliza la vista de **Horario** para acceder a los detalles de cada sesión.
-    * Registra la planificación y el resumen de la clase.
-    * Añade anotaciones específicas para cada estudiante.
-3.  **Consulta de Datos**:
-    * Accede a la ficha completa de cada estudiante desde la pestaña **Clases**.
-    * Exporta la información de los estudiantes a formato DOCX.
+## Llicència
 
-## Tecnologías utilizadas
-
-* HTML5
-* CSS3 (con Tailwind CSS)
-* JavaScript (Vainilla)
-
-## Contribuciones
-
-Este proyecto es mantenido por Juan José de Haro. Las contribuciones son bienvenidas.
+Codi alliberat sota llicència Creative Commons BY-SA.
