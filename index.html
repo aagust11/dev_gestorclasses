@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="ca">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <title>Gestor de classes</title>
+    <title>Diario de clase (Local)</title>
     
     <script>
       const stored = localStorage.getItem('theme');
@@ -35,38 +35,38 @@
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-200">
 
     <div class="flex h-screen">
-        <nav id="sidebar" class="absolute z-20 sm:relative flex flex-col justify-between w-56 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 p-3 transform -translate-x-full sm:translate-x-0 transition-transform duration-300 ease-in-out">
+        <nav id="sidebar" class="absolute z-20 sm:relative flex flex-col justify-between w-56 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 p-3 transform -translate-x-full sm:translate-x-0 transition-transform duration-300 ease-in-out no-print">
             <div>
                 <div class="flex items-center justify-between gap-3 mb-8 px-2">
                     <div class="flex items-center gap-3">
                         <img src="logo.png" alt="Logo" class="w-12 h-12">
-                        <h1 id="app-title" class="text-xl font-bold text-gray-800 dark:text-gray-200">Gestor de classes</h1>
+                        <h1 id="app-title" class="text-xl font-bold text-gray-800 dark:text-gray-200" data-i18n-key="app_title">Diario de clase</h1>
                     </div>
                     <button id="close-sidebar-btn" class="sm:hidden text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200">
                         <i data-lucide="x" class="w-6 h-6"></i>
                     </button>
                 </div>
                 <div class="space-y-2">
-                    <button data-view="subjects" class="nav-button flex items-center justify-start gap-3 w-full p-3 text-sm font-medium rounded-md transition-colors bg-blue-600 text-white">
-                        <div data-lucide="notebook-pen" class="w-5 h-5"></div>
-                        <span>Assignatures</span>
+                    <button data-view="schedule" class="nav-button flex items-center justify-start gap-3 w-full p-3 text-sm font-medium rounded-md transition-colors bg-blue-600 text-white">
+                        <div data-lucide="calendar-days" class="w-5 h-5"></div>
+                        <span data-i18n-key="nav_schedule">Horario</span>
                     </button>
-                    <button data-view="students" class="nav-button flex items-center justify-start gap-3 w-full p-3 text-sm font-medium rounded-md transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white">
+                    <button data-view="classes" class="nav-button flex items-center justify-start gap-3 w-full p-3 text-sm font-medium rounded-md transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white">
                         <div data-lucide="users" class="w-5 h-5"></div>
-                        <span>Alumnes</span>
-                    </button>
-                    <button data-view="evaluation" class="nav-button flex items-center justify-start gap-3 w-full p-3 text-sm font-medium rounded-md transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white">
-                        <div data-lucide="clipboard-list" class="w-5 h-5"></div>
-                        <span>Avaluació</span>
-                    </button>
-                    <button data-view="attendance" class="nav-button flex items-center justify-start gap-3 w-full p-3 text-sm font-medium rounded-md transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white">
-                        <div data-lucide="check-square" class="w-5 h-5"></div>
-                        <span>Assistència</span>
+                        <span data-i18n-key="nav_classes">Clases</span>
                     </button>
                     <button data-view="settings" class="nav-button flex items-center justify-start gap-3 w-full p-3 text-sm font-medium rounded-md transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white">
                         <div data-lucide="settings" class="w-5 h-5"></div>
-                        <span>Configuració</span>
+                        <span data-i18n-key="nav_settings">Configuración</span>
                     </button>
+                    <button data-action="load-example" class="flex items-center justify-start gap-3 w-full p-3 text-sm font-medium rounded-md transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white">
+                        <div data-lucide="file-json" class="w-5 h-5"></div>
+                        <span data-i18n-key="nav_load_example">Cargar ejemplo</span>
+                    </button>
+                     <a href="manual.html" class="flex items-center justify-start gap-3 w-full p-3 text-sm font-medium rounded-md transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white">
+                        <div data-lucide="help-circle" class="w-5 h-5"></div>
+                        <span data-i18n-key="nav_manual">Manual de uso</span>
+                    </a>
                 </div>
             </div>
             <div class="pb-2 space-y-4">
@@ -83,10 +83,16 @@
                         </button>
                     </div>
                 </div>
-                <p class="text-xs text-gray-500 px-2">Les dades es desen automàticament al navegador.</p>
+                <div class="flex justify-start gap-2 px-2">
+                    <button data-lang="es" class="lang-switcher border-2 border-blue-600 rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold text-blue-600">ES</button>
+                    <button data-lang="ca" class="lang-switcher border-2 border-transparent rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold text-gray-500 hover:border-gray-400">CA</button>
+                    <button data-lang="gl" class="lang-switcher border-2 border-transparent rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold text-gray-500 hover:border-gray-400">GL</button>
+                    <button data-lang="eu" class="lang-switcher border-2 border-transparent rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold text-gray-500 hover:border-gray-400">EU</button>
+                    <button data-lang="en" class="lang-switcher border-2 border-transparent rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold text-gray-500 hover:border-gray-400">EN</button>
+                </div>
             </div>
         </nav>
-
+        
         <div class="flex-1 flex flex-col">
              <header class="sm:hidden flex justify-between items-center p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 no-print">
                  <button id="open-sidebar-btn" class="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
@@ -97,20 +103,23 @@
             </header>
             <main id="main-content" class="flex-1 overflow-y-auto pb-16">
                 </main>
-            <footer class="fixed bottom-0 left-0 sm:left-56 right-0 bg-gray-100 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 p-2 text-center text-xs text-gray-500 dark:text-gray-400">
-                Eina creada amb codi obert per a la gestió de classes.
+            <footer class="fixed bottom-0 left-0 sm:left-56 right-0 bg-gray-100 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 p-2 text-center text-xs text-gray-500 dark:text-gray-400 no-print">
+                <span data-i18n-key="footer_made_by">Aplicación hecha por</span> <a href="https://bilateria.org" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">Juan José de Haro</a> - 
+                <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.es" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline" data-i18n-key="footer_license">Licencia Creative Commons BY-SA</a> -
+                <button data-action="show-privacy-policy" class="text-blue-600 dark:text-blue-400 hover:underline" data-i18n-key="footer_privacy">Política de Privacidad</button> -
+                <a href="https://github.com/jjdeharo/diario/issues/new/choose" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline" data-i18n-key="footer_feedback">Sugerencias y errores</a>
             </footer>
         </div>
     </div>
 
-    <div id="save-indicator" class="fixed bottom-12 sm:bottom-5 right-5 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg transition-opacity duration-300 opacity-0 z-50">
+    <div id="save-indicator" class="fixed bottom-12 sm:bottom-5 right-5 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg transition-opacity duration-300 opacity-0 z-50 no-print">
         <div class="flex items-center gap-2">
-            <i data-lucide="check-circle" class="w-5 h-5"></i> Canvis desats
+            <i data-lucide="check-circle" class="w-5 h-5"></i> Guardado
         </div>
     </div>
 
 
-    <div id="modal-container" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4 hidden">
+    <div id="modal-container" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4 hidden no-print">
         <div id="modal-content" class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md max-h-full overflow-y-auto">
             <div class="flex justify-between items-center p-4 border-b dark:border-gray-700">
                 <h3 id="modal-title" class="text-xl font-semibold text-gray-800 dark:text-gray-200"></h3>
