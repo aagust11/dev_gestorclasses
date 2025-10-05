@@ -278,6 +278,8 @@ export const actionHandlers = {
         }
 
         state.learningActivityGuideVisible = false;
+        state.learningActivityCriteriaModalOpen = false;
+        state.pendingCompetencyHighlightId = null;
         state.activeView = 'learningActivityEditor';
     },
     'open-learning-activity-quick': () => {
@@ -299,11 +301,15 @@ export const actionHandlers = {
         };
 
         state.learningActivityGuideVisible = false;
+        state.learningActivityCriteriaModalOpen = false;
+        state.pendingCompetencyHighlightId = null;
         state.activeView = 'learningActivityEditor';
     },
     'back-to-activities': () => {
         state.learningActivityDraft = null;
         state.learningActivityGuideVisible = false;
+        state.learningActivityCriteriaModalOpen = false;
+        state.pendingCompetencyHighlightId = null;
         state.activeView = 'activities';
     },
     'update-learning-activity-title': (id, element) => {
@@ -334,6 +340,21 @@ export const actionHandlers = {
         } else if (existingIndex !== -1) {
             state.learningActivityDraft.criteriaRefs.splice(existingIndex, 1);
         }
+    },
+    'open-learning-activity-criteria': () => {
+        state.learningActivityCriteriaModalOpen = true;
+    },
+    'close-learning-activity-criteria': () => {
+        state.learningActivityCriteriaModalOpen = false;
+    },
+    'go-to-competency-settings': (id, element) => {
+        const classId = element?.dataset?.classId;
+        state.learningActivityCriteriaModalOpen = false;
+        if (classId) {
+            state.pendingCompetencyHighlightId = classId;
+        }
+        state.activeView = 'settings';
+        state.settingsActiveTab = 'competencies';
     },
     'toggle-competency-guide': () => {
         state.learningActivityGuideVisible = !state.learningActivityGuideVisible;

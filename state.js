@@ -28,6 +28,8 @@ export const state = {
     learningActivityDraft: null,
     expandedLearningActivityClassIds: [],
     learningActivityGuideVisible: false,
+    learningActivityCriteriaModalOpen: false,
+    pendingCompetencyHighlightId: null,
 };
 
 export function getRandomPastelColor() {
@@ -110,4 +112,6 @@ export function loadState() {
     state.learningActivityDraft = null;
     state.expandedLearningActivityClassIds = [];
     state.learningActivityGuideVisible = false;
+    state.learningActivityCriteriaModalOpen = false;
+    state.pendingCompetencyHighlightId = null;
 }

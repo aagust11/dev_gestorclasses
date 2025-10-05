@@ -122,6 +122,7 @@
   "activities_selected_criteria_label": "Assigned criteria",
   "activities_selected_criteria_help": "Select the assessment criteria that this activity will address.",
   "activities_selected_count_label": "criteria selected",
+  "activities_go_to_competency_settings": "Competency settings",
   "activities_no_criteria_selected": "No criteria have been assigned to the activity yet.",
   "activities_show_guide": "Show competencies guide",
   "activities_hide_guide": "Hide competencies guide",

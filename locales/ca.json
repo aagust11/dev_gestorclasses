@@ -122,6 +122,7 @@
   "activities_selected_criteria_label": "Criteris assignats",
   "activities_selected_criteria_help": "Selecciona els criteris d'avaluació que treballaràs amb aquesta activitat.",
   "activities_selected_count_label": "criteris seleccionats",
+  "activities_go_to_competency_settings": "Configuració de competències",
   "activities_no_criteria_selected": "Encara no hi ha criteris assignats a l'activitat.",
   "activities_show_guide": "Mostra la guia de competències",
   "activities_hide_guide": "Amaga la guia de competències",

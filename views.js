@@ -336,9 +336,9 @@ export function renderActivitiesView() {
 
         const activitiesHtml = visibleActivities.map(activity => {
             const assignedCount = Array.isArray(activity.criteriaRefs) ? activity.criteriaRefs.length : 0;
-            const assignedLabel = assignedCount > 0
+            const assignedLabelContent = assignedCount > 0
                 ? `${assignedCount} ${t('activities_assigned_criteria_label')}`
-                : t('activities_assigned_criteria_none');
+                : `<span class="inline-flex items-center gap-1"><i data-lucide="crosshair" class="w-3 h-3"></i>${t('activities_assigned_criteria_none')}</span>`;
             const createdDate = formatDateForDisplay(activity.createdAt);
             const description = activity.description?.trim();
             return `
@@ -350,7 +350,7 @@ export function renderActivitiesView() {
                 >
                     <div class="flex items-start justify-between gap-3">
                         <span class="font-semibold text-gray-800 dark:text-gray-100">${activity.title?.trim() || t('activities_untitled_label')}</span>
-                        <span class="text-xs text-blue-600 dark:text-blue-400">${assignedLabel}</span>
+                        <span class="text-xs text-blue-600 dark:text-blue-400">${assignedLabelContent}</span>
                     </div>
                     <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">${description || t('activities_no_description')}</p>
                     ${createdDate ? `<div class="mt-3 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2"><i data-lucide="calendar" class="w-4 h-4"></i><span>${t('activities_created_on')} ${createdDate}</span></div>` : ''}
@@ -549,6 +549,32 @@ export function renderLearningActivityEditorView() {
         : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_no_competencies_help')}</p>`;
 
     const selectedCount = selectedCriteria.length;
+    const isCriteriaModalOpen = state.learningActivityCriteriaModalOpen;
+    const criteriaModalHtml = !isCriteriaModalOpen ? '' : `
+        <div class="fixed inset-0 z-40 flex items-center justify-center px-4 py-6">
+            <div class="absolute inset-0 bg-gray-900/50 dark:bg-gray-900/70" data-action="close-learning-activity-criteria"></div>
+            <div class="relative max-w-3xl w-full bg-white dark:bg-gray-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">${t('activities_available_criteria_title')}</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_selected_criteria_help')}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" data-action="go-to-competency-settings" data-class-id="${targetClass.id}" class="inline-flex items-center gap-2 px-3 py-2 text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 rounded-md border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40">
+                            <i data-lucide="target" class="w-4 h-4"></i>
+                            <span>${t('activities_go_to_competency_settings')}</span>
+                        </button>
+                        <button type="button" data-action="close-learning-activity-criteria" class="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="mt-4 space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+                    ${availableCriteriaHtml}
+                </div>
+            </div>
+        </div>
+    `;
 
     return `
         <div class="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900/50 min-h-full">
@@ -588,7 +614,10 @@ export function renderLearningActivityEditorView() {
                                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">${t('activities_selected_criteria_label')}</h3>
                                 <p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_selected_criteria_help')}</p>
                             </div>
-                            <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 border border-blue-200 dark:border-blue-700">${selectedCount} ${t('activities_selected_count_label')}</span>
+                            <button type="button" data-action="open-learning-activity-criteria" class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-blue-400/60">
+                                <i data-lucide="list-checks" class="w-4 h-4"></i>
+                                <span><span class="font-semibold">${selectedCount}</span> ${t('activities_selected_count_label')}</span>
+                            </button>
                         </div>
                         ${selectedCriteriaHtml}
                         <button data-action="toggle-competency-guide" class="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">
@@ -598,13 +627,10 @@ export function renderLearningActivityEditorView() {
                         ${competencyGuideHtml}
                     </div>
 
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
-                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">${t('activities_available_criteria_title')}</h3>
-                        ${availableCriteriaHtml}
-                    </div>
                 </div>
             </div>
         </div>
+        ${criteriaModalHtml}
     `;
 }
 
