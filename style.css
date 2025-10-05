@@ -1,0 +1,202 @@
+body { 
+    font-family: 'Inter', sans-serif; 
+}
+
+.animate-fade-in { 
+    animation: fadeIn 0.5s ease-in-out; 
+}
+
+@keyframes fadeIn { 
+    from { opacity: 0; } 
+    to { opacity: 1; } 
+}
+
+/* Evitar que el número en input[type=number] tenga flechas */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+
+input[type=number] { 
+    -moz-appearance: textfield; 
+}
+
+#save-indicator.show {
+    opacity: 1;
+}
+
+/* Estilos de impresión */
+@media print {
+    body {
+        font-family: 'Times New Roman', serif;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    .no-print {
+        display: none !important;
+    }
+    
+    /* Oculta todo por defecto */
+    body * {
+        visibility: hidden;
+    }
+    
+    /* Muestra solo el área imprimible y sus hijos */
+    .printable-area, .printable-area * {
+        visibility: visible;
+        color: #000 !important;
+    }
+    
+    /* --- INICIO DE LA CORRECCIÓN CLAVE --- */
+    
+    /* Resetea la altura y el overflow de los contenedores principales */
+    .h-screen, .flex-1.flex.flex-col {
+        height: auto !important;
+        display: block !important; /* Rompe el layout flex para un flujo de documento normal */
+    }
+
+    #main-content {
+        overflow-y: visible !important;
+        height: auto !important;
+    }
+    
+    /* Resetea la posición del área imprimible para que fluya en el documento */
+    .printable-area {
+        position: static !important; /* Permite que el contenido ocupe varias páginas */
+        margin: 20mm; /* Añade márgenes de impresión estándar */
+        padding: 0;
+        width: auto !important;
+        max-width: none !important;
+        box-shadow: none !important;
+        border: none !important;
+        font-size: 12pt;
+    }
+
+    /* Elimina el scroll y la altura máxima del historial de anotaciones */
+    #student-sheet-content .max-h-\[400px\] {
+        max-height: none !important;
+    }
+    #student-sheet-content .overflow-y-auto {
+        overflow: visible !important;
+    }
+    
+    /* --- FIN DE LA CORRECCIÓN CLAVE --- */
+
+    /* --- Estilos específicos para la Ficha del Alumnado --- */
+    #student-sheet-content h2.print\:block {
+        display: block !important;
+        text-align: center;
+        font-size: 22pt;
+        margin-bottom: 40px;
+        border-bottom: 1px solid #000;
+        padding-bottom: 10px;
+    }
+    #student-sheet-content h3 {
+        font-size: 16pt;
+        font-weight: bold;
+        margin-top: 25px;
+        margin-bottom: 15px;
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 5px;
+        page-break-after: avoid; /* Evita saltos de página justo después de un título */
+    }
+    #student-sheet-content h4 { /* Títulos de clase en anotaciones */
+        font-size: 14pt;
+        font-weight: bold;
+        margin-top: 20px;
+        margin-bottom: 10px;
+        page-break-after: avoid;
+    }
+    #student-sheet-content label {
+        font-weight: bold;
+        font-size: 14pt;
+        margin-bottom: 8px;
+        display: block;
+    }
+    #student-sheet-content input[type="text"],
+    #student-sheet-content textarea {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        width: 100%;
+        font-family: 'Times New Roman', serif;
+        font-size: 12pt;
+        line-height: 1.5;
+        resize: none;
+        height: auto;
+    }
+    #student-sheet-content textarea {
+        display: block;
+        white-space: pre-wrap;
+    }
+    #student-sheet-content ul {
+        list-style-position: inside;
+        padding-left: 0;
+    }
+    #student-sheet-content li {
+        background: transparent !important;
+        padding: 4px 0 !important;
+        border-bottom: 1px dotted #ccc;
+    }
+    #student-sheet-content li:last-child {
+        border-bottom: none;
+    }
+    #student-sheet-content .p-3.bg-gray-50,
+    #student-sheet-content .mb-4,
+    #student-sheet-content .pl-6 {
+        background: transparent !important;
+        padding: 15px 0 !important;
+        border: none !important;
+    }
+    #student-sheet-content .p-3.bg-gray-50:first-child {
+        border-top: none;
+    }
+    #student-sheet-content .flex.items-center.gap-2.mb-2,
+    #student-sheet-content .flex.items-center.gap-2.mb-3 {
+        font-weight: bold;
+    }
+    #student-sheet-content .w-3.h-3.rounded-full, 
+    #student-sheet-content .w-4.h-4.rounded-full,
+    #student-sheet-content .absolute {
+        display: none; /* Oculta puntos de color y decoraciones de la línea de tiempo */
+    }
+    #student-sheet-content .relative {
+        page-break-inside: avoid; /* Intenta no cortar un bloque de anotación por la mitad */
+    }
+
+    /* --- Estilos para el Horario --- */
+    #printable-schedule table {
+        width: 100%;
+        table-layout: fixed;
+        font-size: 9pt;
+        border-spacing: 0;
+        border-collapse: collapse;
+    }
+    #printable-schedule th, #printable-schedule td {
+        border: 1px solid #ccc;
+        padding: 6px 4px;
+        word-wrap: break-word;
+    }
+    #printable-schedule button, #printable-schedule div[style*="background-color"] {
+        border: 1px solid #ccc !important;
+        background-color: #f0f0f0 !important;
+        color: #000 !important;
+        font-size: 8pt !important;
+        padding: 2px !important;
+        min-height: 0 !important;
+        white-space: normal !important;
+        line-height: 1.2 !important;
+        height: 100% !important;
+    }
+    #printable-schedule thead {
+        display: none !important;
+    }
+    #printable-schedule button span.absolute {
+        display: none !important;
+    }
+}
