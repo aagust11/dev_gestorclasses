@@ -59,6 +59,14 @@ function updateNavButtons() {
     });
 }
 
+function handleDeferredExampleLoad() {
+    const shouldLoadExample = localStorage.getItem('loadExampleOnNextOpen');
+    if (shouldLoadExample === 'true') {
+        localStorage.removeItem('loadExampleOnNextOpen');
+        actionHandlers['load-example']();
+    }
+}
+
 
 function handleAction(action, element, event) {
     const id = element.dataset.id;
@@ -179,11 +187,12 @@ async function init() {
     await initI18n(() => {
         render();
         updateNavButtons();
-    }); 
-    
+    });
+
     loadState();
     render();
     updateNavButtons();
+    handleDeferredExampleLoad();
     
     navButtons.forEach(btn => {
         btn.addEventListener('click', () => {

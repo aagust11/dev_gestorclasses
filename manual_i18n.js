@@ -13,4 +13,12 @@ function renderManual() {
 }
 
 // Iniciar la internacionalización para la página del manual
-initI18n(renderManual);
+initI18n(renderManual).then(() => {
+    const loadExampleBtn = document.getElementById('manual-load-example-btn');
+    if (loadExampleBtn) {
+        loadExampleBtn.addEventListener('click', () => {
+            localStorage.setItem('loadExampleOnNextOpen', 'true');
+            window.location.href = 'index.html';
+        });
+    }
+});

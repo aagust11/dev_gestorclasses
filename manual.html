@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="ca">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -85,21 +85,22 @@
                     </a>
                 </div>
             </div>
-             <div class="pb-2">
-                <div class="flex justify-center sm:justify-start gap-2 px-2">
-                    <button data-lang="es" class="lang-switcher border-2 border-blue-600 rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold text-blue-600">ES</button>
-                    <button data-lang="ca" class="lang-switcher border-2 border-transparent rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold text-gray-500 hover:border-gray-400">CA</button>
-                    <button data-lang="gl" class="lang-switcher border-2 border-transparent rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold text-gray-500 hover:border-gray-400">GL</button>
-                    <button data-lang="eu" class="lang-switcher border-2 border-transparent rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold text-gray-500 hover:border-gray-400">EU</button>
-                    <button data-lang="en" class="lang-switcher border-2 border-transparent rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold text-gray-500 hover:border-gray-400">EN</button>
-                </div>
-            </div>
         </nav>
 
         <main class="flex-1 p-6 sm:p-8 md:p-10">
             <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-md prose">
                 <h1 class="text-3xl font-bold text-gray-900" data-i18n-key="manual_main_title">Manual de Uso</h1>
                 <p class="text-lg text-gray-600" data-i18n-key="manual_welcome">Bienvenido al Diario de clase. Esta guía te ayudará a configurar y utilizar todas las funcionalidades de la aplicación.</p>
+
+                <div class="p-4 my-6 border border-blue-200 bg-blue-50 rounded-lg">
+                    <h2 class="mt-0" data-i18n-key="manual_load_example_title">Prova l'exemple de dades</h2>
+                    <p data-i18n-key="manual_load_example_description">Pots carregar un horari d'exemple per veure totes les funcionalitats en acció. Quan el carreguis, substituirà les teves dades actuals.</p>
+                    <button id="manual-load-example-btn" class="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        <i data-lucide="file-json" class="w-5 h-5"></i>
+                        <span data-i18n-key="manual_load_example_button">Carrega l'exemple</span>
+                    </button>
+                    <p class="mt-2 text-sm text-gray-500" data-i18n-key="manual_load_example_note">Se't redirigirà a l'aplicació principal per confirmar l'acció.</p>
+                </div>
 
                 <section id="inicio">
                     <h2 data-i18n-key="manual_getting_started_title"><i data-lucide="play-circle" class="icon"></i>Primeros Pasos: Configuración Inicial</h2>
