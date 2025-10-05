@@ -147,6 +147,12 @@ export const actionHandlers = {
                 }
                 const data = await response.json();
                 state.activities = data.activities || [];
+                state.learningActivities = (data.learningActivities || []).map(activity => ({
+                    ...activity,
+                    criteriaRefs: Array.isArray(activity?.criteriaRefs) ? activity.criteriaRefs : [],
+                    createdAt: activity?.createdAt || new Date().toISOString(),
+                    updatedAt: activity?.updatedAt || activity?.createdAt || new Date().toISOString(),
+                }));
                 state.students = data.students || [];
                 state.timeSlots = data.timeSlots || [];
                 state.schedule = data.schedule || {};
@@ -201,6 +207,153 @@ export const actionHandlers = {
                 }, 1500);
             }
         }
+    },
+    'open-learning-activity-editor': (id, element) => {
+        const classId = element.dataset.classId;
+        if (!classId) return;
+
+        const targetClass = state.activities.find(a => a.id === classId);
+        if (!targetClass) return;
+
+        const activityId = element.dataset.learningActivityId;
+        if (activityId) {
+            const existing = state.learningActivities.find(act => act.id === activityId);
+            if (!existing) return;
+
+            state.learningActivityDraft = {
+                ...existing,
+                criteriaRefs: Array.isArray(existing.criteriaRefs) ? [...existing.criteriaRefs] : [],
+                isNew: false,
+            };
+        } else {
+            state.learningActivityDraft = {
+                id: crypto.randomUUID(),
+                classId,
+                title: '',
+                description: '',
+                criteriaRefs: [],
+                isNew: true,
+            };
+        }
+
+        state.learningActivityGuideVisible = false;
+        state.activeView = 'learningActivityEditor';
+    },
+    'open-learning-activity-quick': () => {
+        const selectEl = document.getElementById('activities-quick-nav');
+        if (!selectEl) return;
+        const classId = selectEl.value;
+        if (!classId) return;
+
+        const targetClass = state.activities.find(a => a.id === classId);
+        if (!targetClass) return;
+
+        state.learningActivityDraft = {
+            id: crypto.randomUUID(),
+            classId,
+            title: '',
+            description: '',
+            criteriaRefs: [],
+            isNew: true,
+        };
+
+        state.learningActivityGuideVisible = false;
+        state.activeView = 'learningActivityEditor';
+    },
+    'back-to-activities': () => {
+        state.learningActivityDraft = null;
+        state.learningActivityGuideVisible = false;
+        state.activeView = 'activities';
+    },
+    'update-learning-activity-title': (id, element) => {
+        if (!state.learningActivityDraft) return;
+        state.learningActivityDraft.title = element.value;
+    },
+    'update-learning-activity-description': (id, element) => {
+        if (!state.learningActivityDraft) return;
+        state.learningActivityDraft.description = element.value;
+    },
+    'toggle-learning-activity-criterion': (id, element) => {
+        if (!state.learningActivityDraft) return;
+        const { competencyId, criterionId } = element.dataset;
+        if (!competencyId || !criterionId) return;
+
+        if (!Array.isArray(state.learningActivityDraft.criteriaRefs)) {
+            state.learningActivityDraft.criteriaRefs = [];
+        }
+
+        const existingIndex = state.learningActivityDraft.criteriaRefs.findIndex(ref =>
+            ref.competencyId === competencyId && ref.criterionId === criterionId
+        );
+
+        if (element.checked) {
+            if (existingIndex === -1) {
+                state.learningActivityDraft.criteriaRefs.push({ competencyId, criterionId });
+            }
+        } else if (existingIndex !== -1) {
+            state.learningActivityDraft.criteriaRefs.splice(existingIndex, 1);
+        }
+    },
+    'toggle-competency-guide': () => {
+        state.learningActivityGuideVisible = !state.learningActivityGuideVisible;
+    },
+    'save-learning-activity-draft': () => {
+        const draft = state.learningActivityDraft;
+        if (!draft) return;
+
+        const title = draft.title?.trim() || '';
+        if (!title) {
+            alert(t('activities_title_required'));
+            return;
+        }
+
+        const now = new Date().toISOString();
+
+        if (draft.isNew) {
+            state.learningActivities.push({
+                id: draft.id,
+                classId: draft.classId,
+                title,
+                description: draft.description?.trim() || '',
+                criteriaRefs: Array.isArray(draft.criteriaRefs) ? [...draft.criteriaRefs] : [],
+                createdAt: now,
+                updatedAt: now,
+            });
+        } else {
+            const index = state.learningActivities.findIndex(act => act.id === draft.id);
+            const persisted = {
+                id: draft.id,
+                classId: draft.classId,
+                title,
+                description: draft.description?.trim() || '',
+                criteriaRefs: Array.isArray(draft.criteriaRefs) ? [...draft.criteriaRefs] : [],
+                createdAt: draft.createdAt || now,
+                updatedAt: now,
+            };
+            if (index === -1) {
+                state.learningActivities.push(persisted);
+            } else {
+                state.learningActivities[index] = { ...state.learningActivities[index], ...persisted };
+            }
+        }
+
+        state.learningActivityDraft = null;
+        state.learningActivityGuideVisible = false;
+        state.activeView = 'activities';
+        saveState();
+    },
+    'toggle-learning-activity-list': (id, element) => {
+        const classId = element.dataset.classId;
+        if (!classId) return;
+
+        const expanded = state.expandedLearningActivityClassIds || [];
+        const index = expanded.indexOf(classId);
+        if (index === -1) {
+            expanded.push(classId);
+        } else {
+            expanded.splice(index, 1);
+        }
+        state.expandedLearningActivityClassIds = expanded;
     },
     // --- Student Actions ---
     'add-student-to-class': (id, element) => {
@@ -931,6 +1084,12 @@ export const actionHandlers = {
                 try {
                     const data = JSON.parse(e.target.result);
                     state.activities = data.activities || [];
+                    state.learningActivities = (data.learningActivities || []).map(activity => ({
+                        ...activity,
+                        criteriaRefs: Array.isArray(activity?.criteriaRefs) ? activity.criteriaRefs : [],
+                        createdAt: activity?.createdAt || new Date().toISOString(),
+                        updatedAt: activity?.updatedAt || activity?.createdAt || new Date().toISOString(),
+                    }));
                     state.students = data.students || [];
                     state.timeSlots = data.timeSlots || [];
                     state.schedule = data.schedule || {};

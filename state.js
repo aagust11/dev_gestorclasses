@@ -6,6 +6,7 @@ const pastelColors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A
 export const state = {
     activeView: 'schedule',
     activities: [],
+    learningActivities: [],
     students: [],
     timeSlots: [],
     schedule: {},
@@ -24,6 +25,9 @@ export const state = {
     editingActivityId: null,
     settingsActiveTab: 'calendar', // NUEVO: Pestaña activa en la vista de configuración
     studentTimelineFilter: 'all',
+    learningActivityDraft: null,
+    expandedLearningActivityClassIds: [],
+    learningActivityGuideVisible: false,
 };
 
 export function getRandomPastelColor() {
@@ -36,6 +40,7 @@ let saveTimeout;
 export function saveState() {
     const dataToSave = {
         activities: state.activities,
+        learningActivities: state.learningActivities,
         students: state.students,
         timeSlots: state.timeSlots,
         schedule: state.schedule,
@@ -70,6 +75,12 @@ export function loadState() {
     if (savedData) {
         const parsedData = JSON.parse(savedData);
         state.activities = parsedData.activities || [];
+        state.learningActivities = (parsedData.learningActivities || []).map(activity => ({
+            ...activity,
+            criteriaRefs: Array.isArray(activity?.criteriaRefs) ? activity.criteriaRefs : [],
+            createdAt: activity?.createdAt || new Date().toISOString(),
+            updatedAt: activity?.updatedAt || activity?.createdAt || new Date().toISOString(),
+        }));
         state.students = parsedData.students || [];
         state.timeSlots = parsedData.timeSlots || [];
         state.schedule = parsedData.schedule || {};
@@ -95,4 +106,8 @@ export function loadState() {
             }
         });
     });
+
+    state.learningActivityDraft = null;
+    state.expandedLearningActivityClassIds = [];
+    state.learningActivityGuideVisible = false;
 }

@@ -230,7 +230,7 @@ export function renderScheduleView() {
 export function renderClassesView() {
     renderMobileHeaderActions([]);
     const classes = state.activities.filter(a => a.type === 'class').sort((a, b) => a.name.localeCompare(b.name));
-    
+
     if (classes.length === 0) {
         return `<div class="p-4 sm:p-6"><h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-6">${t('classes_view_title')}</h2><p class="text-gray-500 dark:text-gray-400">${t('no_classes_created')}</p></div>`;
     }
@@ -294,6 +294,315 @@ export function renderClassesView() {
             </div>
             <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 ${classesHtml}
+            </div>
+        </div>
+    `;
+}
+
+export function renderActivitiesView() {
+    renderMobileHeaderActions([]);
+    const classes = state.activities.filter(a => a.type === 'class').sort((a, b) => a.name.localeCompare(b.name));
+
+    const locale = document.documentElement.lang || 'ca';
+    const formatDateForDisplay = (isoString) => {
+        if (!isoString) return '';
+        const date = new Date(isoString);
+        if (Number.isNaN(date.getTime())) return '';
+        return date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
+    if (classes.length === 0) {
+        return `
+            <div class="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900/50 min-h-full">
+                <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">${t('activities_view_title')}</h2>
+                <p class="text-gray-500 dark:text-gray-400">${t('no_classes_created')}</p>
+            </div>
+        `;
+    }
+
+    const selectOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+    const cardsHtml = classes.map(c => {
+        const classActivities = state.learningActivities
+            .filter(activity => activity.classId === c.id)
+            .sort((a, b) => {
+                const dateA = new Date(a.createdAt || 0);
+                const dateB = new Date(b.createdAt || 0);
+                return dateB - dateA;
+            });
+
+        const isExpanded = state.expandedLearningActivityClassIds?.includes(c.id);
+        const visibleActivities = isExpanded ? classActivities : classActivities.slice(0, 3);
+
+        const activitiesHtml = visibleActivities.map(activity => {
+            const assignedCount = Array.isArray(activity.criteriaRefs) ? activity.criteriaRefs.length : 0;
+            const assignedLabel = assignedCount > 0
+                ? `${assignedCount} ${t('activities_assigned_criteria_label')}`
+                : t('activities_assigned_criteria_none');
+            const createdDate = formatDateForDisplay(activity.createdAt);
+            const description = activity.description?.trim();
+            return `
+                <button
+                    data-action="open-learning-activity-editor"
+                    data-class-id="${c.id}"
+                    data-learning-activity-id="${activity.id}"
+                    class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded-md hover:border-blue-400 dark:hover:border-blue-500 transition-colors bg-white/60 dark:bg-gray-800/60"
+                >
+                    <div class="flex items-start justify-between gap-3">
+                        <span class="font-semibold text-gray-800 dark:text-gray-100">${activity.title?.trim() || t('activities_untitled_label')}</span>
+                        <span class="text-xs text-blue-600 dark:text-blue-400">${assignedLabel}</span>
+                    </div>
+                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">${description || t('activities_no_description')}</p>
+                    ${createdDate ? `<div class="mt-3 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2"><i data-lucide="calendar" class="w-4 h-4"></i><span>${t('activities_created_on')} ${createdDate}</span></div>` : ''}
+                </button>
+            `;
+        }).join('');
+
+        const toggleButton = classActivities.length > 3
+            ? `
+                <button data-action="toggle-learning-activity-list" data-class-id="${c.id}" class="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                    <i data-lucide="${isExpanded ? 'circle-minus' : 'circle-plus'}" class="w-4 h-4"></i>
+                    <span>${isExpanded ? t('activities_show_less') : t('activities_show_all')}</span>
+                </button>
+            `
+            : '';
+
+        return `
+            <div id="activities-card-${c.id}" class="bg-white dark:bg-gray-800 rounded-lg shadow-md flex flex-col">
+                <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-t-lg">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-xl font-bold" style="color: ${darkenColor(c.color, 40)}">${c.name}</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 flex items-center gap-2">
+                                <i data-lucide="list" class="w-4 h-4"></i>
+                                <span>${classActivities.length} ${t('activities_total_label')}</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-4 flex flex-col gap-4 flex-grow">
+                    <div class="flex justify-end">
+                        <button data-action="open-learning-activity-editor" data-class-id="${c.id}" class="inline-flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                            <i data-lucide="file-plus-2" class="w-4 h-4"></i>
+                            <span>${t('activities_new_button_label')}</span>
+                        </button>
+                    </div>
+                    <div class="space-y-3">
+                        ${activitiesHtml || `<p class=\"text-sm text-gray-500 dark:text-gray-400\">${t('activities_view_empty')}</p>`}
+                    </div>
+                    ${toggleButton ? `<div class="border-t border-gray-200 dark:border-gray-700 pt-3">${toggleButton}</div>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900/50 min-h-full">
+            <div class="flex flex-col sm:flex-row justify-between sm:items-stretch gap-4 mb-6">
+                <div class="flex-1">
+                    <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200">${t('activities_view_title')}</h2>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">${t('activities_view_description')}</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 w-full sm:w-80">
+                    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                        <i data-lucide="rocket" class="w-4 h-4"></i>
+                        ${t('activities_quick_create_title')}
+                    </h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${t('activities_quick_create_hint')}</p>
+                    <div class="mt-3 flex gap-2">
+                        <select id="activities-quick-nav" class="flex-1 p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md">
+                            <option value="">${t('activities_quick_select_placeholder')}</option>
+                            ${selectOptions}
+                        </select>
+                        <button data-action="open-learning-activity-quick" class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center">
+                            <i data-lucide="file-plus-2" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+                ${cardsHtml}
+            </div>
+        </div>
+    `;
+}
+
+export function renderLearningActivityEditorView() {
+    const draft = state.learningActivityDraft;
+    if (!draft) {
+        renderMobileHeaderActions([
+            { action: 'back-to-activities', label: t('back_to_activities'), icon: 'arrow-left' }
+        ]);
+        return `
+            <div class="p-6">
+                <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
+                    <p class="text-sm text-yellow-800 dark:text-yellow-200">${t('activities_editor_missing')}</p>
+                    <button data-action="back-to-activities" class="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                        ${t('back_to_activities')}
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    const targetClass = state.activities.find(a => a.id === draft.classId);
+    if (!targetClass) {
+        renderMobileHeaderActions([
+            { action: 'back-to-activities', label: t('back_to_activities'), icon: 'arrow-left' }
+        ]);
+        return `
+            <div class="p-6">
+                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4">
+                    <p class="text-sm text-red-800 dark:text-red-200">${t('activities_editor_missing')}</p>
+                    <button data-action="back-to-activities" class="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                        ${t('back_to_activities')}
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    renderMobileHeaderActions([
+        { action: 'save-learning-activity-draft', label: t('activities_save_button'), icon: 'save' },
+        { action: 'back-to-activities', label: t('back_to_activities'), icon: 'arrow-left' }
+    ]);
+
+    const competencies = Array.isArray(targetClass.competencies) ? targetClass.competencies : [];
+    const selectedRefs = Array.isArray(draft.criteriaRefs) ? draft.criteriaRefs : [];
+
+    const selectedCriteria = selectedRefs.map(ref => {
+        const competency = competencies.find(c => c.id === ref.competencyId);
+        const criterion = competency?.criteria?.find(cr => cr.id === ref.criterionId);
+        if (!criterion) return null;
+        return {
+            competency,
+            criterion,
+        };
+    }).filter(Boolean);
+
+    const selectedCriteriaHtml = selectedCriteria.length > 0
+        ? `<ul class="space-y-2">${selectedCriteria.map(item => `
+                <li class="px-3 py-2 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-gray-700 dark:text-gray-200">
+                    <span class="font-semibold">${item.criterion.code || t('criterion_without_code')}</span>
+                    <span class="text-gray-500 dark:text-gray-400">— ${item.criterion.description || t('criterion_without_description')}</span>
+                </li>
+            `).join('')}</ul>`
+        : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_no_criteria_selected')}</p>`;
+
+    const guideToggleIcon = state.learningActivityGuideVisible ? 'book-x' : 'book-open';
+    const guideToggleLabel = state.learningActivityGuideVisible ? t('activities_hide_guide') : t('activities_show_guide');
+
+    const competencyGuideHtml = state.learningActivityGuideVisible
+        ? `
+            <div class="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3 bg-white dark:bg-gray-800">
+                ${competencies.length > 0 ? competencies.map(comp => {
+                    const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
+                    return `
+                        <div class="space-y-2">
+                            <p class="font-semibold text-gray-800 dark:text-gray-100">${comp.code || t('competency_without_code')} · <span class="font-normal text-sm text-gray-600 dark:text-gray-300">${comp.description || t('competency_without_description')}</span></p>
+                            ${criteria.length > 0 ? `<ul class="space-y-1 text-sm text-gray-600 dark:text-gray-300 list-disc list-inside">${criteria.map(cr => `<li><span class="font-medium">${cr.code || t('criterion_without_code')}</span> — ${cr.description || t('criterion_without_description')}</li>`).join('')}</ul>` : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_no_criteria_for_competency')}</p>`}
+                        </div>
+                    `;
+                }).join('') : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_no_competencies_help')}</p>`}
+            </div>
+        `
+        : '';
+
+    const availableCriteriaHtml = competencies.length > 0
+        ? competencies.map(comp => {
+            const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
+            if (criteria.length === 0) {
+                return `
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                        <p class="font-semibold text-gray-700 dark:text-gray-200">${comp.code || t('competency_without_code')}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">${comp.description || t('competency_without_description')}</p>
+                        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${t('activities_no_criteria_for_competency')}</p>
+                    </div>
+                `;
+            }
+
+            const criteriaItems = criteria.map(criterion => {
+                const isChecked = selectedRefs.some(ref => ref.competencyId === comp.id && ref.criterionId === criterion.id);
+                return `
+                    <label class="flex items-start gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg ${isChecked ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700' : 'bg-white dark:bg-gray-800'}">
+                        <input type="checkbox" class="mt-1" data-action="toggle-learning-activity-criterion" data-competency-id="${comp.id}" data-criterion-id="${criterion.id}" ${isChecked ? 'checked' : ''}>
+                        <div>
+                            <p class="font-semibold text-gray-800 dark:text-gray-100">${criterion.code || t('criterion_without_code')}</p>
+                            <p class="text-sm text-gray-600 dark:text-gray-300">${criterion.description || t('criterion_without_description')}</p>
+                        </div>
+                    </label>
+                `;
+            }).join('');
+
+            return `
+                <div class="space-y-2">
+                    <p class="font-semibold text-gray-700 dark:text-gray-200">${comp.code || t('competency_without_code')}</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">${comp.description || t('competency_without_description')}</p>
+                    <div class="space-y-2">
+                        ${criteriaItems}
+                    </div>
+                </div>
+            `;
+        }).join('<hr class="my-4 border-gray-200 dark:border-gray-700">')
+        : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_no_competencies_help')}</p>`;
+
+    const selectedCount = selectedCriteria.length;
+
+    return `
+        <div class="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900/50 min-h-full">
+            <div class="max-w-5xl mx-auto space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between gap-4">
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_editor_class_prefix')} <span class="font-semibold text-gray-800 dark:text-gray-100">${targetClass.name}</span></p>
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">${draft.isNew ? t('activities_editor_title_new') : t('activities_editor_title_edit')}</h2>
+                    </div>
+                    <div class="flex flex-wrap gap-2 justify-end">
+                        <button data-action="back-to-activities" class="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                            ${t('activities_cancel_button')}
+                        </button>
+                        <button data-action="save-learning-activity-draft" class="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                            ${t('activities_save_button')}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_title_label')}</label>
+                            <input type="text" value="${draft.title || ''}" data-action="update-learning-activity-title" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md" placeholder="${t('activities_form_title_placeholder')}">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_description_label')}</label>
+                            <textarea data-action="update-learning-activity-description" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md h-36" placeholder="${t('activities_form_description_placeholder')}">${draft.description || ''}</textarea>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">${t('activities_selected_criteria_label')}</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_selected_criteria_help')}</p>
+                            </div>
+                            <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 border border-blue-200 dark:border-blue-700">${selectedCount} ${t('activities_selected_count_label')}</span>
+                        </div>
+                        ${selectedCriteriaHtml}
+                        <button data-action="toggle-competency-guide" class="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                            <i data-lucide="${guideToggleIcon}" class="w-4 h-4"></i>
+                            <span>${guideToggleLabel}</span>
+                        </button>
+                        ${competencyGuideHtml}
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">${t('activities_available_criteria_title')}</h3>
+                        ${availableCriteriaHtml}
+                    </div>
+                </div>
             </div>
         </div>
     `;

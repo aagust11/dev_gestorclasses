@@ -21,6 +21,8 @@ function render() {
     switch (state.activeView) {
         case 'schedule': viewContent = views.renderScheduleView(); break;
         case 'classes': viewContent = views.renderClassesView(); break;
+        case 'activities': viewContent = views.renderActivitiesView(); break;
+        case 'learningActivityEditor': viewContent = views.renderLearningActivityEditorView(); break;
         case 'settings': viewContent = views.renderSettingsView(); break;
         case 'competencyDetail': viewContent = views.renderCompetencyDetailView(); break;
         case 'activityDetail': viewContent = views.renderActivityDetailView(); break;
@@ -38,18 +40,21 @@ function updateMobileHeader() {
     const keyMap = {
         schedule: 'schedule_view_title',
         classes: 'classes_view_title',
+        activities: 'activities_view_title',
         settings: 'settings_view_title',
         activityDetail: 'activity_detail_view_title',
         studentDetail: 'student_detail_view_title',
-        competencyDetail: 'competency_detail_view_title'
+        competencyDetail: 'competency_detail_view_title',
+        learningActivityEditor: 'activities_editor_header'
     };
     mobileHeaderTitle.textContent = t(keyMap[state.activeView] || 'app_title');
 }
 
 function updateNavButtons() {
+    const effectiveView = state.activeView === 'learningActivityEditor' ? 'activities' : state.activeView;
     navButtons.forEach(btn => {
         const view = btn.dataset.view;
-        const isActive = view === state.activeView;
+        const isActive = view === effectiveView;
         btn.classList.toggle('bg-blue-600', isActive);
         btn.classList.toggle('text-white', isActive);
         btn.classList.toggle('text-gray-600', !isActive);
@@ -81,7 +86,10 @@ function handleAction(action, element, event) {
         'add-holiday', 'delete-holiday', 'select-settings-tab',
         'add-competency', 'delete-competency', 'add-criterion', 'delete-criterion',
         'select-competency', 'back-to-competencies', 'toggle-attendance-status',
-        'add-positive-record', 'add-incident-record', 'set-student-timeline-filter'
+        'add-positive-record', 'add-incident-record', 'set-student-timeline-filter',
+        'open-learning-activity-editor', 'open-learning-activity-quick', 'back-to-activities',
+        'save-learning-activity-draft', 'toggle-learning-activity-list', 'toggle-competency-guide',
+        'toggle-learning-activity-criterion'
     ];
 
     if (actionHandlers[action]) {
@@ -208,6 +216,8 @@ async function init() {
             state.activeView = btn.dataset.view;
             state.selectedActivity = null;
             state.selectedStudentId = null;
+            state.learningActivityDraft = null;
+            state.learningActivityGuideVisible = false;
             updateNavButtons();
             render();
             if (window.innerWidth < 640) {
