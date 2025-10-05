@@ -6,6 +6,43 @@ import { t } from './i18n.js'; // Importamos la función de traducción
 // Claves internas para los días de la semana. No dependen del idioma.
 export const DAY_KEYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 
+export const STUDENT_ATTENDANCE_STATUS = {
+    ABSENCE: 'absence',
+    LATE_SHORT: 'late_short',
+    LATE_LONG: 'late_long'
+};
+
+export function createEmptyStudentAnnotation() {
+    return {
+        note: '',
+        attendance: null,
+        positives: [],
+        incidents: []
+    };
+}
+
+export function normalizeStudentAnnotation(rawAnnotation) {
+    if (!rawAnnotation) {
+        return createEmptyStudentAnnotation();
+    }
+
+    if (typeof rawAnnotation === 'string') {
+        return {
+            note: rawAnnotation,
+            attendance: null,
+            positives: [],
+            incidents: []
+        };
+    }
+
+    return {
+        note: typeof rawAnnotation.note === 'string' ? rawAnnotation.note : '',
+        attendance: rawAnnotation.attendance || null,
+        positives: Array.isArray(rawAnnotation.positives) ? rawAnnotation.positives : [],
+        incidents: Array.isArray(rawAnnotation.incidents) ? rawAnnotation.incidents : []
+    };
+}
+
 export function darkenColor(hex, percent) {
     if (!hex || typeof hex !== 'string') return '#000000';
     let [r, g, b] = hex.match(/\w\w/g).map(x => parseInt(x, 16));
@@ -216,6 +253,44 @@ export function showModal(title, content, onConfirm) {
     };
     document.getElementById('modal-cancel').onclick = close;
     modalCloseBtn.onclick = close;
+}
+
+export function showTextInputModal({ title, label, placeholder = '', defaultValue = '' }) {
+    const modalContainer = document.getElementById('modal-container');
+    const modalTitle = document.getElementById('modal-title');
+    const modalBody = document.getElementById('modal-body');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
+
+    return new Promise((resolve) => {
+        const textareaId = `modal-textarea-${Date.now()}`;
+
+        modalTitle.textContent = title;
+        modalBody.innerHTML = `
+            <label for="${textareaId}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">${label}</label>
+            <textarea id="${textareaId}" placeholder="${placeholder}" class="mt-2 w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md h-32"></textarea>
+            <div class="flex justify-end gap-4 mt-6">
+                <button id="modal-cancel" class="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">${t('modal_cancel')}</button>
+                <button id="modal-confirm" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">${t('modal_confirm')}</button>
+            </div>`;
+
+        const textarea = modalBody.querySelector('textarea');
+        textarea.value = defaultValue;
+
+        const close = (result) => {
+            modalContainer.classList.add('hidden');
+            document.getElementById('modal-confirm').onclick = null;
+            document.getElementById('modal-cancel').onclick = null;
+            modalCloseBtn.onclick = null;
+            resolve(result);
+        };
+
+        document.getElementById('modal-confirm').onclick = () => close(textarea.value.trim());
+        document.getElementById('modal-cancel').onclick = () => close(null);
+        modalCloseBtn.onclick = () => close(null);
+
+        modalContainer.classList.remove('hidden');
+        setTimeout(() => textarea.focus(), 0);
+    });
 }
 
 export function showInfoModal(title, htmlContent, onClose) {

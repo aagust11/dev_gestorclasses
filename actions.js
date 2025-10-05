@@ -1,7 +1,7 @@
 // actions.js: Define toda la lógica de las acciones del usuario.
 
 import { state, saveState, getRandomPastelColor } from './state.js';
-import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange } from './utils.js';
+import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal } from './utils.js';
 import { t } from './i18n.js';
 
 function escapeRegExp(str) {
@@ -77,6 +77,37 @@ function showImportSummary(data) {
     showInfoModal(title, content, () => {
         window.location.reload();
     });
+}
+
+function ensureClassEntry(entryId) {
+    if (!state.classEntries[entryId]) {
+        state.classEntries[entryId] = { planned: '', completed: '', annotations: {} };
+    }
+
+    if (!state.classEntries[entryId].annotations) {
+        state.classEntries[entryId].annotations = {};
+    }
+
+    return state.classEntries[entryId];
+}
+
+function ensureStudentAnnotation(entry, studentId) {
+    if (!entry.annotations[studentId]) {
+        entry.annotations[studentId] = createEmptyStudentAnnotation();
+        return entry.annotations[studentId];
+    }
+
+    if (typeof entry.annotations[studentId] === 'string') {
+        entry.annotations[studentId] = normalizeStudentAnnotation(entry.annotations[studentId]);
+        return entry.annotations[studentId];
+    }
+
+    const current = entry.annotations[studentId];
+    current.note = typeof current.note === 'string' ? current.note : '';
+    current.attendance = current.attendance || null;
+    current.positives = Array.isArray(current.positives) ? current.positives : [];
+    current.incidents = Array.isArray(current.incidents) ? current.incidents : [];
+    return current;
 }
 
 export const actionHandlers = {
@@ -216,6 +247,7 @@ export const actionHandlers = {
     },
     'select-student': (id, element) => {
         state.selectedStudentId = element.dataset.studentId;
+        state.studentTimelineFilter = 'all';
         state.activeView = 'studentDetail';
     },
     'back-to-classes': () => {
@@ -238,10 +270,18 @@ export const actionHandlers = {
     },
     'edit-session-annotation': (id, element) => {
         const { entryId, studentId } = element.dataset;
-        if (state.classEntries[entryId] && state.classEntries[entryId].annotations) {
-            state.classEntries[entryId].annotations[studentId] = element.value;
-            saveState();
-        }
+        const entry = ensureClassEntry(entryId);
+        const studentAnnotation = ensureStudentAnnotation(entry, studentId);
+        studentAnnotation.note = element.value;
+        saveState();
+    },
+    'set-student-timeline-filter': (id, element) => {
+        const { filter } = element.dataset;
+        if (!filter) return;
+
+        const nextFilter = (filter === state.studentTimelineFilter && filter !== 'all') ? 'all' : filter;
+        state.studentTimelineFilter = nextFilter;
+        saveState();
     },
     'go-to-student': (id, element) => {
         const studentId = element.value;
@@ -752,22 +792,73 @@ export const actionHandlers = {
     // --- Class Entry Actions ---
     'planned-change': (id, element) => {
         const entryId = `${state.selectedActivity.id}_${state.selectedActivity.date}`;
-        if (!state.classEntries[entryId]) state.classEntries[entryId] = { annotations: {} };
-        state.classEntries[entryId].planned = element.value;
+        const entry = ensureClassEntry(entryId);
+        entry.planned = element.value;
         saveState();
     },
     'completed-change': (id, element) => {
         const entryId = `${state.selectedActivity.id}_${state.selectedActivity.date}`;
-        if (!state.classEntries[entryId]) state.classEntries[entryId] = { annotations: {} };
-        state.classEntries[entryId].completed = element.value;
+        const entry = ensureClassEntry(entryId);
+        entry.completed = element.value;
         saveState();
     },
     'annotation-change': (id, element) => {
         const { studentId } = element.dataset;
         const entryId = `${state.selectedActivity.id}_${state.selectedActivity.date}`;
-        if (!state.classEntries[entryId]) state.classEntries[entryId] = { annotations: {} };
-        if (!state.classEntries[entryId].annotations) state.classEntries[entryId].annotations = {};
-        state.classEntries[entryId].annotations[studentId] = element.value;
+        const entry = ensureClassEntry(entryId);
+        const studentAnnotation = ensureStudentAnnotation(entry, studentId);
+        studentAnnotation.note = element.value;
+        saveState();
+    },
+    'toggle-attendance-status': (id, element) => {
+        const { studentId, status } = element.dataset;
+        if (!studentId || !status) return;
+        const entryId = `${state.selectedActivity.id}_${state.selectedActivity.date}`;
+        const entry = ensureClassEntry(entryId);
+        const studentAnnotation = ensureStudentAnnotation(entry, studentId);
+        studentAnnotation.attendance = studentAnnotation.attendance === status ? null : status;
+        saveState();
+    },
+    'add-positive-record': async (id, element) => {
+        const { studentId } = element.dataset;
+        if (!studentId) return;
+        const entryId = `${state.selectedActivity.id}_${state.selectedActivity.date}`;
+        const entry = ensureClassEntry(entryId);
+        const studentAnnotation = ensureStudentAnnotation(entry, studentId);
+        const content = await showTextInputModal({
+            title: t('add_positive_record'),
+            label: t('positive_record_prompt')
+        });
+
+        if (!content) return;
+
+        studentAnnotation.positives.push({
+            id: crypto.randomUUID(),
+            content,
+            createdAt: new Date().toISOString(),
+            entryId
+        });
+        saveState();
+    },
+    'add-incident-record': async (id, element) => {
+        const { studentId } = element.dataset;
+        if (!studentId) return;
+        const entryId = `${state.selectedActivity.id}_${state.selectedActivity.date}`;
+        const entry = ensureClassEntry(entryId);
+        const studentAnnotation = ensureStudentAnnotation(entry, studentId);
+        const content = await showTextInputModal({
+            title: t('add_incident_record'),
+            label: t('incident_record_prompt')
+        });
+
+        if (!content) return;
+
+        studentAnnotation.incidents.push({
+            id: crypto.randomUUID(),
+            content,
+            createdAt: new Date().toISOString(),
+            entryId
+        });
         saveState();
     },
     // --- Data Management Actions ---

@@ -23,6 +23,7 @@ export const state = {
     editingTimeSlotId: null,
     editingActivityId: null,
     settingsActiveTab: 'calendar', // NUEVO: Pestaña activa en la vista de configuración
+    studentTimelineFilter: 'all',
 };
 
 export function getRandomPastelColor() {
@@ -42,10 +43,11 @@ export function saveState() {
         classEntries: state.classEntries,
         courseStartDate: state.courseStartDate,
         courseEndDate: state.courseEndDate,
-        terms: state.terms, 
+        terms: state.terms,
         selectedTermId: state.selectedTermId,
         holidays: state.holidays,
-        settingsActiveTab: state.settingsActiveTab // Guardar la pestaña activa
+        settingsActiveTab: state.settingsActiveTab, // Guardar la pestaña activa
+        studentTimelineFilter: state.studentTimelineFilter,
     };
     localStorage.setItem('teacherDashboardData', JSON.stringify(dataToSave));
     
@@ -79,6 +81,7 @@ export function loadState() {
         state.selectedTermId = parsedData.selectedTermId || 'all';
         state.holidays = parsedData.holidays || [];
         state.settingsActiveTab = parsedData.settingsActiveTab || 'calendar'; // Cargar la pestaña activa
+        state.studentTimelineFilter = parsedData.studentTimelineFilter || 'all';
     }
 
     state.activities.forEach(activity => {
