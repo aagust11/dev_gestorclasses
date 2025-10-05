@@ -14,11 +14,12 @@ export const state = {
     currentDate: new Date(),
     courseStartDate: '', // Mantenido por retrocompatibilidad, pero los trimestres tienen prioridad.
     courseEndDate: '',   // Mantenido por retrocompatibilidad.
-    terms: [], 
-    selectedTermId: 'all', 
-    holidays: [], 
+    terms: [],
+    selectedTermId: 'all',
+    holidays: [],
     selectedActivity: null,
     selectedStudentId: null,
+    selectedCompetency: null,
     editingTimeSlotId: null,
     editingActivityId: null,
     settingsActiveTab: 'calendar', // NUEVO: Pestaña activa en la vista de configuración
@@ -74,9 +75,21 @@ export function loadState() {
         state.classEntries = parsedData.classEntries || {};
         state.courseStartDate = parsedData.courseStartDate || '';
         state.courseEndDate = parsedData.courseEndDate || '';
-        state.terms = parsedData.terms || []; 
+        state.terms = parsedData.terms || [];
         state.selectedTermId = parsedData.selectedTermId || 'all';
         state.holidays = parsedData.holidays || [];
         state.settingsActiveTab = parsedData.settingsActiveTab || 'calendar'; // Cargar la pestaña activa
     }
+
+    state.activities.forEach(activity => {
+        if (!activity.competencies) {
+            activity.competencies = [];
+        }
+
+        activity.competencies.forEach(competency => {
+            if (!competency.criteria) {
+                competency.criteria = [];
+            }
+        });
+    });
 }

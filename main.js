@@ -22,6 +22,7 @@ function render() {
         case 'schedule': viewContent = views.renderScheduleView(); break;
         case 'classes': viewContent = views.renderClassesView(); break;
         case 'settings': viewContent = views.renderSettingsView(); break;
+        case 'competencyDetail': viewContent = views.renderCompetencyDetailView(); break;
         case 'activityDetail': viewContent = views.renderActivityDetailView(); break;
         case 'studentDetail': viewContent = views.renderStudentDetailView(); break;
         default: viewContent = views.renderScheduleView();
@@ -39,7 +40,8 @@ function updateMobileHeader() {
         classes: 'classes_view_title',
         settings: 'settings_view_title',
         activityDetail: 'activity_detail_view_title',
-        studentDetail: 'student_detail_view_title'
+        studentDetail: 'student_detail_view_title',
+        competencyDetail: 'competency_detail_view_title'
     };
     mobileHeaderTitle.textContent = t(keyMap[state.activeView] || 'app_title');
 }
@@ -68,7 +70,9 @@ function handleAction(action, element, event) {
         'cancel-edit-activity', 'prev-week', 'next-week', 'today', 'select-student', 'back-to-classes',
         'add-selected-student-to-class', 'navigate-to-session', 'add-schedule-override', 'delete-schedule-override',
         'go-to-class-session', 'add-term', 'delete-term', 'select-term', 'go-to-week',
-        'add-holiday', 'delete-holiday', 'select-settings-tab' // FIX: Added action to re-render
+        'add-holiday', 'delete-holiday', 'select-settings-tab',
+        'add-competency', 'delete-competency', 'add-criterion', 'delete-criterion',
+        'select-competency', 'back-to-competencies'
     ];
     
     if (actionHandlers[action]) {
