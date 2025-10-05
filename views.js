@@ -1369,24 +1369,24 @@ export function renderSettingsView() {
 
         return `
             <div id="competency-card-${c.id}" class="bg-white dark:bg-gray-800 rounded-lg shadow-md flex flex-col">
-                <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-t-lg">
-                    <h3 class="text-xl font-bold" style="color: ${darkenColor(c.color, 40)}">${c.name}</h3>
-                    <div class="text-sm text-gray-600 dark:text-gray-400 mt-2 flex items-center gap-2">
-                        <i data-lucide="target" class="w-4 h-4"></i>
-                        <span>${competencyCount} ${t('competencies_short_label')}</span>
+                <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-t-lg flex flex-col gap-2">
+                    <div>
+                        <h3 class="text-xl font-bold" style="color: ${darkenColor(c.color, 40)}">${c.name}</h3>
+                        <div class="text-sm text-gray-600 dark:text-gray-400 mt-2 flex items-center gap-2">
+                            <i data-lucide="target" class="w-4 h-4"></i>
+                            <span>${competencyCount} ${t('competencies_short_label')}</span>
+                        </div>
+                    </div>
+                    <div class="mt-auto">
+                        <button data-action="add-competency" data-activity-id="${c.id}" class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800">
+                            <i data-lucide="plus" class="w-5 h-5"></i>
+                            <span class="sr-only">${t('add_competency')}</span>
+                        </button>
                     </div>
                 </div>
                 <div class="p-4 flex flex-col gap-4 flex-grow">
                     <div class="space-y-2 max-h-48 overflow-y-auto">
                         ${competenciesHtml || `<p class=\"text-sm text-gray-500 dark:text-gray-400\">${t('no_competencies_in_class')}</p>`}
-                    </div>
-                    <div class="flex flex-col gap-2 border-t border-gray-200 dark:border-gray-700 pt-4">
-                        <input type="text" id="new-competency-code-${c.id}" placeholder="${t('add_competency_identifier_placeholder')}" class="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md">
-                        <textarea id="new-competency-description-${c.id}" placeholder="${t('add_competency_description_placeholder')}" class="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-20"></textarea>
-                        <button data-action="add-competency" data-activity-id="${c.id}" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center justify-center gap-2">
-                            <i data-lucide="plus" class="w-5 h-5"></i>
-                            ${t('add_competency')}
-                        </button>
                     </div>
                 </div>
             </div>
