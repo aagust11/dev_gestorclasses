@@ -1,6 +1,18 @@
 // actions.js: Define toda la lógica de las acciones del usuario.
 
-import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS } from './state.js';
+import {
+    state,
+    saveState,
+    getRandomPastelColor,
+    LEARNING_ACTIVITY_STATUS,
+    calculateLearningActivityStatus,
+    createEmptyRubric,
+    normalizeRubric,
+    RUBRIC_LEVELS,
+    ensureEvaluationSettingsForClass,
+    normalizeEvaluationSettings
+} from './state.js';
+import { computeClassTermEvaluation } from './evaluation.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate } from './utils.js';
 import { t } from './i18n.js';
 
@@ -132,6 +144,50 @@ function removeRubricItemsForCriterion(rubric, competencyId, criterionId) {
 
     cleanRubricEvaluations(rubric, removedIds);
     return removedIds;
+}
+
+function getEvaluationTermKey(termId) {
+    return termId && termId !== 'all' ? termId : 'all';
+}
+
+function ensureEvaluationResultSnapshot(classId, termId = 'all') {
+    if (!classId) return null;
+    const key = getEvaluationTermKey(termId);
+    if (!state.evaluationResults[classId]) {
+        state.evaluationResults[classId] = {};
+    }
+    if (!state.evaluationResults[classId][key]) {
+        state.evaluationResults[classId][key] = {
+            computedAt: null,
+            data: null,
+            overrides: { final: {} }
+        };
+    } else {
+        const snapshot = state.evaluationResults[classId][key];
+        if (!snapshot.overrides || typeof snapshot.overrides !== 'object') {
+            snapshot.overrides = { final: {} };
+        }
+        if (!snapshot.overrides.final || typeof snapshot.overrides.final !== 'object') {
+            snapshot.overrides.final = {};
+        }
+    }
+    return state.evaluationResults[classId][key];
+}
+
+function getTermRangeById(termId) {
+    if (!termId || termId === 'all') {
+        return null;
+    }
+    const term = state.terms.find(entry => entry.id === termId);
+    if (!term) {
+        return null;
+    }
+    const start = new Date(`${term.startDate}T00:00:00`);
+    const end = new Date(`${term.endDate}T23:59:59`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        return null;
+    }
+    return { start, end };
 }
 
 function syncRubricWithActivityCriteria(activity) {
@@ -392,7 +448,7 @@ export const actionHandlers = {
 
     'set-evaluation-tab': (id, element) => {
         const tab = element?.dataset?.tab;
-        const allowedTabs = ['activities', 'grades'];
+        const allowedTabs = ['activities', 'grades', 'term-grades'];
         if (!tab || !allowedTabs.includes(tab)) return;
         state.evaluationActiveTab = tab;
 
@@ -405,13 +461,139 @@ export const actionHandlers = {
                 state.selectedEvaluationClassId = classes[0]?.id || null;
             }
         }
+        if (tab === 'term-grades' && state.selectedEvaluationClassId) {
+            ensureEvaluationSettingsForClass(state.selectedEvaluationClassId);
+        }
     },
 
     'select-evaluation-class': (id, element) => {
         const classId = element?.dataset?.classId;
         if (classId) {
             state.selectedEvaluationClassId = classId;
+            ensureEvaluationSettingsForClass(classId);
         }
+    },
+    'set-evaluation-term': (id, element) => {
+        const value = element?.value || element?.dataset?.termId;
+        state.evaluationSelectedTermId = value && value !== 'all' ? value : 'all';
+    },
+    'update-evaluation-setting': (id, element) => {
+        const classId = element?.dataset?.classId;
+        if (!classId) return;
+        const current = ensureEvaluationSettingsForClass(classId);
+        const section = element?.dataset?.section || 'root';
+        const field = element?.dataset?.field;
+        let hasChanges = false;
+
+        if (section === 'root' && field === 'evaluationType') {
+            const value = element?.value === 'numerica' ? 'numerica' : 'competencial';
+            if (current.evaluationType !== value) {
+                current.evaluationType = value;
+                hasChanges = true;
+            }
+        } else if (section === 'competencial') {
+            if (field === 'termEvaluationMethod') {
+                const value = element?.value === 'majority' ? 'majority' : 'weighted';
+                if (current.competencial.termEvaluationMethod !== value) {
+                    current.competencial.termEvaluationMethod = value;
+                    hasChanges = true;
+                }
+            } else if (field === 'levelValues') {
+                const level = element?.dataset?.level;
+                if (level && Object.prototype.hasOwnProperty.call(current.competencial.levelValues, level)) {
+                    const parsed = parseFloat(element.value);
+                    const nextValue = Number.isFinite(parsed) ? parsed : current.competencial.levelValues[level];
+                    if (current.competencial.levelValues[level] !== nextValue) {
+                        current.competencial.levelValues[level] = nextValue;
+                        hasChanges = true;
+                    }
+                }
+            } else if (field === 'thresholds') {
+                const level = element?.dataset?.level;
+                if (level && Object.prototype.hasOwnProperty.call(current.competencial.minimumThresholds, level)) {
+                    const parsed = parseFloat(element.value);
+                    const nextValue = Number.isFinite(parsed) ? parsed : current.competencial.minimumThresholds[level];
+                    if (current.competencial.minimumThresholds[level] !== nextValue) {
+                        current.competencial.minimumThresholds[level] = nextValue;
+                        hasChanges = true;
+                    }
+                }
+            } else if (field === 'maxNotAchieved') {
+                const group = element?.dataset?.group;
+                const scope = element?.dataset?.scope;
+                if (group && scope && current.competencial.maxNotAchieved[group] && Object.prototype.hasOwnProperty.call(current.competencial.maxNotAchieved[group], scope)) {
+                    const parsed = parseInt(element.value, 10);
+                    const nextValue = Number.isInteger(parsed) && parsed >= 0 ? parsed : current.competencial.maxNotAchieved[group][scope];
+                    if (current.competencial.maxNotAchieved[group][scope] !== nextValue) {
+                        current.competencial.maxNotAchieved[group][scope] = nextValue;
+                        hasChanges = true;
+                    }
+                }
+            }
+        }
+
+        if (hasChanges) {
+            state.evaluationSettings[classId] = normalizeEvaluationSettings(current);
+            delete state.evaluationResults[classId];
+            saveState();
+        }
+    },
+    'calculate-term-grades': (id, element) => {
+        const classId = element?.dataset?.classId || state.selectedEvaluationClassId;
+        if (!classId) return;
+        const classData = state.activities.find(activity => activity.id === classId && activity.type === 'class');
+        if (!classData) return;
+        const settings = ensureEvaluationSettingsForClass(classId);
+        const termId = state.evaluationSelectedTermId || 'all';
+        const termRange = getTermRangeById(termId);
+        const studentIds = Array.isArray(classData.studentIds) ? classData.studentIds : [];
+        const students = state.students.filter(student => studentIds.includes(student.id));
+        const result = computeClassTermEvaluation({
+            classData,
+            students,
+            learningActivities: state.learningActivities,
+            termRange,
+            settings,
+        });
+        const snapshot = ensureEvaluationResultSnapshot(classId, termId);
+        if (!snapshot) return;
+        snapshot.data = result;
+        snapshot.computedAt = new Date().toISOString();
+        snapshot.termId = getEvaluationTermKey(termId);
+        saveState();
+    },
+    'update-term-grade-override': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const studentId = element?.dataset?.studentId;
+        const field = element?.dataset?.field;
+        if (!classId || !studentId || !field) return;
+        const termId = element?.dataset?.termId || state.evaluationSelectedTermId || 'all';
+        const snapshot = ensureEvaluationResultSnapshot(classId, termId);
+        if (!snapshot) return;
+        const overrides = snapshot.overrides?.final || {};
+        snapshot.overrides.final = overrides;
+        if (!overrides[studentId]) {
+            overrides[studentId] = { numeric: null, qualitative: '' };
+        }
+        if (field === 'numeric') {
+            const raw = element.value;
+            if (raw === '') {
+                overrides[studentId].numeric = null;
+            } else {
+                const parsed = parseFloat(raw);
+                if (Number.isFinite(parsed)) {
+                    overrides[studentId].numeric = parsed;
+                }
+            }
+        } else if (field === 'qualitative') {
+            const value = element.value;
+            overrides[studentId].qualitative = RUBRIC_LEVELS.includes(value) ? value : '';
+        }
+
+        if ((overrides[studentId].numeric === null || Number.isNaN(overrides[studentId].numeric)) && (!overrides[studentId].qualitative || overrides[studentId].qualitative === '')) {
+            delete overrides[studentId];
+        }
+        saveState();
     },
 
     // --- Load Example Action ---
@@ -446,6 +628,10 @@ export const actionHandlers = {
                     criteriaRefs: Array.isArray(activity?.criteriaRefs) ? activity.criteriaRefs : [],
                     createdAt: activity?.createdAt || new Date().toISOString(),
                     updatedAt: activity?.updatedAt || activity?.createdAt || new Date().toISOString(),
+                    startDate: activity?.startDate || '',
+                    endDate: activity?.endDate || '',
+                    weight: typeof activity?.weight === 'number' && !Number.isNaN(activity.weight) ? activity.weight : 1,
+                    status: activity?.status || LEARNING_ACTIVITY_STATUS.SCHEDULED,
                 }));
                 state.students = data.students || [];
                 state.timeSlots = data.timeSlots || [];
@@ -465,6 +651,16 @@ export const actionHandlers = {
                         }
                     });
                 });
+                state.evaluationSettings = {};
+                state.evaluationResults = {};
+                state.evaluationSelectedTermId = 'all';
+
+                state.activities
+                    .filter(activity => activity.type === 'class')
+                    .forEach(activity => {
+                        ensureEvaluationSettingsForClass(activity.id);
+                    });
+
                 state.learningActivities.forEach(activity => {
                     syncRubricWithActivityCriteria(activity);
                 });
@@ -528,6 +724,8 @@ export const actionHandlers = {
                     endDate: existing.endDate || '',
                     rubric: normalizeRubric(existing?.rubric),
                     status: existing?.status || LEARNING_ACTIVITY_STATUS.SCHEDULED,
+                    weight: typeof existing?.weight === 'number' && !Number.isNaN(existing.weight) ? existing.weight : 1,
+                    statusManuallySet: true,
                 };
                 syncRubricWithActivityCriteria(state.learningActivityDraft);
             } else {
@@ -542,6 +740,8 @@ export const actionHandlers = {
                     endDate: '',
                     rubric: createEmptyRubric(),
                     status: LEARNING_ACTIVITY_STATUS.SCHEDULED,
+                    weight: 1,
+                    statusManuallySet: false,
                 };
                 syncRubricWithActivityCriteria(state.learningActivityDraft);
             }
@@ -554,7 +754,9 @@ export const actionHandlers = {
             state.learningActivityDraft.endDate = computeDefaultEndDate(state.learningActivityDraft.startDate);
         }
 
-        state.learningActivityDraft.status = calculateLearningActivityStatus(state.learningActivityDraft);
+        if (!state.learningActivityDraft.statusManuallySet) {
+            state.learningActivityDraft.status = calculateLearningActivityStatus(state.learningActivityDraft);
+        }
 
         state.learningActivityGuideVisible = false;
         state.learningActivityCriteriaModalOpen = false;
@@ -581,13 +783,17 @@ export const actionHandlers = {
             endDate: '',
             rubric: createEmptyRubric(),
             status: LEARNING_ACTIVITY_STATUS.SCHEDULED,
+            weight: 1,
+            statusManuallySet: false,
         };
         syncRubricWithActivityCriteria(state.learningActivityDraft);
 
         const todayString = formatDate(new Date());
         state.learningActivityDraft.startDate = todayString;
         state.learningActivityDraft.endDate = computeDefaultEndDate(todayString);
-        state.learningActivityDraft.status = calculateLearningActivityStatus(state.learningActivityDraft);
+        if (!state.learningActivityDraft.statusManuallySet) {
+            state.learningActivityDraft.status = calculateLearningActivityStatus(state.learningActivityDraft);
+        }
 
         state.learningActivityGuideVisible = false;
         state.learningActivityCriteriaModalOpen = false;
@@ -631,10 +837,29 @@ export const actionHandlers = {
         if (endInput) {
             endInput.value = computedEnd;
         }
+        if (!state.learningActivityDraft.statusManuallySet) {
+            state.learningActivityDraft.status = calculateLearningActivityStatus(state.learningActivityDraft);
+        }
     },
     'update-learning-activity-end-date': (id, element) => {
         if (!state.learningActivityDraft) return;
         state.learningActivityDraft.endDate = element.value;
+        if (!state.learningActivityDraft.statusManuallySet) {
+            state.learningActivityDraft.status = calculateLearningActivityStatus(state.learningActivityDraft);
+        }
+    },
+    'update-learning-activity-status': (id, element) => {
+        if (!state.learningActivityDraft) return;
+        const value = element?.value;
+        if (!value) return;
+        if (!Object.values(LEARNING_ACTIVITY_STATUS).includes(value)) return;
+        state.learningActivityDraft.status = value;
+        state.learningActivityDraft.statusManuallySet = true;
+    },
+    'update-learning-activity-weight': (id, element) => {
+        if (!state.learningActivityDraft) return;
+        const value = parseFloat(element?.value);
+        state.learningActivityDraft.weight = Number.isFinite(value) && value >= 0 ? value : 0;
     },
     'toggle-learning-activity-criterion': (id, element) => {
         if (!state.learningActivityDraft) return;
@@ -691,11 +916,21 @@ export const actionHandlers = {
         const now = new Date().toISOString();
         syncRubricWithActivityCriteria(draft);
         const normalizedRubric = normalizeRubric(draft.rubric);
-        const computedStatus = calculateLearningActivityStatus({
-            startDate: draft.startDate,
-            endDate: draft.endDate,
-            status: draft.status,
-        });
+        const allowedStatuses = Object.values(LEARNING_ACTIVITY_STATUS);
+        let normalizedStatus;
+        if (draft.statusManuallySet && allowedStatuses.includes(draft.status)) {
+            normalizedStatus = draft.status;
+        } else {
+            normalizedStatus = calculateLearningActivityStatus({
+                startDate: draft.startDate,
+                endDate: draft.endDate,
+                status: draft.status,
+            });
+        }
+
+        const weightValue = typeof draft.weight === 'number' && !Number.isNaN(draft.weight) && draft.weight >= 0
+            ? draft.weight
+            : 1;
 
         if (draft.isNew) {
             state.learningActivities.push({
@@ -709,7 +944,8 @@ export const actionHandlers = {
                 startDate: draft.startDate || '',
                 endDate: draft.endDate || '',
                 rubric: normalizedRubric,
-                status: computedStatus,
+                status: normalizedStatus,
+                weight: weightValue,
             });
         } else {
             const index = state.learningActivities.findIndex(act => act.id === draft.id);
@@ -724,7 +960,8 @@ export const actionHandlers = {
                 startDate: draft.startDate || '',
                 endDate: draft.endDate || '',
                 rubric: normalizedRubric,
-                status: computedStatus,
+                status: normalizedStatus,
+                weight: weightValue,
             };
             if (index === -1) {
                 state.learningActivities.push(persisted);
@@ -1291,7 +1528,7 @@ export const actionHandlers = {
         const name = nameInput.value.trim();
         const type = document.querySelector('input[name="activityType"]:checked').value;
         if (name) {
-            state.activities.push({
+            const newActivity = {
                 id: crypto.randomUUID(),
                 name,
                 type,
@@ -1300,7 +1537,11 @@ export const actionHandlers = {
                 startDate: state.courseStartDate,
                 endDate: state.courseEndDate,
                 competencies: []
-            });
+            };
+            state.activities.push(newActivity);
+            if (type === 'class') {
+                ensureEvaluationSettingsForClass(newActivity.id);
+            }
             nameInput.value = '';
             saveState();
         }
@@ -1308,6 +1549,8 @@ export const actionHandlers = {
     'delete-activity': (id) => {
         showModal(t('delete_activity_confirm_title'), t('delete_activity_confirm_text'), () => {
             state.activities = state.activities.filter(a => a.id !== id);
+            delete state.evaluationSettings[id];
+            delete state.evaluationResults[id];
             saveState();
             document.dispatchEvent(new CustomEvent('render'));
         });

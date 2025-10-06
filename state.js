@@ -9,7 +9,142 @@ export const LEARNING_ACTIVITY_STATUS = {
     PENDING_REVIEW: 'pending_review'
 };
 
-export const RUBRIC_LEVELS = ['NA', 'AS', 'AN', 'AE'];
+export const RUBRIC_LEVELS = ['NP', 'NA', 'AS', 'AN', 'AE'];
+
+export const EVALUATION_METHODS = {
+    WEIGHTED: 'weighted',
+    MAJORITY: 'majority'
+};
+
+export const DEFAULT_COMPETENCIAL_LEVEL_VALUES = {
+    NP: 0,
+    NA: 1,
+    AS: 2,
+    AN: 3,
+    AE: 4
+};
+
+export const DEFAULT_COMPETENCIAL_MINIMUMS = {
+    AS: 1.5,
+    AN: 2.5,
+    AE: 3.5
+};
+
+export const DEFAULT_MAX_NOT_ACHIEVED = {
+    competencies: {
+        term: 0,
+        course: 0
+    },
+    criteria: {
+        term: 0,
+        course: 0
+    }
+};
+
+export function createDefaultCompetencialConfig() {
+    return {
+        levelValues: { ...DEFAULT_COMPETENCIAL_LEVEL_VALUES },
+        minimumThresholds: { ...DEFAULT_COMPETENCIAL_MINIMUMS },
+        maxNotAchieved: {
+            competencies: { ...DEFAULT_MAX_NOT_ACHIEVED.competencies },
+            criteria: { ...DEFAULT_MAX_NOT_ACHIEVED.criteria }
+        },
+        termEvaluationMethod: EVALUATION_METHODS.WEIGHTED
+    };
+}
+
+export function createDefaultEvaluationSettings() {
+    return {
+        evaluationType: 'competencial',
+        competencial: createDefaultCompetencialConfig()
+    };
+}
+
+export function normalizeCompetencialConfig(rawConfig) {
+    const config = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
+    const levelValues = config.levelValues && typeof config.levelValues === 'object'
+        ? { ...DEFAULT_COMPETENCIAL_LEVEL_VALUES, ...config.levelValues }
+        : { ...DEFAULT_COMPETENCIAL_LEVEL_VALUES };
+
+    Object.keys(DEFAULT_COMPETENCIAL_LEVEL_VALUES).forEach(level => {
+        const value = levelValues[level];
+        levelValues[level] = typeof value === 'number' && !Number.isNaN(value)
+            ? value
+            : DEFAULT_COMPETENCIAL_LEVEL_VALUES[level];
+    });
+
+    const minimumThresholds = config.minimumThresholds && typeof config.minimumThresholds === 'object'
+        ? { ...DEFAULT_COMPETENCIAL_MINIMUMS, ...config.minimumThresholds }
+        : { ...DEFAULT_COMPETENCIAL_MINIMUMS };
+
+    Object.keys(DEFAULT_COMPETENCIAL_MINIMUMS).forEach(level => {
+        const value = minimumThresholds[level];
+        minimumThresholds[level] = typeof value === 'number' && !Number.isNaN(value)
+            ? value
+            : DEFAULT_COMPETENCIAL_MINIMUMS[level];
+    });
+
+    const maxNotAchieved = {
+        competencies: { ...DEFAULT_MAX_NOT_ACHIEVED.competencies },
+        criteria: { ...DEFAULT_MAX_NOT_ACHIEVED.criteria }
+    };
+
+    if (config.maxNotAchieved && typeof config.maxNotAchieved === 'object') {
+        ['competencies', 'criteria'].forEach(group => {
+            const groupValue = config.maxNotAchieved?.[group];
+            if (groupValue && typeof groupValue === 'object') {
+                ['term', 'course'].forEach(scope => {
+                    const rawValue = groupValue?.[scope];
+                    const parsed = parseInt(rawValue, 10);
+                    maxNotAchieved[group][scope] = Number.isInteger(parsed) && parsed >= 0
+                        ? parsed
+                        : DEFAULT_MAX_NOT_ACHIEVED[group][scope];
+                });
+            }
+        });
+    }
+
+    const method = config.termEvaluationMethod;
+    const normalizedMethod = Object.values(EVALUATION_METHODS).includes(method)
+        ? method
+        : EVALUATION_METHODS.WEIGHTED;
+
+    return {
+        levelValues,
+        minimumThresholds,
+        maxNotAchieved,
+        termEvaluationMethod: normalizedMethod
+    };
+}
+
+export function normalizeEvaluationSettings(rawSettings) {
+    const settings = rawSettings && typeof rawSettings === 'object'
+        ? rawSettings
+        : createDefaultEvaluationSettings();
+
+    const evaluationType = settings.evaluationType === 'numerica'
+        ? 'numerica'
+        : 'competencial';
+
+    return {
+        evaluationType,
+        competencial: normalizeCompetencialConfig(settings.competencial)
+    };
+}
+
+export function ensureEvaluationSettingsForClass(classId) {
+    if (!classId) return createDefaultEvaluationSettings();
+    if (!state.evaluationSettings[classId]) {
+        state.evaluationSettings[classId] = createDefaultEvaluationSettings();
+    } else {
+        state.evaluationSettings[classId] = normalizeEvaluationSettings(state.evaluationSettings[classId]);
+    }
+    return state.evaluationSettings[classId];
+}
+
+export function getEvaluationSettingsForClass(classId) {
+    return ensureEvaluationSettingsForClass(classId);
+}
 
 export const state = {
     activeView: 'schedule',
@@ -43,6 +178,9 @@ export const state = {
     learningActivityRubricFilter: '',
     evaluationActiveTab: 'activities',
     selectedEvaluationClassId: null,
+    evaluationSelectedTermId: 'all',
+    evaluationSettings: {},
+    evaluationResults: {},
     learningActivityRubricReturnView: null,
 };
 
@@ -161,6 +299,9 @@ export function saveState() {
         studentTimelineFilter: state.studentTimelineFilter,
         evaluationActiveTab: state.evaluationActiveTab,
         selectedEvaluationClassId: state.selectedEvaluationClassId,
+        evaluationSelectedTermId: state.evaluationSelectedTermId,
+        evaluationSettings: state.evaluationSettings,
+        evaluationResults: state.evaluationResults,
     };
     localStorage.setItem('teacherDashboardData', JSON.stringify(dataToSave));
     
@@ -191,6 +332,7 @@ export function loadState() {
                 updatedAt: activity?.updatedAt || activity?.createdAt || new Date().toISOString(),
                 startDate: activity?.startDate || '',
                 endDate: activity?.endDate || '',
+                weight: typeof activity?.weight === 'number' && !Number.isNaN(activity.weight) ? activity.weight : 1,
             };
             normalized.rubric = normalizeRubricStructure(activity?.rubric);
             normalized.status = calculateLearningActivityStatus(normalized);
@@ -210,6 +352,9 @@ export function loadState() {
         state.studentTimelineFilter = parsedData.studentTimelineFilter || 'all';
         state.evaluationActiveTab = parsedData.evaluationActiveTab || 'activities';
         state.selectedEvaluationClassId = parsedData.selectedEvaluationClassId || null;
+        state.evaluationSelectedTermId = parsedData.evaluationSelectedTermId || 'all';
+        state.evaluationSettings = parsedData.evaluationSettings || {};
+        state.evaluationResults = parsedData.evaluationResults || {};
     }
 
     state.activities.forEach(activity => {
@@ -220,6 +365,25 @@ export function loadState() {
         activity.competencies.forEach(competency => {
             if (!competency.criteria) {
                 competency.criteria = [];
+            }
+        });
+    });
+
+    Object.keys(state.evaluationSettings).forEach(classId => {
+        state.evaluationSettings[classId] = normalizeEvaluationSettings(state.evaluationSettings[classId]);
+    });
+
+    state.activities
+        .filter(activity => activity.type === 'class')
+        .forEach(activity => ensureEvaluationSettingsForClass(activity.id));
+
+    Object.entries(state.evaluationResults || {}).forEach(([classId, perClass]) => {
+        if (!state.evaluationSettings[classId]) {
+            delete state.evaluationResults[classId];
+        }
+        Object.entries(perClass || {}).forEach(([termId, snapshot]) => {
+            if (!snapshot || typeof snapshot !== 'object') {
+                delete perClass[termId];
             }
         });
     });
