@@ -1517,7 +1517,7 @@ export function renderActivityDetailView() {
         }
     ];
 
-    const basePillClass = 'px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-700';
+    const basePillClass = 'px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-700';
     const inactivePillClass = 'bg-gray-100 text-gray-600 border-transparent hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600';
 
     const entryAnnotations = entry.annotations || {};
@@ -1530,9 +1530,8 @@ export function renderActivityDetailView() {
             const buttonClasses = `${basePillClass} ${isActive ? option.activeClasses : inactivePillClass}`;
             return `
                 <button type="button" data-action="toggle-attendance-status" data-student-id="${student.id}" data-status="${option.status}" class="${buttonClasses}" aria-pressed="${isActive}" title="${option.label}" aria-label="${option.label}">
-                    <i data-lucide="${option.icon}" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">${option.label}</span>
-                    <span class="sm:hidden font-semibold">${option.shortLabel}</span>
+                    <i data-lucide="${option.icon}" class="w-5 h-5"></i>
+                    <span class="sr-only">${option.label}</span>
                 </button>
             `;
         }).join('');
@@ -1636,21 +1635,18 @@ export function renderActivityDetailView() {
                         </div>
                         <div class="flex items-center gap-2 ml-2">
                             <button type="button" data-action="add-positive-record" data-student-id="${student.id}" class="${positiveButtonClasses}" title="${t('add_positive_record')}" aria-label="${t('add_positive_record')}">
-                                <i data-lucide="shield-plus" class="w-4 h-4"></i>
-                                <span class="hidden sm:inline">${t('positive_record_label')}</span>
-                                <span class="sm:hidden font-semibold">${t('positive_record_short')}</span>
+                                <i data-lucide="shield-plus" class="w-5 h-5"></i>
+                                <span class="sr-only">${t('positive_record_label')}</span>
                                 ${positivesCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-green-900/60 text-xs font-semibold">${positivesCount}</span>` : ''}
                             </button>
                             <button type="button" data-action="add-comment-record" data-student-id="${student.id}" class="${commentButtonClasses}" title="${t('add_comment_record')}" aria-label="${t('add_comment_record')}">
-                                <i data-lucide="message-square-more" class="w-4 h-4"></i>
-                                <span class="hidden sm:inline">${t('comment_record_label')}</span>
-                                <span class="sm:hidden font-semibold">${t('comment_record_short')}</span>
+                                <i data-lucide="message-square-more" class="w-5 h-5"></i>
+                                <span class="sr-only">${t('comment_record_label')}</span>
                                 ${commentsCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-blue-900/60 text-xs font-semibold">${commentsCount}</span>` : ''}
                             </button>
                             <button type="button" data-action="add-incident-record" data-student-id="${student.id}" class="${incidentButtonClasses}" title="${t('add_incident_record')}" aria-label="${t('add_incident_record')}">
-                                <i data-lucide="clock-alert" class="w-4 h-4"></i>
-                                <span class="hidden sm:inline">${t('incident_record_label')}</span>
-                                <span class="sm:hidden font-semibold">${t('incident_record_short')}</span>
+                                <i data-lucide="clock-alert" class="w-5 h-5"></i>
+                                <span class="sr-only">${t('incident_record_label')}</span>
                                 ${incidentsCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-red-900/60 text-xs font-semibold">${incidentsCount}</span>` : ''}
                             </button>
                         </div>
@@ -1682,12 +1678,12 @@ export function renderActivityDetailView() {
                 ${prevButton}
                 ${nextButton}
             </div>
-            <div class="grid md:grid-cols-2 gap-6">
+            <div class="grid md:grid-cols-2 gap-6 items-start">
                 <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md space-y-4">
                     <div><label class="block text-lg font-semibold mb-2 text-gray-700 dark:text-gray-300">${t('planning_for_today')}</label><textarea data-action="planned-change" placeholder="${t('planning_placeholder')}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-32">${entry.planned || ''}</textarea></div>
                     <div><label class="block text-lg font-semibold mb-2 text-gray-700 dark:text-gray-300">${t('summary_of_session')}</label><textarea data-action="completed-change" placeholder="${t('summary_placeholder')}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-32">${entry.completed || ''}</textarea></div>
                 </div>
-                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md flex flex-col md:h-[calc(100vh-260px)]">
                     <h3 class="text-lg font-semibold mb-3">${t('student_annotations_title')}</h3>
                     <div class="mb-4">
                         <label for="student-quick-nav" class="sr-only">${t('select_student')}</label>
@@ -1696,7 +1692,7 @@ export function renderActivityDetailView() {
                             ${studentsInClass.map(student => `<option value="${student.id}">${student.name}</option>`).join('')}
                         </select>
                     </div>
-                    <div class="space-y-4 max-h-96 overflow-y-auto pr-2">${annotationsHtml}</div>
+                    <div class="space-y-4 flex-1 overflow-y-auto pr-2">${annotationsHtml}</div>
                 </div>
             </div>
         </div>
