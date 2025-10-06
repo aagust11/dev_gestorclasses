@@ -135,7 +135,7 @@ function ensureRubricHasItemForCriterion(rubric, competencyId, criterionId) {
     if (!rubric) return null;
 
     const exists = Array.isArray(rubric.items)
-        ? rubric.items.some(item => item.competencyId === competencyId && item.criterionId === criterionId)
+        ? rubric.items.some(item => item.type !== 'section' && item.competencyId === competencyId && item.criterionId === criterionId)
         : false;
 
     if (exists) {
@@ -144,10 +144,12 @@ function ensureRubricHasItemForCriterion(rubric, competencyId, criterionId) {
 
     const newItem = {
         id: generateRubricItemId(),
+        type: 'criterion',
         competencyId,
         criterionId,
         weight: 1,
         levelComments: createDefaultLevelComments(),
+        generalGuidance: '',
     };
 
     rubric.items.push(newItem);
@@ -161,7 +163,7 @@ function removeRubricItemsForCriterion(rubric, competencyId, criterionId) {
 
     const removedIds = [];
     rubric.items = rubric.items.filter(item => {
-        const matches = item.competencyId === competencyId && item.criterionId === criterionId;
+        const matches = item.type !== 'section' && item.competencyId === competencyId && item.criterionId === criterionId;
         if (matches) {
             removedIds.push(item.id);
         }
@@ -228,6 +230,9 @@ function syncRubricWithActivityCriteria(activity) {
 
     if (Array.isArray(rubric.items)) {
         rubric.items.forEach(item => {
+            if (item.type === 'section') {
+                return;
+            }
             const key = makeCriterionKey(item.competencyId, item.criterionId);
             if (!assignedKeys.has(key)) {
                 ensureActivityHasCriterionRef(activity, item.competencyId, item.criterionId);
@@ -1059,13 +1064,29 @@ export const actionHandlers = {
         const [competencyId = '', criterionId = ''] = value.split('|');
         rubric.items.push({
             id: generateRubricItemId(),
+            type: 'criterion',
             competencyId,
             criterionId,
             weight: 1,
             levelComments: createDefaultLevelComments(),
+            generalGuidance: '',
         });
         ensureActivityHasCriterionRef(activity, competencyId, criterionId);
         select.value = '';
+        saveState();
+        document.dispatchEvent(new CustomEvent('render'));
+    },
+    'add-rubric-section': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        if (!activityId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        rubric.items.push({
+            id: generateRubricItemId(),
+            type: 'section',
+            sectionTitle: '',
+        });
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
     },
@@ -1081,11 +1102,13 @@ export const actionHandlers = {
             const [removed] = rubric.items.splice(index, 1);
             if (removed) {
                 cleanRubricEvaluations(rubric, [removed.id]);
-                const stillPresent = rubric.items.some(item =>
-                    item.competencyId === removed.competencyId && item.criterionId === removed.criterionId
-                );
-                if (!stillPresent) {
-                    removeCriterionRefFromActivity(activity, removed.competencyId, removed.criterionId);
+                if (removed.type !== 'section') {
+                    const stillPresent = rubric.items.some(item =>
+                        item.type !== 'section' && item.competencyId === removed.competencyId && item.criterionId === removed.criterionId
+                    );
+                    if (!stillPresent) {
+                        removeCriterionRefFromActivity(activity, removed.competencyId, removed.criterionId);
+                    }
                 }
             }
             saveState();
@@ -1116,9 +1139,21 @@ export const actionHandlers = {
         if (!activity) return;
         const rubric = ensureLearningActivityRubric(activity);
         const item = rubric.items.find(entry => entry.id === itemId);
-        if (!item) return;
+        if (!item || item.type === 'section') return;
         const value = parseFloat(element.value);
         item.weight = Number.isFinite(value) ? value : 1;
+        saveState();
+    },
+    'update-rubric-item-guidance': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const itemId = element?.dataset?.itemId;
+        if (!activityId || !itemId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        const item = rubric.items.find(entry => entry.id === itemId);
+        if (!item || item.type === 'section') return;
+        item.generalGuidance = element.value;
         saveState();
     },
     'update-rubric-item-comment': (id, element) => {
@@ -1130,8 +1165,20 @@ export const actionHandlers = {
         if (!activity) return;
         const rubric = ensureLearningActivityRubric(activity);
         const item = rubric.items.find(entry => entry.id === itemId);
-        if (!item) return;
+        if (!item || item.type === 'section') return;
         item.levelComments[level] = element.value;
+        saveState();
+    },
+    'update-rubric-section-title': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const itemId = element?.dataset?.itemId;
+        if (!activityId || !itemId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        const item = rubric.items.find(entry => entry.id === itemId);
+        if (!item || item.type !== 'section') return;
+        item.sectionTitle = element.value;
         saveState();
     },
     'set-rubric-score': (id, element) => {
