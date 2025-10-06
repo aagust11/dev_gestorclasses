@@ -10,7 +10,8 @@ import {
     normalizeRubric,
     RUBRIC_LEVELS,
     ensureEvaluationSettingsForClass,
-    normalizeEvaluationSettings
+    normalizeEvaluationSettings,
+    recalculateLearningActivityStatus
 } from './state.js';
 import { computeClassTermEvaluation } from './evaluation.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate } from './utils.js';
@@ -1073,6 +1074,7 @@ export const actionHandlers = {
         });
         ensureActivityHasCriterionRef(activity, competencyId, criterionId);
         select.value = '';
+        recalculateLearningActivityStatus(activity);
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
     },
@@ -1111,6 +1113,7 @@ export const actionHandlers = {
                     }
                 }
             }
+            recalculateLearningActivityStatus(activity);
             saveState();
             document.dispatchEvent(new CustomEvent('render'));
         }
@@ -1200,6 +1203,7 @@ export const actionHandlers = {
         } else {
             evaluation.scores[itemId] = level;
         }
+        recalculateLearningActivityStatus(activity);
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
     },
@@ -1230,6 +1234,7 @@ export const actionHandlers = {
             evaluation.scores = {};
             evaluation.flags.deliveredLate = false;
         }
+        recalculateLearningActivityStatus(activity);
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
     },
@@ -1244,12 +1249,22 @@ export const actionHandlers = {
         if (!evaluation) return;
         const current = Boolean(evaluation.flags?.deliveredLate);
         evaluation.flags.deliveredLate = !current;
+        recalculateLearningActivityStatus(activity);
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
     },
     'filter-learning-activity-rubric-students': (id, element) => {
         if (!element) return;
         state.learningActivityRubricFilter = element.value;
+    },
+    'open-learning-activity-evaluation': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        if (!activityId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        state.activeView = 'evaluation';
+        state.evaluationActiveTab = 'activities';
+        state.selectedEvaluationClassId = activity.classId || null;
     },
 
     // --- Student Actions ---
