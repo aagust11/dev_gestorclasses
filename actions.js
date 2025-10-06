@@ -1,6 +1,20 @@
 // actions.js: Define toda la lógica de las acciones del usuario.
 
-import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS } from './state.js';
+import {
+    state,
+    saveState,
+    getRandomPastelColor,
+    LEARNING_ACTIVITY_STATUS,
+    calculateLearningActivityStatus,
+    createEmptyRubric,
+    normalizeRubric,
+    RUBRIC_LEVELS,
+    createDefaultEvaluationSettings,
+    normalizeEvaluationSettings,
+    EVALUATION_TYPES,
+    TERM_EVALUATION_METHODS,
+    COMPETENCIAL_LEVEL_ORDER
+} from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate } from './utils.js';
 import { t } from './i18n.js';
 import { calculateAndMergeTermGrades, setManualGrade } from './grades.js';
@@ -486,6 +500,92 @@ export const actionHandlers = {
 
         state.termGrades[classId][termId].lastCalculatedAt = new Date().toISOString();
         saveState();
+    'update-evaluation-type': (id, element) => {
+        const activityId = element?.dataset?.activityId;
+        const value = element?.value;
+        if (!activityId || !Object.values(EVALUATION_TYPES).includes(value)) return;
+        const activity = state.activities.find(a => a.id === activityId && a.type === 'class');
+        if (!activity) return;
+
+        activity.evaluationSettings = normalizeEvaluationSettings(activity.evaluationSettings);
+        if (activity.evaluationSettings.type !== value) {
+            activity.evaluationSettings.type = value;
+            saveState();
+        }
+    },
+
+    'update-competencial-level-value': (id, element) => {
+        const activityId = element?.dataset?.activityId;
+        const level = element?.dataset?.level;
+        if (!activityId || !level || !COMPETENCIAL_LEVEL_ORDER.includes(level)) return;
+        const activity = state.activities.find(a => a.id === activityId && a.type === 'class');
+        if (!activity) return;
+
+        activity.evaluationSettings = normalizeEvaluationSettings(activity.evaluationSettings);
+        const settings = activity.evaluationSettings.competencial;
+
+        const parsedValue = parseFloat(element.value);
+        const nextValue = Number.isFinite(parsedValue) ? parsedValue : 0;
+
+        if (settings.levelValues[level] !== nextValue) {
+            settings.levelValues[level] = nextValue;
+            saveState();
+        }
+    },
+
+    'update-competencial-minimum': (id, element) => {
+        const activityId = element?.dataset?.activityId;
+        const level = element?.dataset?.level;
+        if (!activityId || !level) return;
+        if (level === 'NA') return;
+        const activity = state.activities.find(a => a.id === activityId && a.type === 'class');
+        if (!activity) return;
+
+        activity.evaluationSettings = normalizeEvaluationSettings(activity.evaluationSettings);
+        const settings = activity.evaluationSettings.competencial;
+
+        const parsedValue = parseFloat(element.value);
+        const nextValue = Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : 0;
+
+        if (settings.levelMinimums[level] !== nextValue) {
+            settings.levelMinimums[level] = nextValue;
+            saveState();
+        }
+    },
+
+    'update-evaluation-max-not-achieved': (id, element) => {
+        const activityId = element?.dataset?.activityId;
+        const scope = element?.dataset?.scope;
+        if (!activityId || !['term', 'course'].includes(scope)) return;
+        const activity = state.activities.find(a => a.id === activityId && a.type === 'class');
+        if (!activity) return;
+
+        activity.evaluationSettings = normalizeEvaluationSettings(activity.evaluationSettings);
+        const settings = activity.evaluationSettings.competencial;
+
+        const parsedValue = parseInt(element.value, 10);
+        const nextValue = Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : 0;
+
+        if (settings.maxNotAchieved[scope] !== nextValue) {
+            settings.maxNotAchieved[scope] = nextValue;
+            saveState();
+        }
+    },
+
+    'update-term-evaluation-method': (id, element) => {
+        const activityId = element?.dataset?.activityId;
+        const method = element?.value;
+        if (!activityId || !Object.values(TERM_EVALUATION_METHODS).includes(method)) return;
+        const activity = state.activities.find(a => a.id === activityId && a.type === 'class');
+        if (!activity) return;
+
+        activity.evaluationSettings = normalizeEvaluationSettings(activity.evaluationSettings);
+        const settings = activity.evaluationSettings.competencial;
+
+        if (settings.termEvaluationMethod !== method) {
+            settings.termEvaluationMethod = method;
+            saveState();
+        }
     },
 
     // --- Load Example Action ---
@@ -538,6 +638,9 @@ export const actionHandlers = {
                             competency.criteria = [];
                         }
                     });
+                    if (activity.type === 'class') {
+                        activity.evaluationSettings = normalizeEvaluationSettings(activity.evaluationSettings);
+                    }
                 });
                 state.learningActivities.forEach(activity => {
                     syncRubricWithActivityCriteria(activity);
@@ -1449,7 +1552,8 @@ export const actionHandlers = {
                 color: getRandomPastelColor(),
                 startDate: state.courseStartDate,
                 endDate: state.courseEndDate,
-                competencies: []
+                competencies: [],
+                evaluationSettings: type === 'class' ? createDefaultEvaluationSettings() : undefined
             });
             nameInput.value = '';
             saveState();
