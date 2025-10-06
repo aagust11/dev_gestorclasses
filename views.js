@@ -18,34 +18,23 @@ const escapeAttribute = (value = '') => escapeHtml(value).replace(/\n/g, '&#10;'
 function renderMobileHeaderActions(actions) {
     const container = document.getElementById('mobile-header-actions');
     if (!container) return;
-
+    
     if (actions.length === 0) {
         container.innerHTML = '';
         return;
     }
-
-    const buildDataAttributes = (attributes) => {
-        if (!attributes || typeof attributes !== 'object') {
-            return '';
-        }
-        return Object.entries(attributes)
-            .filter(([key]) => key)
-            .map(([key, value]) => ` data-${key}="${escapeAttribute(value == null ? '' : String(value))}"`)
-            .join('');
-    };
-
+    
     const buttonsHtml = actions.map(action => {
-        const dataAttrs = buildDataAttributes(action.dataAttributes);
         if(action.action === 'import-data-mobile') {
             return `
-                <label for="import-file-input-mobile" data-action="import-data-mobile"${dataAttrs} class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 cursor-pointer">
+                <label for="import-file-input-mobile" data-action="import-data-mobile" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 cursor-pointer">
                     <i data-lucide="${action.icon}" class="w-4 h-4"></i>
                     <span>${action.label}</span>
                 </label>
                 <input type="file" id="import-file-input-mobile" accept=".json" class="hidden"/>
             `;
         }
-        return `<button data-action="${action.action}"${dataAttrs} class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+        return `<button data-action="${action.action}" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
             <i data-lucide="${action.icon}" class="w-4 h-4"></i>
             <span>${action.label}</span>
         </button>`
@@ -366,10 +355,6 @@ export function renderActivitiesView() {
             [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: {
                 label: t('learning_activity_status_pending'),
                 classes: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700'
-            },
-            [LEARNING_ACTIVITY_STATUS.CORRECTED]: {
-                label: t('learning_activity_status_corrected'),
-                classes: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:border-blue-700'
             }
         };
 
@@ -613,8 +598,7 @@ function renderEvaluationActivitiesTab(classes) {
     const statusPriority = [
         LEARNING_ACTIVITY_STATUS.PENDING_REVIEW,
         LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS,
-        LEARNING_ACTIVITY_STATUS.SCHEDULED,
-        LEARNING_ACTIVITY_STATUS.CORRECTED
+        LEARNING_ACTIVITY_STATUS.SCHEDULED
     ];
 
     const statusMeta = {
@@ -629,10 +613,6 @@ function renderEvaluationActivitiesTab(classes) {
         [LEARNING_ACTIVITY_STATUS.SCHEDULED]: {
             label: t('evaluation_status_not_started'),
             badgeClasses: 'bg-gray-500/10 text-gray-600 border border-gray-200 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800/60'
-        },
-        [LEARNING_ACTIVITY_STATUS.CORRECTED]: {
-            label: t('learning_activity_status_corrected'),
-            badgeClasses: 'bg-blue-500/10 text-blue-600 border border-blue-200 dark:text-blue-200 dark:border-blue-600 dark:bg-blue-900/30'
         }
     };
 
@@ -659,9 +639,7 @@ function renderEvaluationActivitiesTab(classes) {
             return { status, items };
         });
 
-        const pendingCount = activitiesByStatus
-            .filter(entry => entry.status !== LEARNING_ACTIVITY_STATUS.CORRECTED)
-            .reduce((acc, entry) => acc + entry.items.length, 0);
+        const pendingCount = activitiesByStatus.reduce((acc, entry) => acc + entry.items.length, 0);
         const rawPendingLabel = t('evaluation_class_pending_count');
         const pendingLabel = rawPendingLabel.startsWith('[')
             ? String(pendingCount)
@@ -1038,29 +1016,10 @@ export function renderLearningActivityEditorView() {
         `;
     }
 
-    const mobileHeaderActions = [];
-    if (!draft.isNew) {
-        mobileHeaderActions.push(
-            {
-                action: 'open-learning-activity-rubric',
-                label: t('activities_editor_open_rubric'),
-                icon: 'table-properties',
-                dataAttributes: { 'learning-activity-id': draft.id }
-            },
-            {
-                action: 'go-to-learning-activity-evaluation',
-                label: t('activities_editor_open_evaluation'),
-                icon: 'graduation-cap',
-                dataAttributes: { 'learning-activity-id': draft.id }
-            }
-        );
-    }
-    mobileHeaderActions.push(
+    renderMobileHeaderActions([
         { action: 'save-learning-activity-draft', label: t('activities_save_button'), icon: 'save' },
         { action: 'back-to-activities', label: t('back_to_activities'), icon: 'arrow-left' }
-    );
-
-    renderMobileHeaderActions(mobileHeaderActions);
+    ]);
 
     const competencies = Array.isArray(targetClass.competencies) ? targetClass.competencies : [];
     const selectedRefs = Array.isArray(draft.criteriaRefs) ? draft.criteriaRefs : [];
@@ -1088,7 +1047,6 @@ export function renderLearningActivityEditorView() {
         [LEARNING_ACTIVITY_STATUS.SCHEDULED]: 'learning_activity_status_scheduled',
         [LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS]: 'learning_activity_status_open',
         [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: 'learning_activity_status_pending',
-        [LEARNING_ACTIVITY_STATUS.CORRECTED]: 'learning_activity_status_corrected',
     }[automaticStatusPreview] || 'learning_activity_status_scheduled';
     const automaticStatusLabel = t(automaticStatusLabelKey);
     const statusOptions = [
@@ -1096,7 +1054,6 @@ export function renderLearningActivityEditorView() {
         { value: LEARNING_ACTIVITY_STATUS.SCHEDULED, label: t('learning_activity_status_scheduled') },
         { value: LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS, label: t('learning_activity_status_open') },
         { value: LEARNING_ACTIVITY_STATUS.PENDING_REVIEW, label: t('learning_activity_status_pending') },
-        { value: LEARNING_ACTIVITY_STATUS.CORRECTED, label: t('learning_activity_status_corrected') },
     ];
     const statusSelectOptions = statusOptions.map(option => `
         <option value="${option.value}" ${option.value === currentStatusValue ? 'selected' : ''}>${escapeHtml(option.label)}</option>
@@ -1221,16 +1178,6 @@ export function renderLearningActivityEditorView() {
                         <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">${draft.isNew ? t('activities_editor_title_new') : t('activities_editor_title_edit')}</h2>
                     </div>
                     <div class="flex flex-wrap gap-2 justify-end">
-                        ${draft.isNew ? '' : `
-                            <button data-action="open-learning-activity-rubric" data-learning-activity-id="${draft.id}" class="px-4 py-2 rounded-md bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 flex items-center gap-2">
-                                <i data-lucide="table-properties" class="w-4 h-4"></i>
-                                ${t('activities_editor_open_rubric')}
-                            </button>
-                            <button data-action="go-to-learning-activity-evaluation" data-learning-activity-id="${draft.id}" class="px-4 py-2 rounded-md bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-900/30 dark:text-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/40 flex items-center gap-2">
-                                <i data-lucide="graduation-cap" class="w-4 h-4"></i>
-                                ${t('activities_editor_open_evaluation')}
-                            </button>
-                        `}
                         <button data-action="back-to-activities" class="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
                             <i data-lucide="arrow-left" class="w-4 h-4"></i>
                             ${t('activities_cancel_button')}
@@ -2213,10 +2160,6 @@ export function renderLearningActivityRubricView() {
         [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: {
             label: t('learning_activity_status_pending'),
             classes: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700'
-        },
-        [LEARNING_ACTIVITY_STATUS.CORRECTED]: {
-            label: t('learning_activity_status_corrected'),
-            classes: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:border-blue-700'
         }
     };
     const status = calculateLearningActivityStatus(activity);
