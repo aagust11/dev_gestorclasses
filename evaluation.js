@@ -233,7 +233,6 @@ export function computeClassTermEvaluation({
             : {};
 
         rubricItems.forEach(item => {
-            if (item?.type === 'section') return;
             const criterionId = item?.criterionId;
             if (!criterionIndex.has(criterionId)) return;
             const studentMap = criterionResults.get(criterionId);

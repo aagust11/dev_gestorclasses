@@ -196,17 +196,6 @@ function normalizeRubricStructure(rawRubric) {
     const rubric = rawRubric && typeof rawRubric === 'object' ? rawRubric : {};
     const normalized = {
         items: Array.isArray(rubric.items) ? rubric.items.map(item => {
-            const type = item?.type === 'section' ? 'section' : 'criterion';
-            const id = item?.id || generateId('rubric-item');
-
-            if (type === 'section') {
-                return {
-                    id,
-                    type: 'section',
-                    sectionTitle: typeof item?.sectionTitle === 'string' ? item.sectionTitle : '',
-                };
-            }
-
             const levelComments = item?.levelComments && typeof item.levelComments === 'object'
                 ? item.levelComments
                 : {};
@@ -216,13 +205,11 @@ function normalizeRubricStructure(rawRubric) {
             });
 
             return {
-                id,
-                type: 'criterion',
+                id: item?.id || generateId('rubric-item'),
                 competencyId: item?.competencyId || '',
                 criterionId: item?.criterionId || '',
                 weight: typeof item?.weight === 'number' && !Number.isNaN(item.weight) ? item.weight : 1,
                 levelComments: normalizedComments,
-                generalGuidance: typeof item?.generalGuidance === 'string' ? item.generalGuidance : '',
             };
         }) : [],
         evaluations: {}
