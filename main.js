@@ -22,6 +22,7 @@ function render() {
         case 'schedule': viewContent = views.renderScheduleView(); break;
         case 'classes': viewContent = views.renderClassesView(); break;
         case 'activities': viewContent = views.renderActivitiesView(); break;
+        case 'evaluation': viewContent = views.renderEvaluationView(); break;
         case 'learningActivityEditor': viewContent = views.renderLearningActivityEditorView(); break;
         case 'learningActivityRubric': viewContent = views.renderLearningActivityRubricView(); break;
         case 'settings': viewContent = views.renderSettingsView(); break;
@@ -58,6 +59,7 @@ function updateMobileHeader() {
         schedule: 'schedule_view_title',
         classes: 'classes_view_title',
         activities: 'activities_view_title',
+        evaluation: 'evaluation_view_title',
         settings: 'settings_view_title',
         activityDetail: 'activity_detail_view_title',
         studentDetail: 'student_detail_view_title',
@@ -111,7 +113,7 @@ function handleAction(action, element, event) {
         'close-learning-activity-criteria', 'go-to-competency-settings',
         'open-learning-activity-rubric', 'close-learning-activity-rubric', 'set-learning-activity-rubric-tab',
         'add-rubric-item', 'remove-rubric-item', 'move-rubric-item', 'set-rubric-score',
-        'filter-learning-activity-rubric-students'
+        'filter-learning-activity-rubric-students', 'set-evaluation-tab', 'select-evaluation-class'
     ];
 
     if (actionHandlers[action]) {

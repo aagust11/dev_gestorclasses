@@ -390,6 +390,30 @@ export const actionHandlers = {
         }
     },
 
+    'set-evaluation-tab': (id, element) => {
+        const tab = element?.dataset?.tab;
+        const allowedTabs = ['activities', 'grades'];
+        if (!tab || !allowedTabs.includes(tab)) return;
+        state.evaluationActiveTab = tab;
+
+        if (tab === 'grades') {
+            const classes = state.activities
+                .filter(activity => activity.type === 'class')
+                .sort((a, b) => a.name.localeCompare(b.name));
+            const hasSelection = classes.some(cls => cls.id === state.selectedEvaluationClassId);
+            if (!hasSelection) {
+                state.selectedEvaluationClassId = classes[0]?.id || null;
+            }
+        }
+    },
+
+    'select-evaluation-class': (id, element) => {
+        const classId = element?.dataset?.classId;
+        if (classId) {
+            state.selectedEvaluationClassId = classId;
+        }
+    },
+
     // --- Load Example Action ---
     'load-example': () => {
         showModal(t('import_data_confirm_title'), t('import_data_confirm_text'), async () => {
