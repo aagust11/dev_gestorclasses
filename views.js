@@ -2167,8 +2167,8 @@ export function renderLearningActivityRubricView() {
     const flagButtonBaseClass = 'inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600';
     const flagButtonVariants = {
         notPresented: {
-            active: 'bg-gray-700 text-white border-gray-800 shadow-sm',
-            inactive: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-200 dark:border-red-700 dark:hover:bg-red-900/40'
+            active: 'bg-gray-700 text-white border-gray-800 shadow-sm dark:bg-gray-200 dark:text-gray-900 dark:border-gray-300',
+            inactive: 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700'
         },
         deliveredLate: {
             active: 'bg-amber-500 text-white border-amber-600 shadow-sm',
@@ -2220,12 +2220,6 @@ export function renderLearningActivityRubricView() {
                     </td>`;
                 }).join('');
 
-                const statusBadges = [];
-                if (isDeliveredLate && !isNotPresented) {
-                    statusBadges.push(`<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700"><i data-lucide="file-clock" class="w-3 h-3"></i>${escapeHtml(t('rubric_flag_delivered_late_badge'))}</span>`);
-                }
-                const statusBadgesHtml = statusBadges.length ? `<div class="mt-1 flex flex-wrap gap-1">${statusBadges.join('')}</div>` : '';
-
                 const notPresentedButtonClasses = `${flagButtonBaseClass} ${(isNotPresented ? flagButtonVariants.notPresented.active : flagButtonVariants.notPresented.inactive)}`;
                 const deliveredLateDisabled = isNotPresented;
                 const deliveredLateButtonClasses = `${flagButtonBaseClass} ${(isDeliveredLate ? flagButtonVariants.deliveredLate.active : flagButtonVariants.deliveredLate.inactive)}${deliveredLateDisabled ? ' opacity-60 cursor-not-allowed' : ''}`;
@@ -2248,7 +2242,6 @@ export function renderLearningActivityRubricView() {
                     ? `<th scope="row" rowspan="${rubricItems.length}" class="px-3 py-3 text-sm font-semibold text-gray-700 dark:text-gray-200 align-top min-w-[10rem]">
                             <div>
                                 <div>${escapeHtml(student.name)}</div>
-                                ${statusBadgesHtml}
                                 ${flagButtonsHtml}
                             </div>
                         </th>`
