@@ -492,6 +492,10 @@ export function renderActivitiesView() {
             [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: {
                 label: t('learning_activity_status_pending'),
                 classes: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700'
+            },
+            [LEARNING_ACTIVITY_STATUS.CORRECTED]: {
+                label: t('learning_activity_status_corrected'),
+                classes: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:border-blue-700'
             }
         };
 
@@ -742,6 +746,10 @@ function renderEvaluationActivitiesTab(classes) {
         [LEARNING_ACTIVITY_STATUS.SCHEDULED]: {
             label: t('evaluation_status_not_started'),
             badgeClasses: 'bg-gray-500/10 text-gray-600 border border-gray-200 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800/60'
+        },
+        [LEARNING_ACTIVITY_STATUS.CORRECTED]: {
+            label: t('learning_activity_status_corrected'),
+            badgeClasses: 'bg-blue-500/10 text-blue-600 border border-blue-200 dark:text-blue-200 dark:border-blue-600 dark:bg-blue-900/30'
         }
     };
 
@@ -1440,6 +1448,30 @@ export function renderLearningActivityEditorView() {
                     <div>
                         <p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_editor_class_prefix')} <span class="font-semibold text-gray-800 dark:text-gray-100">${targetClass.name}</span></p>
                         <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">${draft.isNew ? t('activities_editor_title_new') : t('activities_editor_title_edit')}</h2>
+                        ${draft.isNew ? '' : `
+                            <div class="mt-3 space-y-2">
+                                <p class="text-xs text-gray-500 dark:text-gray-400">${t('activities_editor_quick_access_label')}</p>
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        data-action="open-learning-activity-rubric"
+                                        data-class-id="${targetClass.id}"
+                                        data-learning-activity-id="${draft.id}"
+                                        class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 dark:text-blue-200 dark:bg-blue-900/30 dark:border-blue-700"
+                                    >
+                                        <i data-lucide="table-properties" class="w-3.5 h-3.5"></i>
+                                        ${t('activities_editor_open_rubric')}
+                                    </button>
+                                    <button
+                                        data-action="open-learning-activity-evaluation"
+                                        data-learning-activity-id="${draft.id}"
+                                        class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-md hover:bg-purple-100 dark:text-purple-200 dark:bg-purple-900/30 dark:border-purple-700"
+                                    >
+                                        <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i>
+                                        ${t('activities_editor_open_evaluation')}
+                                    </button>
+                                </div>
+                            </div>
+                        `}
                     </div>
                     <div class="flex flex-wrap gap-2 justify-end">
                         <button data-action="back-to-activities" class="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
@@ -1481,7 +1513,8 @@ export function renderLearningActivityEditorView() {
                                         const labels = {
                                             [LEARNING_ACTIVITY_STATUS.SCHEDULED]: t('learning_activity_status_scheduled'),
                                             [LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS]: t('learning_activity_status_open'),
-                                            [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: t('learning_activity_status_pending')
+                                            [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: t('learning_activity_status_pending'),
+                                            [LEARNING_ACTIVITY_STATUS.CORRECTED]: t('learning_activity_status_corrected')
                                         };
                                         const label = labels[status] || status;
                                         const selected = draft.status === status ? ' selected' : '';
@@ -2567,6 +2600,10 @@ export function renderLearningActivityRubricView() {
         [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: {
             label: t('learning_activity_status_pending'),
             classes: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700'
+        },
+        [LEARNING_ACTIVITY_STATUS.CORRECTED]: {
+            label: t('learning_activity_status_corrected'),
+            classes: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:border-blue-700'
         }
     };
     const status = calculateLearningActivityStatus(activity);
