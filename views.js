@@ -1761,14 +1761,23 @@ export function renderLearningActivityRubricView() {
 
                 const scoreCells = RUBRIC_LEVELS.map(level => {
                     const levelLabel = t(`rubric_level_${level}_label`);
-                    const template = item.levelComments?.[level]?.trim() || '';
-                    const tooltip = template ? `${levelLabel} · ${template}` : levelLabel;
+                    const commentTemplate = item.levelComments?.[level]?.trim() || '';
+                    const tooltipParts = [`${criterionCode} · ${levelLabel}`];
+                    if (commentTemplate) {
+                        tooltipParts.push(commentTemplate);
+                    }
+                    const tooltip = tooltipParts.join('\n');
+                    const ariaLabelParts = [levelLabel];
+                    if (commentTemplate) {
+                        ariaLabelParts.push(commentTemplate);
+                    }
+                    const ariaLabel = ariaLabelParts.join('. ');
                     const isActive = currentLevel === level;
                     const buttonClasses = `${baseLevelButtonClass} ${isActive ? levelStyles[level].active : levelStyles[level].inactive}`;
                     return `<td class="px-2 py-2 text-center align-top">
-                        <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${buttonClasses}" aria-pressed="${isActive}" title="${escapeHtml(tooltip)}">
+                        <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${buttonClasses}" aria-pressed="${isActive}" aria-label="${escapeHtml(ariaLabel)}" title="${escapeHtml(tooltip)}" data-tooltip-comment="${escapeHtml(commentTemplate)}">
                             <span class="block text-[11px] font-bold leading-none">${level}</span>
-                            <span class="block text-[10px] leading-tight">${escapeHtml(levelLabel)}</span>
+                            <span class="sr-only">${escapeHtml(levelLabel)}</span>
                         </button>
                     </td>`;
                 }).join('');
@@ -1819,7 +1828,7 @@ export function renderLearningActivityRubricView() {
     const assessmentTableHtml = assessmentRowsHtml
         ? `
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 rubric-assessment-table">
                     <thead class="bg-white dark:bg-gray-800">
                         <tr>
                             <th scope="col" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[10rem]">${t('rubric_students_column')}</th>
