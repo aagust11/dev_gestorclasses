@@ -540,6 +540,10 @@ export function renderActivitiesView() {
             [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: {
                 label: t('learning_activity_status_pending'),
                 classes: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700'
+            },
+            [LEARNING_ACTIVITY_STATUS.CORRECTED]: {
+                label: t('learning_activity_status_corrected'),
+                classes: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:border-blue-700'
             }
         };
 
@@ -790,6 +794,10 @@ function renderEvaluationActivitiesTab(classes) {
         [LEARNING_ACTIVITY_STATUS.SCHEDULED]: {
             label: t('evaluation_status_not_started'),
             badgeClasses: 'bg-gray-500/10 text-gray-600 border border-gray-200 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800/60'
+        },
+        [LEARNING_ACTIVITY_STATUS.CORRECTED]: {
+            label: t('learning_activity_status_corrected'),
+            badgeClasses: 'bg-blue-500/10 text-blue-600 border border-blue-200 dark:text-blue-200 dark:border-blue-600 dark:bg-blue-900/30'
         }
     };
 
@@ -979,23 +987,27 @@ function renderEvaluationGradesTab(classes) {
     } else {
         const headerRow1 = learningActivities.map(activity => {
             const rubricItems = Array.isArray(activity.rubric?.items) ? activity.rubric.items : [];
-            const colSpan = Math.max(rubricItems.length, 1);
+            const rubricCriterionItems = rubricItems.filter(item => item.type !== 'section');
+            const colSpan = Math.max(rubricCriterionItems.length, 1);
             const title = activity.title?.trim() || t('activities_untitled_label');
             return `<th scope="col" colspan="${colSpan}" class="px-3 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">${escapeHtml(title)}</th>`;
         }).join('');
 
         const headerRow2 = learningActivities.map(activity => {
             const rubricItems = Array.isArray(activity.rubric?.items) ? activity.rubric.items : [];
-            if (rubricItems.length === 0) {
+            const rubricCriterionItems = rubricItems.filter(item => item.type !== 'section');
+            if (rubricCriterionItems.length === 0) {
                 return `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${t('evaluation_grades_no_criteria')}</th>`;
             }
             return rubricItems.map(item => `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center min-w-[11rem]">${getCriterionHeader(item)}</th>`).join('');
+            return rubricCriterionItems.map(item => `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-left min-w-[11rem]">${getCriterionHeader(item)}</th>`).join('');
         }).join('');
 
         const rowsHtml = students.map(student => {
             const activityCells = learningActivities.map(activity => {
                 const rubric = activity.rubric || {};
                 const rubricItems = Array.isArray(rubric.items) ? rubric.items : [];
+                const rubricCriterionItems = rubricItems.filter(item => item.type !== 'section');
                 const evaluations = rubric.evaluations && typeof rubric.evaluations === 'object' ? rubric.evaluations : {};
                 const evaluation = evaluations[student.id];
                 const scores = evaluation && evaluation.scores && typeof evaluation.scores === 'object' ? evaluation.scores : {};
@@ -1010,14 +1022,14 @@ function renderEvaluationGradesTab(classes) {
                     statusTooltipParts.push(t('rubric_flag_delivered_late'));
                 }
 
-                if (rubricItems.length === 0) {
+                if (rubricCriterionItems.length === 0) {
                     const tooltipParts = [...statusTooltipParts];
                     if (generalComment) {
                         tooltipParts.push(`${t('evaluation_tooltip_general_comment')}: ${generalComment}`);
                     }
-                    const tooltipAttr = tooltipParts.length > 0 ? ` title="${escapeAttribute(tooltipParts.join('\\n'))}"` : '';
-                    const mainContent = isNotPresented
-                        ? renderLevelBadge('NP', { size: 'sm', showTooltip: false })
+                    const tooltipAttr = tooltipParts.length > 0 ? ` title="${escapeAttribute(tooltipParts.join('\n'))}"` : '';
+                    const textClasses = isNotPresented
+                        ? 'text-red-600 dark:text-red-300 font-semibold'
                         : isDeliveredLate
                             ? '<span class="text-amber-600 dark:text-amber-300 font-semibold">—</span>'
                             : '<span class="text-gray-400">—</span>';
@@ -1030,7 +1042,7 @@ function renderEvaluationGradesTab(classes) {
                     return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><div class="flex items-center justify-center gap-1">${mainContent}${iconHtml}</div></td>`;
                 }
 
-                return rubricItems.map(item => {
+                return rubricCriterionItems.map(item => {
                     const scoreLevel = scores[item.id] || '';
                     const levelComment = scoreLevel && item.levelComments && typeof item.levelComments === 'object'
                         ? (item.levelComments[scoreLevel] || '')
@@ -1042,12 +1054,23 @@ function renderEvaluationGradesTab(classes) {
                     if (generalComment) {
                         tooltipParts.push(`${t('evaluation_tooltip_general_comment')}: ${generalComment}`);
                     }
-                    const tooltipAttr = tooltipParts.length > 0 ? ` title="${escapeAttribute(tooltipParts.join('\\n'))}"` : '';
-                    const mainContent = isNotPresented
-                        ? renderLevelBadge('NP', { size: 'sm', showTooltip: false })
-                        : scoreLevel
-                            ? renderLevelBadge(scoreLevel, { size: 'sm' })
-                            : '<span class="text-gray-400">—</span>';
+                    const tooltipAttr = tooltipParts.length > 0 ? ` title="${escapeAttribute(tooltipParts.join('\n'))}"` : '';
+                    let label;
+                    let textClasses;
+                    if (isNotPresented) {
+                        label = t('rubric_flag_not_presented_short');
+                        textClasses = 'text-red-600 dark:text-red-300 font-semibold';
+                    } else if (scoreLevel) {
+                        const key = `rubric_level_${scoreLevel}_label`;
+                        const translated = t(key);
+                        label = translated !== `[${key}]` ? translated : scoreLevel;
+                        textClasses = 'text-gray-800 dark:text-gray-100 font-medium';
+                    } else {
+                        label = isDeliveredLate ? t('rubric_flag_delivered_late_short') : '—';
+                        textClasses = isDeliveredLate
+                            ? 'text-amber-600 dark:text-amber-300 font-semibold'
+                            : 'text-gray-400';
+                    }
                     const statusIcon = isNotPresented
                         ? '<i data-lucide="shredder" class="w-3.5 h-3.5 text-red-500 dark:text-red-300"></i>'
                         : isDeliveredLate
@@ -1056,6 +1079,8 @@ function renderEvaluationGradesTab(classes) {
                     const iconHtml = statusIcon ? `<span class="inline-flex items-center">${statusIcon}</span>` : '';
                     return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><div class="flex items-center justify-center gap-1">${mainContent}${iconHtml}</div></td>`;
                 }).join('');
+            }).join('');
+
             }).join('');
 
             return `<tr class="border-b border-gray-100 dark:border-gray-800"><th scope="row" class="px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 text-left min-w-[12rem]">${escapeHtml(student.name)}</th>${activityCells}</tr>`;
@@ -1523,6 +1548,30 @@ export function renderLearningActivityEditorView() {
                     <div>
                         <p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_editor_class_prefix')} <span class="font-semibold text-gray-800 dark:text-gray-100">${targetClass.name}</span></p>
                         <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">${draft.isNew ? t('activities_editor_title_new') : t('activities_editor_title_edit')}</h2>
+                        ${draft.isNew ? '' : `
+                            <div class="mt-3 space-y-2">
+                                <p class="text-xs text-gray-500 dark:text-gray-400">${t('activities_editor_quick_access_label')}</p>
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        data-action="open-learning-activity-rubric"
+                                        data-class-id="${targetClass.id}"
+                                        data-learning-activity-id="${draft.id}"
+                                        class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 dark:text-blue-200 dark:bg-blue-900/30 dark:border-blue-700"
+                                    >
+                                        <i data-lucide="table-properties" class="w-3.5 h-3.5"></i>
+                                        ${t('activities_editor_open_rubric')}
+                                    </button>
+                                    <button
+                                        data-action="open-learning-activity-evaluation"
+                                        data-learning-activity-id="${draft.id}"
+                                        class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-md hover:bg-purple-100 dark:text-purple-200 dark:bg-purple-900/30 dark:border-purple-700"
+                                    >
+                                        <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i>
+                                        ${t('activities_editor_open_evaluation')}
+                                    </button>
+                                </div>
+                            </div>
+                        `}
                     </div>
                     <div class="flex flex-wrap gap-2 justify-end">
                         <button data-action="back-to-activities" class="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
@@ -1564,7 +1613,8 @@ export function renderLearningActivityEditorView() {
                                         const labels = {
                                             [LEARNING_ACTIVITY_STATUS.SCHEDULED]: t('learning_activity_status_scheduled'),
                                             [LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS]: t('learning_activity_status_open'),
-                                            [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: t('learning_activity_status_pending')
+                                            [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: t('learning_activity_status_pending'),
+                                            [LEARNING_ACTIVITY_STATUS.CORRECTED]: t('learning_activity_status_corrected')
                                         };
                                         const label = labels[status] || status;
                                         const selected = draft.status === status ? ' selected' : '';
@@ -2669,6 +2719,7 @@ export function renderLearningActivityRubricView() {
     const targetClass = state.activities.find(a => a.id === activity.classId);
     const rubric = activity.rubric || { items: [], evaluations: {} };
     const rubricItems = Array.isArray(rubric.items) ? rubric.items : [];
+    const rubricCriterionItems = rubricItems.filter(item => item.type !== 'section');
     const evaluations = rubric.evaluations && typeof rubric.evaluations === 'object' ? rubric.evaluations : {};
 
     const competencies = Array.isArray(targetClass?.competencies) ? targetClass.competencies : [];
@@ -2696,6 +2747,10 @@ export function renderLearningActivityRubricView() {
         [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: {
             label: t('learning_activity_status_pending'),
             classes: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700'
+        },
+        [LEARNING_ACTIVITY_STATUS.CORRECTED]: {
+            label: t('learning_activity_status_corrected'),
+            classes: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:border-blue-700'
         }
     };
     const status = calculateLearningActivityStatus(activity);
@@ -2741,8 +2796,60 @@ export function renderLearningActivityRubricView() {
         `
         : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('rubric_no_criteria_available')}</p>`;
 
+    const addSectionButton = `
+        <button data-action="add-rubric-section" data-learning-activity-id="${activity.id}" class="inline-flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800">
+            <i data-lucide="layout-list" class="w-4 h-4"></i>
+            ${t('rubric_add_section_button')}
+        </button>
+    `;
+
+    const addControls = `
+        <div class="flex flex-col gap-3">
+            ${addCriterionControls}
+            <div>${addSectionButton}</div>
+        </div>
+    `;
+
     const configurationItemsHtml = rubricItems.length > 0
         ? rubricItems.map((item, index) => {
+            const moveUpDisabled = index === 0 ? 'disabled aria-disabled="true"' : '';
+            const moveDownDisabled = index === rubricItems.length - 1 ? 'disabled aria-disabled="true"' : '';
+            const controlsHtml = `
+                <div class="flex gap-1">
+                    <button ${moveUpDisabled} data-action="move-rubric-item" data-direction="up" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="inline-flex items-center justify-center p-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                        <i data-lucide="arrow-up" class="w-4 h-4"></i>
+                        <span class="sr-only">${t('rubric_move_up_label')}</span>
+                    </button>
+                    <button ${moveDownDisabled} data-action="move-rubric-item" data-direction="down" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="inline-flex items-center justify-center p-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                        <i data-lucide="arrow-down" class="w-4 h-4"></i>
+                        <span class="sr-only">${t('rubric_move_down_label')}</span>
+                    </button>
+                    <button data-action="remove-rubric-item" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="inline-flex items-center justify-center p-2 border border-red-200 text-red-600 dark:border-red-700 dark:text-red-300 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        <span class="sr-only">${t('rubric_remove_button_label')}</span>
+                    </button>
+                </div>
+            `;
+
+            if (item.type === 'section') {
+                const sectionTitle = escapeHtml(item.sectionTitle || '');
+                return `
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3 bg-white dark:bg-gray-900/40">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="text-sm font-semibold text-gray-800 dark:text-gray-100">${t('rubric_section_label')}</p>
+                                <p class="text-xs text-gray-600 dark:text-gray-300">${t('rubric_section_description')}</p>
+                            </div>
+                            ${controlsHtml}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1" for="rubric-section-${item.id}">${t('rubric_section_label')}</label>
+                            <input id="rubric-section-${item.id}" type="text" value="${sectionTitle}" data-action="update-rubric-section-title" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm" placeholder="${t('rubric_section_placeholder')}">
+                        </div>
+                    </div>
+                `;
+            }
+
             const competency = competencies.find(comp => comp.id === item.competencyId);
             const fallbackCriterion = availableCriteria.find(opt => opt.criterion?.id === item.criterionId)?.criterion || null;
             const criterion = competency?.criteria?.find(cr => cr.id === item.criterionId) || fallbackCriterion;
@@ -2750,8 +2857,7 @@ export function renderLearningActivityRubricView() {
             const criterionCode = criterion?.code || t('criterion_without_code');
             const criterionDescription = criterion?.description || t('criterion_without_description');
             const weightValue = typeof item.weight === 'number' && !Number.isNaN(item.weight) ? item.weight : 1;
-            const moveUpDisabled = index === 0 ? 'disabled aria-disabled="true"' : '';
-            const moveDownDisabled = index === rubricItems.length - 1 ? 'disabled aria-disabled="true"' : '';
+            const guidanceValue = escapeHtml(item.generalGuidance || '');
 
             const levelCommentsHtml = RUBRIC_LEVELS.map(level => {
                 const levelLabel = t(`rubric_level_${level}_label`);
@@ -2774,21 +2880,12 @@ export function renderLearningActivityRubricView() {
                         <div class="flex items-center gap-2">
                             <label class="text-sm font-medium text-gray-700 dark:text-gray-200" for="rubric-weight-${item.id}">${t('rubric_weight_label')}</label>
                             <input id="rubric-weight-${item.id}" type="number" step="0.1" min="0" value="${weightValue}" data-action="update-rubric-item-weight" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="w-24 p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm">
-                            <div class="flex gap-1">
-                                <button ${moveUpDisabled} data-action="move-rubric-item" data-direction="up" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="inline-flex items-center justify-center p-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                                    <i data-lucide="arrow-up" class="w-4 h-4"></i>
-                                    <span class="sr-only">${t('rubric_move_up_label')}</span>
-                                </button>
-                                <button ${moveDownDisabled} data-action="move-rubric-item" data-direction="down" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="inline-flex items-center justify-center p-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                                    <i data-lucide="arrow-down" class="w-4 h-4"></i>
-                                    <span class="sr-only">${t('rubric_move_down_label')}</span>
-                                </button>
-                                <button data-action="remove-rubric-item" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="inline-flex items-center justify-center p-2 border border-red-200 text-red-600 dark:border-red-700 dark:text-red-300 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30">
-                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                    <span class="sr-only">${t('rubric_remove_button_label')}</span>
-                                </button>
-                            </div>
+                            ${controlsHtml}
                         </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1" for="rubric-guidance-${item.id}">${t('rubric_general_guidance_label')}</label>
+                        <textarea id="rubric-guidance-${item.id}" data-action="update-rubric-item-guidance" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm min-h-[4.5rem]" placeholder="${t('rubric_general_guidance_placeholder')}">${guidanceValue}</textarea>
                     </div>
                     <div class="grid gap-3 sm:grid-cols-2">${levelCommentsHtml}</div>
                 </div>
@@ -2798,7 +2895,7 @@ export function renderLearningActivityRubricView() {
 
     const configurationContent = `
         <div class="space-y-4">
-            ${addCriterionControls}
+            ${addControls}
             <div class="space-y-4">${configurationItemsHtml}</div>
         </div>
     `;
@@ -2811,6 +2908,10 @@ export function renderLearningActivityRubricView() {
         : [];
 
     const levelStyles = {
+        NP: {
+            active: 'bg-gray-700 text-white border-gray-800',
+            inactive: 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600'
+        },
         NA: { active: 'bg-red-600 text-white border-red-700', inactive: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-200 dark:border-red-700' },
         AS: { active: 'bg-amber-500 text-white border-amber-600', inactive: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-700' },
         AN: { active: 'bg-blue-600 text-white border-blue-700', inactive: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-200 dark:border-blue-700' },
@@ -2840,9 +2941,11 @@ export function renderLearningActivityRubricView() {
         }
     };
 
-    const assessmentRowsHtml = rubricItems.length === 0 || filteredStudents.length === 0
+    const hasCriterionItems = rubricCriterionItems.length > 0;
+
+    const assessmentRowsHtml = !hasCriterionItems || filteredStudents.length === 0
         ? ''
-        : filteredStudents.map(student => {
+        : filteredStudents.map((student, studentIndex) => {
             const evaluation = evaluations[student.id] || {};
             const scores = evaluation.scores && typeof evaluation.scores === 'object' ? evaluation.scores : {};
             const comment = evaluation.comment || '';
@@ -2851,38 +2954,7 @@ export function renderLearningActivityRubricView() {
             const isDeliveredLate = Boolean(flags.deliveredLate);
 
             const studentRows = rubricItems.map((item, index) => {
-                const competency = competencies.find(comp => comp.id === item.competencyId);
-                const fallbackCriterion = availableCriteria.find(opt => opt.criterion?.id === item.criterionId)?.criterion || null;
-                const criterion = competency?.criteria?.find(cr => cr.id === item.criterionId) || fallbackCriterion;
-                const competencyLabel = competency?.code || t('competency_without_code');
-                const criterionCode = criterion?.code || t('criterion_without_code');
-                const criterionDescription = criterion?.description || t('criterion_without_description');
-                const currentLevel = scores[item.id] || '';
-
-                const scoreCells = RUBRIC_LEVELS.map(level => {
-                    const levelLabel = t(`rubric_level_${level}_label`);
-                    const commentTemplate = item.levelComments?.[level]?.trim() || '';
-                    const tooltipParts = [`${criterionCode} · ${levelLabel}`];
-                    if (commentTemplate) {
-                        tooltipParts.push(commentTemplate);
-                    }
-                    const tooltip = tooltipParts.join('\n');
-                    const ariaLabelParts = [levelLabel];
-                    if (commentTemplate) {
-                        ariaLabelParts.push(commentTemplate);
-                    }
-                    const ariaLabel = ariaLabelParts.join('. ');
-                    const isActive = currentLevel === level;
-                    const disabledAttr = isNotPresented ? ' disabled' : '';
-                    const disabledClasses = isNotPresented ? ' opacity-60 cursor-not-allowed' : '';
-                    const buttonClasses = `${baseLevelButtonClass} ${isActive ? levelStyles[level].active : levelStyles[level].inactive}${disabledClasses}`;
-                    return `<td class="px-2 py-2 text-center align-top">
-                        <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${buttonClasses}" aria-pressed="${isActive}" aria-label="${escapeHtml(ariaLabel)}" title="${escapeHtml(tooltip)}" data-tooltip-comment="${escapeHtml(commentTemplate)}"${disabledAttr} aria-disabled="${isNotPresented}">
-                            <span class="block text-[11px] font-bold leading-none">${level}</span>
-                            <span class="sr-only">${escapeHtml(levelLabel)}</span>
-                        </button>
-                    </td>`;
-                }).join('');
+                const rowSeparatorClass = studentIndex > 0 && index === 0 ? 'border-t border-gray-300 dark:border-gray-700' : '';
 
                 const notPresentedButtonClasses = `${flagButtonBaseClass} ${(isNotPresented ? flagButtonVariants.notPresented.active : flagButtonVariants.notPresented.inactive)}`;
                 const deliveredLateDisabled = isNotPresented;
@@ -2917,13 +2989,74 @@ export function renderLearningActivityRubricView() {
                         </td>`
                     : '';
 
+                if (item.type === 'section') {
+                    const sectionTitle = (item.sectionTitle || '').trim();
+                    const sectionContent = sectionTitle
+                        ? escapeHtml(sectionTitle)
+                        : `<span class="italic text-gray-400 dark:text-gray-500">${t('rubric_section_empty_label')}</span>`;
+                    return `
+                        <tr class="${rowSeparatorClass}">
+                            ${nameCell}
+                            <td colspan="${RUBRIC_LEVELS.length + 1}" class="px-3 py-3 align-top bg-gray-50 dark:bg-gray-900/60 text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                ${sectionContent}
+                            </td>
+                            ${commentCell}
+                        </tr>
+                    `;
+                }
+
+                const competency = competencies.find(comp => comp.id === item.competencyId);
+                const fallbackCriterion = availableCriteria.find(opt => opt.criterion?.id === item.criterionId)?.criterion || null;
+                const criterion = competency?.criteria?.find(cr => cr.id === item.criterionId) || fallbackCriterion;
+                const competencyLabel = competency?.code || t('competency_without_code');
+                const criterionCode = criterion?.code || t('criterion_without_code');
+                const criterionDescription = criterion?.description || t('criterion_without_description');
+                const currentLevel = scores[item.id] || '';
+                const guidance = (item.generalGuidance || '').trim();
+
+                const scoreCells = RUBRIC_LEVELS.map(level => {
+                    const levelLabel = t(`rubric_level_${level}_label`);
+                    const commentTemplate = item.levelComments?.[level]?.trim() || '';
+                    const tooltipParts = [`${criterionCode} · ${levelLabel}`];
+                    if (commentTemplate) {
+                        tooltipParts.push(commentTemplate);
+                    }
+                    const tooltip = tooltipParts.join('\n');
+                    const ariaLabelParts = [levelLabel];
+                    if (commentTemplate) {
+                        ariaLabelParts.push(commentTemplate);
+                    }
+                    const ariaLabel = ariaLabelParts.join('. ');
+                    const isActive = currentLevel === level;
+                    const disabledAttr = isNotPresented ? ' disabled' : '';
+                    const disabledClasses = isNotPresented ? ' opacity-60 cursor-not-allowed' : '';
+                    const buttonClasses = `${baseLevelButtonClass} ${isActive ? levelStyles[level].active : levelStyles[level].inactive}${disabledClasses}`;
+                    return `<td class="px-2 py-2 text-center align-top">
+                        <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${buttonClasses}" aria-pressed="${isActive}" aria-label="${escapeHtml(ariaLabel)}" title="${escapeHtml(tooltip)}" data-tooltip-comment="${escapeHtml(commentTemplate)}"${disabledAttr} aria-disabled="${isNotPresented}">
+                            <span class="block text-[11px] font-bold leading-none">${level}</span>
+                            <span class="sr-only">${escapeHtml(levelLabel)}</span>
+                        </button>
+                    </td>`;
+                }).join('');
+
+                const codeBadges = `
+                    <div class="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200">${escapeHtml(competencyLabel)}</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200">${escapeHtml(criterionCode)}</span>
+                    </div>
+                `;
+
+                const generalGuidanceHtml = guidance
+                    ? `<div class="mt-2 text-xs text-gray-600 dark:text-gray-300 italic whitespace-pre-wrap">${escapeHtml(guidance)}</div>`
+                    : '';
+
                 return `
-                    <tr>
+                    <tr class="${rowSeparatorClass}">
                         ${nameCell}
                         <td class="px-3 py-3 align-top min-w-[14rem]">
-                            <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(criterionCode)}</div>
-                            <div class="text-xs text-gray-600 dark:text-gray-300">${escapeHtml(competencyLabel)}</div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${escapeHtml(criterionDescription)}</div>
+                            ${codeBadges}
+                            <div class="mt-2 text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(criterionDescription)}</div>
+                            ${generalGuidanceHtml}
                         </td>
                         ${scoreCells}
                         ${commentCell}
@@ -2934,7 +3067,7 @@ export function renderLearningActivityRubricView() {
             return studentRows;
         }).join('');
 
-    const studentSearchHtml = rubricItems.length === 0 || studentsInClass.length === 0
+    const studentSearchHtml = !hasCriterionItems || studentsInClass.length === 0
         ? ''
         : `
             <div class="mb-4">
@@ -2962,7 +3095,7 @@ export function renderLearningActivityRubricView() {
                             <th scope="col" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[16rem]">${t('rubric_general_comment_column')}</th>
                         </tr>
                     </thead>
-                    <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+                    <tbody class="bg-white dark:bg-gray-900">
                         ${assessmentRowsHtml}
                     </tbody>
                 </table>
@@ -2970,7 +3103,7 @@ export function renderLearningActivityRubricView() {
         `
         : noStudentsMessage;
 
-    const assessmentContent = rubricItems.length === 0
+    const assessmentContent = !hasCriterionItems
         ? `<p class="text-sm text-gray-500 dark:text-gray-400">${t('rubric_no_items_assessment')}</p>`
         : studentsInClass.length === 0
             ? `<p class="text-sm text-gray-500 dark:text-gray-400">${t('rubric_no_students_assessment')}</p>`

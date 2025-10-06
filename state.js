@@ -6,7 +6,8 @@ const pastelColors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A
 export const LEARNING_ACTIVITY_STATUS = {
     SCHEDULED: 'scheduled',
     OPEN_SUBMISSIONS: 'open_submissions',
-    PENDING_REVIEW: 'pending_review'
+    PENDING_REVIEW: 'pending_review',
+    CORRECTED: 'corrected'
 };
 
 export const RUBRIC_LEVELS = ['NP', 'NA', 'AS', 'AN', 'AE'];
@@ -219,6 +220,17 @@ function normalizeRubricStructure(rawRubric) {
     const rubric = rawRubric && typeof rawRubric === 'object' ? rawRubric : {};
     const normalized = {
         items: Array.isArray(rubric.items) ? rubric.items.map(item => {
+            const type = item?.type === 'section' ? 'section' : 'criterion';
+            const id = item?.id || generateId('rubric-item');
+
+            if (type === 'section') {
+                return {
+                    id,
+                    type: 'section',
+                    sectionTitle: typeof item?.sectionTitle === 'string' ? item.sectionTitle : '',
+                };
+            }
+
             const levelComments = item?.levelComments && typeof item.levelComments === 'object'
                 ? item.levelComments
                 : {};
@@ -228,11 +240,13 @@ function normalizeRubricStructure(rawRubric) {
             });
 
             return {
-                id: item?.id || generateId('rubric-item'),
+                id,
+                type: 'criterion',
                 competencyId: item?.competencyId || '',
                 criterionId: item?.criterionId || '',
                 weight: typeof item?.weight === 'number' && !Number.isNaN(item.weight) ? item.weight : 1,
                 levelComments: normalizedComments,
+                generalGuidance: typeof item?.generalGuidance === 'string' ? item.generalGuidance : '',
             };
         }) : [],
         evaluations: {}
@@ -270,9 +284,84 @@ function parseDateValue(dateString, endOfDay = false) {
     return date;
 }
 
+function getLearningActivityStudentIds(activity) {
+    if (!activity) return [];
+    const classId = activity.classId;
+    const classData = classId
+        ? state.activities.find(entry => entry.id === classId && entry.type === 'class')
+        : null;
+    const classStudentIds = Array.isArray(classData?.studentIds) ? classData.studentIds : [];
+    const activityStudentIds = Array.isArray(activity.studentIds) ? activity.studentIds : [];
+    const uniqueIds = new Set([...classStudentIds, ...activityStudentIds]);
+    uniqueIds.delete(undefined);
+    uniqueIds.delete(null);
+    uniqueIds.delete('');
+    return Array.from(uniqueIds);
+}
+
+function hasStudentCompleteEvaluation(rubric, studentId, requiredItemIds) {
+    if (!studentId || !rubric) return false;
+    const evaluations = rubric.evaluations && typeof rubric.evaluations === 'object'
+        ? rubric.evaluations
+        : {};
+    const evaluation = evaluations[studentId];
+    if (!evaluation || typeof evaluation !== 'object') {
+        return false;
+    }
+    const flags = evaluation.flags && typeof evaluation.flags === 'object'
+        ? evaluation.flags
+        : {};
+    if (flags.notPresented) {
+        return true;
+    }
+
+    if (!Array.isArray(requiredItemIds) || requiredItemIds.length === 0) {
+        return false;
+    }
+
+    const scores = evaluation.scores && typeof evaluation.scores === 'object'
+        ? evaluation.scores
+        : {};
+
+    return requiredItemIds.every(itemId => {
+        const value = scores[itemId];
+        return typeof value === 'string' && value.trim().length > 0;
+    });
+}
+
+export function isLearningActivityFullyAssessed(activity) {
+    if (!activity) return false;
+
+    const studentsToEvaluate = getLearningActivityStudentIds(activity);
+    if (studentsToEvaluate.length === 0) {
+        return false;
+    }
+
+    const rubric = activity.rubric && typeof activity.rubric === 'object'
+        ? activity.rubric
+        : null;
+    const rubricItems = Array.isArray(rubric?.items)
+        ? rubric.items.filter(item => item && typeof item.id === 'string' && item.id.length > 0)
+        : [];
+
+    if (rubricItems.length === 0) {
+        return false;
+    }
+
+    const requiredItemIds = rubricItems.map(item => item.id);
+
+    return studentsToEvaluate.every(studentId =>
+        hasStudentCompleteEvaluation(rubric, studentId, requiredItemIds)
+    );
+}
+
 export function calculateLearningActivityStatus(activity, referenceDate = new Date()) {
     if (!activity) {
         return LEARNING_ACTIVITY_STATUS.SCHEDULED;
+    }
+
+    if (isLearningActivityFullyAssessed(activity)) {
+        return LEARNING_ACTIVITY_STATUS.CORRECTED;
     }
 
     const today = new Date(referenceDate);
@@ -294,6 +383,14 @@ export function calculateLearningActivityStatus(activity, referenceDate = new Da
     }
 
     return LEARNING_ACTIVITY_STATUS.SCHEDULED;
+}
+
+export function recalculateLearningActivityStatus(activity, referenceDate = new Date()) {
+    const status = calculateLearningActivityStatus(activity, referenceDate);
+    if (activity && activity.status !== status) {
+        activity.status = status;
+    }
+    return status;
 }
 
 export function createEmptyRubric() {
