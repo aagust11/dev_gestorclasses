@@ -118,6 +118,16 @@ function handleAction(action, element, event) {
         const result = actionHandlers[action](id, element, event);
 
         if (reRenderActions.includes(action)) {
+            const previousSelection = (() => {
+                if (action === 'filter-learning-activity-rubric-students' && element instanceof HTMLInputElement) {
+                    return {
+                        start: element.selectionStart,
+                        end: element.selectionEnd
+                    };
+                }
+                return null;
+            })();
+
             const rerender = () => {
                 render();
                 if (action === 'edit-activity') {
@@ -125,6 +135,22 @@ function handleAction(action, element, event) {
                     if (targetElement) {
                         targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
+                }
+                if (action === 'filter-learning-activity-rubric-students') {
+                    requestAnimationFrame(() => {
+                        const searchInput = document.getElementById('rubric-student-search');
+                        if (searchInput instanceof HTMLInputElement) {
+                            searchInput.focus({ preventScroll: true });
+                            const { start, end } = previousSelection || {};
+                            const caretPosition = typeof start === 'number' ? start : searchInput.value.length;
+                            const selectionEnd = typeof end === 'number' ? end : caretPosition;
+                            try {
+                                searchInput.setSelectionRange(caretPosition, selectionEnd);
+                            } catch (err) {
+                                // Some input types do not support setSelectionRange; ignore in that case.
+                            }
+                        }
+                    });
                 }
             };
 
