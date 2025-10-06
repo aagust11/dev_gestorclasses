@@ -1,10 +1,17 @@
 // views.js: Contiene todas las funciones que generan el HTML de las vistas.
 
-import { state } from './state.js';
+import { state, LEARNING_ACTIVITY_STATUS, RUBRIC_LEVELS, calculateLearningActivityStatus } from './state.js';
 import { darkenColor, getWeekStartDate, getWeekDateRange, formatDate, isSameDate, findNextSession, findPreviousSession, DAY_KEYS, findNextClassSession, getCurrentTermDateRange, getWeeksForCourse, isHoliday, normalizeStudentAnnotation, STUDENT_ATTENDANCE_STATUS } from './utils.js';
 import { t } from './i18n.js';
 
 const sortStudentsByName = (studentA, studentB) => studentA.name.localeCompare(studentB.name);
+
+const escapeHtml = (value = '') => String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 function renderMobileHeaderActions(actions) {
     const container = document.getElementById('mobile-header-actions');
@@ -334,6 +341,21 @@ export function renderActivitiesView() {
         const isExpanded = state.expandedLearningActivityClassIds?.includes(c.id);
         const visibleActivities = isExpanded ? classActivities : classActivities.slice(0, 3);
 
+        const statusMeta = {
+            [LEARNING_ACTIVITY_STATUS.SCHEDULED]: {
+                label: t('learning_activity_status_scheduled'),
+                classes: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-700/40 dark:text-gray-200 dark:border-gray-600'
+            },
+            [LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS]: {
+                label: t('learning_activity_status_open'),
+                classes: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/40 dark:text-green-200 dark:border-green-700'
+            },
+            [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: {
+                label: t('learning_activity_status_pending'),
+                classes: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700'
+            }
+        };
+
         const activitiesHtml = visibleActivities.map(activity => {
             const assignedCount = Array.isArray(activity.criteriaRefs) ? activity.criteriaRefs.length : 0;
             const assignedLabelContent = assignedCount > 0
@@ -346,21 +368,43 @@ export function renderActivitiesView() {
             const dateRangeHtml = (startDateDisplay || endDateDisplay)
                 ? `<div class="mt-3 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2"><i data-lucide="calendar-range" class="w-4 h-4"></i><span>${[startDateDisplay, endDateDisplay].filter(Boolean).join(' · ')}</span></div>`
                 : '';
+            const status = calculateLearningActivityStatus(activity);
+            activity.status = status;
+            const statusInfo = statusMeta[status] || statusMeta[LEARNING_ACTIVITY_STATUS.SCHEDULED];
+
             return `
-                <button
-                    data-action="open-learning-activity-editor"
-                    data-class-id="${c.id}"
-                    data-learning-activity-id="${activity.id}"
-                    class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded-md hover:border-blue-400 dark:hover:border-blue-500 transition-colors bg-white/60 dark:bg-gray-800/60"
-                >
-                    <div class="flex items-start justify-between gap-3">
-                        <span class="font-semibold text-gray-800 dark:text-gray-100">${activity.title?.trim() || t('activities_untitled_label')}</span>
-                        <span class="text-xs text-blue-600 dark:text-blue-400">${assignedLabelContent}</span>
+                <div class="p-3 border border-gray-200 dark:border-gray-700 rounded-md bg-white/60 dark:bg-gray-800/60 shadow-sm">
+                    <div
+                        data-action="open-learning-activity-editor"
+                        data-class-id="${c.id}"
+                        data-learning-activity-id="${activity.id}"
+                        role="button"
+                        tabindex="0"
+                        class="block cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-600 rounded-md"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <span class="font-semibold text-gray-800 dark:text-gray-100">${activity.title?.trim() || t('activities_untitled_label')}</span>
+                            <span class="text-xs text-blue-600 dark:text-blue-400">${assignedLabelContent}</span>
+                        </div>
+                        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">${description || t('activities_no_description')}</p>
+                        ${dateRangeHtml}
+                        ${createdDate ? `<div class="mt-3 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2"><i data-lucide="calendar" class="w-4 h-4"></i><span>${t('activities_created_on')} ${createdDate}</span></div>` : ''}
                     </div>
-                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">${description || t('activities_no_description')}</p>
-                    ${dateRangeHtml}
-                    ${createdDate ? `<div class="mt-3 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2"><i data-lucide="calendar" class="w-4 h-4"></i><span>${t('activities_created_on')} ${createdDate}</span></div>` : ''}
-                </button>
+                    <div class="mt-3 flex items-center justify-between gap-2">
+                        <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold border ${statusInfo.classes}">
+                            ${statusInfo.label}
+                        </span>
+                        <button
+                            data-action="open-learning-activity-rubric"
+                            data-class-id="${c.id}"
+                            data-learning-activity-id="${activity.id}"
+                            class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 dark:text-blue-200 dark:bg-blue-900/30 dark:border-blue-700"
+                        >
+                            <i data-lucide="table-properties" class="w-3.5 h-3.5"></i>
+                            ${t('activities_rubric_button_label')}
+                        </button>
+                    </div>
+                </div>
             `;
         }).join('');
 
@@ -1495,6 +1539,327 @@ export function renderSettingsView() {
 
             <div id="settings-tab-content">
                 ${activeTabContent}
+            </div>
+        </div>
+    `;
+}
+
+
+export function renderLearningActivityRubricView() {
+    const activityId = state.activeLearningActivityRubricId;
+    renderMobileHeaderActions([
+        { action: 'close-learning-activity-rubric', label: t('back_to_activities'), icon: 'arrow-left' }
+    ]);
+
+    if (!activityId) {
+        return `
+            <div class="p-6">
+                <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
+                    <p class="text-sm text-yellow-800 dark:text-yellow-200">${t('rubric_activity_not_selected')}</p>
+                    <button data-action="close-learning-activity-rubric" class="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                        ${t('back_to_activities')}
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    const activity = state.learningActivities.find(act => act.id === activityId);
+    if (!activity) {
+        return `
+            <div class="p-6">
+                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4">
+                    <p class="text-sm text-red-800 dark:text-red-200">${t('rubric_activity_not_found')}</p>
+                    <button data-action="close-learning-activity-rubric" class="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                        ${t('back_to_activities')}
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    const targetClass = state.activities.find(a => a.id === activity.classId);
+    const rubric = activity.rubric || { items: [], evaluations: {} };
+    const rubricItems = Array.isArray(rubric.items) ? rubric.items : [];
+    const evaluations = rubric.evaluations && typeof rubric.evaluations === 'object' ? rubric.evaluations : {};
+
+    const competencies = Array.isArray(targetClass?.competencies) ? targetClass.competencies : [];
+    const availableCriteria = competencies.flatMap(comp => {
+        const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
+        return criteria.map(criterion => ({
+            competency: comp,
+            criterion
+        }));
+    });
+
+    const allowedTabs = ['configuration', 'assessment'];
+    const activeTab = allowedTabs.includes(state.learningActivityRubricTab) ? state.learningActivityRubricTab : 'configuration';
+    state.learningActivityRubricTab = activeTab;
+
+    const statusMeta = {
+        [LEARNING_ACTIVITY_STATUS.SCHEDULED]: {
+            label: t('learning_activity_status_scheduled'),
+            classes: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-700/40 dark:text-gray-200 dark:border-gray-600'
+        },
+        [LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS]: {
+            label: t('learning_activity_status_open'),
+            classes: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/40 dark:text-green-200 dark:border-green-700'
+        },
+        [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: {
+            label: t('learning_activity_status_pending'),
+            classes: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700'
+        }
+    };
+    const status = calculateLearningActivityStatus(activity);
+    const statusInfo = statusMeta[status] || statusMeta[LEARNING_ACTIVITY_STATUS.SCHEDULED];
+
+    const tabButtonBaseClass = 'px-4 py-2 text-sm font-semibold rounded-md border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600';
+    const tabButtonInactive = 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700';
+    const tabButtonActive = 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500';
+
+    const tabButtonsHtml = [
+        { key: 'configuration', label: t('rubric_tab_configuration') },
+        { key: 'assessment', label: t('rubric_tab_assessment') }
+    ].map(tab => {
+        const isActive = tab.key === activeTab;
+        const classes = `${tabButtonBaseClass} ${isActive ? tabButtonActive : tabButtonInactive}`;
+        return `<button data-action="set-learning-activity-rubric-tab" data-tab="${tab.key}" class="${classes}" aria-pressed="${isActive}">${tab.label}</button>`;
+    }).join('');
+
+    const criteriaOptions = availableCriteria.map(item => {
+        const competencyCode = item.competency?.code || t('competency_without_code');
+        const criterionCode = item.criterion?.code || t('criterion_without_code');
+        const criterionDescription = item.criterion?.description || t('criterion_without_description');
+        const competencyId = item.competency?.id || '';
+        const criterionId = item.criterion?.id || '';
+        return `<option value="${competencyId}|${criterionId}">${escapeHtml(`${competencyCode} · ${criterionCode}`)} — ${escapeHtml(criterionDescription)}</option>`;
+    }).join('');
+
+    const addCriterionControls = availableCriteria.length > 0
+        ? `
+            <div class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+                <div class="flex-1">
+                    <label for="rubric-add-select-${activity.id}" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('rubric_add_criterion_label')}</label>
+                    <select id="rubric-add-select-${activity.id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md">
+                        <option value="">${t('rubric_select_placeholder')}</option>
+                        ${criteriaOptions}
+                    </select>
+                </div>
+                <button data-action="add-rubric-item" data-learning-activity-id="${activity.id}" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    ${t('rubric_add_button')}
+                </button>
+            </div>
+        `
+        : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('rubric_no_criteria_available')}</p>`;
+
+    const configurationItemsHtml = rubricItems.length > 0
+        ? rubricItems.map((item, index) => {
+            const competency = competencies.find(comp => comp.id === item.competencyId);
+            const fallbackCriterion = availableCriteria.find(opt => opt.criterion?.id === item.criterionId)?.criterion || null;
+            const criterion = competency?.criteria?.find(cr => cr.id === item.criterionId) || fallbackCriterion;
+            const competencyLabel = competency?.code || t('competency_without_code');
+            const criterionCode = criterion?.code || t('criterion_without_code');
+            const criterionDescription = criterion?.description || t('criterion_without_description');
+            const weightValue = typeof item.weight === 'number' && !Number.isNaN(item.weight) ? item.weight : 1;
+            const moveUpDisabled = index === 0 ? 'disabled aria-disabled="true"' : '';
+            const moveDownDisabled = index === rubricItems.length - 1 ? 'disabled aria-disabled="true"' : '';
+
+            const levelCommentsHtml = RUBRIC_LEVELS.map(level => {
+                const levelLabel = t(`rubric_level_${level}_label`);
+                const commentValue = escapeHtml(item.levelComments?.[level] || '');
+                return `
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">${levelLabel}</label>
+                        <textarea data-action="update-rubric-item-comment" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-level="${level}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm" placeholder="${t('rubric_level_comment_placeholder')}">${commentValue}</textarea>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4 bg-white dark:bg-gray-900/40">
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                        <div>
+                            <p class="text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(competencyLabel)} · ${escapeHtml(criterionCode)}</p>
+                            <p class="text-sm text-gray-600 dark:text-gray-300">${escapeHtml(criterionDescription)}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm font-medium text-gray-700 dark:text-gray-200" for="rubric-weight-${item.id}">${t('rubric_weight_label')}</label>
+                            <input id="rubric-weight-${item.id}" type="number" step="0.1" min="0" value="${weightValue}" data-action="update-rubric-item-weight" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="w-24 p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm">
+                            <div class="flex gap-1">
+                                <button ${moveUpDisabled} data-action="move-rubric-item" data-direction="up" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="inline-flex items-center justify-center p-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                    <i data-lucide="arrow-up" class="w-4 h-4"></i>
+                                    <span class="sr-only">${t('rubric_move_up_label')}</span>
+                                </button>
+                                <button ${moveDownDisabled} data-action="move-rubric-item" data-direction="down" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="inline-flex items-center justify-center p-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                    <i data-lucide="arrow-down" class="w-4 h-4"></i>
+                                    <span class="sr-only">${t('rubric_move_down_label')}</span>
+                                </button>
+                                <button data-action="remove-rubric-item" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="inline-flex items-center justify-center p-2 border border-red-200 text-red-600 dark:border-red-700 dark:text-red-300 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    <span class="sr-only">${t('rubric_remove_button_label')}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid gap-3 sm:grid-cols-2">${levelCommentsHtml}</div>
+                </div>
+            `;
+        }).join('')
+        : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('rubric_no_items_configuration')}</p>`;
+
+    const configurationContent = `
+        <div class="space-y-4">
+            ${addCriterionControls}
+            <div class="space-y-4">${configurationItemsHtml}</div>
+        </div>
+    `;
+
+    const studentsInClass = Array.isArray(targetClass?.studentIds)
+        ? targetClass.studentIds
+            .map(studentId => state.students.find(student => student.id === studentId))
+            .filter(Boolean)
+            .sort(sortStudentsByName)
+        : [];
+
+    const studentFilterValue = typeof state.learningActivityRubricStudentFilter === 'string'
+        ? state.learningActivityRubricStudentFilter
+        : '';
+    const normalizedStudentFilter = studentFilterValue.trim().toLowerCase();
+    const filteredStudents = normalizedStudentFilter
+        ? studentsInClass.filter(student => student.name.toLowerCase().includes(normalizedStudentFilter))
+        : studentsInClass;
+
+    const levelStyles = {
+        NA: { active: 'bg-red-600 text-white border-red-700', inactive: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-200 dark:border-red-700' },
+        AS: { active: 'bg-amber-500 text-white border-amber-600', inactive: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-700' },
+        AN: { active: 'bg-blue-600 text-white border-blue-700', inactive: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-200 dark:border-blue-700' },
+        AE: { active: 'bg-emerald-600 text-white border-emerald-700', inactive: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-200 dark:border-emerald-700' }
+    };
+
+    const assessmentRowsHtml = rubricItems.length === 0 || filteredStudents.length === 0 ? '' : filteredStudents.map(student => {
+        const evaluation = evaluations[student.id] || {};
+        const scores = evaluation.scores && typeof evaluation.scores === 'object' ? evaluation.scores : {};
+        const comment = evaluation.comment || '';
+        const rowSpan = rubricItems.length || 1;
+
+        const rows = rubricItems.map((item, index) => {
+            const competency = competencies.find(comp => comp.id === item.competencyId);
+            const fallbackCriterion = availableCriteria.find(opt => opt.criterion?.id === item.criterionId)?.criterion || null;
+            const criterion = competency?.criteria?.find(cr => cr.id === item.criterionId) || fallbackCriterion;
+            const competencyLabel = competency?.code || t('competency_without_code');
+            const criterionCode = criterion?.code || t('criterion_without_code');
+            const criterionDescription = criterion?.description || t('criterion_without_description');
+            const weightValue = typeof item.weight === 'number' && !Number.isNaN(item.weight) ? item.weight : 1;
+            const currentLevel = scores[item.id] || '';
+
+            const nameCell = index === 0
+                ? `<th scope="row" class="px-3 py-3 text-sm font-semibold text-gray-700 dark:text-gray-200 align-top" rowspan="${rowSpan}">${escapeHtml(student.name)}</th>`
+                : '';
+
+            const commentCell = index === 0
+                ? `<td class="px-3 py-3 align-top min-w-[16rem]" rowspan="${rowSpan}">
+                        <textarea data-action="update-rubric-general-comment" data-learning-activity-id="${activity.id}" data-student-id="${student.id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm min-h-[6rem]" placeholder="${escapeHtml(t('rubric_general_comment_placeholder'))}">${escapeHtml(comment)}</textarea>
+                    </td>`
+                : '';
+
+            const criterionCell = `
+                <td class="px-3 py-3 align-top min-w-[14rem]">
+                    <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(competencyLabel)} · ${escapeHtml(criterionCode)}</div>
+                    <div class="text-xs text-gray-600 dark:text-gray-300 mt-1">${escapeHtml(criterionDescription)}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-2">${escapeHtml(t('rubric_weight_label'))}: <span class="font-semibold text-gray-700 dark:text-gray-200">${weightValue}</span></div>
+                </td>
+            `;
+
+            const levelCells = RUBRIC_LEVELS.map(level => {
+                const levelLabel = t(`rubric_level_${level}_label`);
+                const template = item.levelComments?.[level]?.trim() || '';
+                const tooltip = template ? `${levelLabel} · ${template}` : levelLabel;
+                const isActive = currentLevel === level;
+                const classes = isActive
+                    ? `${levelStyles[level].active} w-full inline-flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-md text-xs font-semibold`
+                    : `${levelStyles[level].inactive} w-full inline-flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-md text-xs font-semibold`;
+                return `
+                    <td class="px-2 py-3 align-top text-center">
+                        <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${classes}" aria-pressed="${isActive}" title="${escapeHtml(tooltip)}">
+                            <span class="text-[10px] font-bold">${level}</span>
+                            <span class="text-[10px] leading-tight">${escapeHtml(levelLabel)}</span>
+                        </button>
+                    </td>
+                `;
+            }).join('');
+
+            return `${nameCell}${criterionCell}${levelCells}${commentCell ? commentCell : ''}`;
+        }).map(rowContent => `<tr>${rowContent}</tr>`).join('');
+
+        return rows;
+    }).join('');
+
+    const studentSearchControls = studentsInClass.length > 0
+        ? `
+            <div class="mb-4">
+                <label for="rubric-student-search" class="block text-sm font-medium text-gray-700 dark:text-gray-200">${escapeHtml(t('rubric_student_search_label'))}</label>
+                <input id="rubric-student-search" type="text" value="${escapeHtml(studentFilterValue)}" placeholder="${escapeHtml(t('rubric_student_search_placeholder'))}" class="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm text-gray-700 dark:text-gray-200" data-action="update-learning-activity-rubric-filter" />
+            </div>
+        `
+        : '';
+
+    const assessmentContent = rubricItems.length === 0
+        ? `<p class="text-sm text-gray-500 dark:text-gray-400">${t('rubric_no_items_assessment')}</p>`
+        : studentsInClass.length === 0
+            ? `<p class="text-sm text-gray-500 dark:text-gray-400">${t('rubric_no_students_assessment')}</p>`
+            : `
+                ${studentSearchControls}
+                ${filteredStudents.length === 0
+                    ? `<p class="text-sm text-gray-500 dark:text-gray-400">${escapeHtml(t('rubric_no_students_filter'))}</p>`
+                    : `
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead class="bg-white dark:bg-gray-800">
+                                    <tr>
+                                        <th scope="col" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${t('rubric_students_column')}</th>
+                                        <th scope="col" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${t('rubric_criterion_column')}</th>
+                                        ${RUBRIC_LEVELS.map(level => `<th scope="col" class="px-2 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">${level}</th>`).join('')}
+                                        <th scope="col" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${t('rubric_general_comment_column')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+                                    ${assessmentRowsHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    `}
+            `;
+
+    const descriptionHtml = activity.description?.trim()
+        ? `<p class="mt-2 text-sm text-gray-600 dark:text-gray-300">${escapeHtml(activity.description.trim())}</p>`
+        : '';
+
+    const classInfoHtml = targetClass
+        ? `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_editor_class_prefix')} <span class="font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(targetClass.name)}</span></p>`
+        : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('rubric_no_class_message')}</p>`;
+
+    const mainContent = activeTab === 'configuration' ? configurationContent : assessmentContent;
+
+    return `
+        <div class="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900/50 min-h-full">
+            <div class="max-w-6xl mx-auto space-y-6">
+                <div>
+                    ${classInfoHtml}
+                    <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">${escapeHtml(activity.title?.trim() || t('activities_untitled_label'))}</h2>
+                    ${descriptionHtml}
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${statusInfo.classes}">
+                            ${statusInfo.label}
+                        </span>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">${tabButtonsHtml}</div>
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
+                    ${mainContent}
+                </div>
             </div>
         </div>
     `;
