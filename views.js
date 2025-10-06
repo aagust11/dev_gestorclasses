@@ -1967,20 +1967,6 @@ export function renderActivityDetailView() {
             return recordDate.toLocaleString(locale, { hour: '2-digit', minute: '2-digit' });
         };
 
-        const attendanceInfo = annotationData.attendance ? (() => {
-            const option = attendanceOptions.find(opt => opt.status === annotationData.attendance);
-            if (!option) return '';
-            return `
-                <div class="text-xs text-gray-600 dark:text-gray-300 flex items-center gap-2">
-                    <span class="font-semibold">${t('attendance_record_label')}</span>
-                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md ${option.activeClasses}">
-                        <i data-lucide="${option.icon}" class="w-3 h-3"></i>
-                        ${option.label}
-                    </span>
-                </div>
-            `;
-        })() : '';
-
         const positivesInfo = positivesCount > 0 ? `
             <div class="space-y-1">
                 <p class="text-xs font-semibold text-green-700 dark:text-green-300 flex items-center gap-1">
@@ -2038,7 +2024,7 @@ export function renderActivityDetailView() {
             </div>
         ` : '';
 
-        const extraInfo = [attendanceInfo, positivesInfo, commentsInfo, incidentsInfo].filter(Boolean).join('');
+        const extraInfo = [positivesInfo, commentsInfo, incidentsInfo].filter(Boolean).join('');
 
         return `
             <div id="student-annotation-${student.id}" class="p-3 border border-gray-200 dark:border-gray-700 rounded-md space-y-3 bg-gray-50/60 dark:bg-gray-900/40">
