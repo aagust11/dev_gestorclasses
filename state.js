@@ -43,6 +43,7 @@ export const state = {
     learningActivityRubricFilter: '',
     evaluationActiveTab: 'activities',
     selectedEvaluationClassId: null,
+    evaluationSelectedTermId: 'all',
     learningActivityRubricReturnView: null,
 };
 
@@ -114,6 +115,10 @@ export function calculateLearningActivityStatus(activity, referenceDate = new Da
         return LEARNING_ACTIVITY_STATUS.SCHEDULED;
     }
 
+    if (activity.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(activity.status)) {
+        return activity.status;
+    }
+
     const today = new Date(referenceDate);
     today.setHours(0, 0, 0, 0);
 
@@ -128,7 +133,7 @@ export function calculateLearningActivityStatus(activity, referenceDate = new Da
     }
 
     const existingStatus = activity.status;
-    if (existingStatus && !Object.values(LEARNING_ACTIVITY_STATUS).includes(existingStatus)) {
+    if (!activity.startDate && !activity.endDate && Object.values(LEARNING_ACTIVITY_STATUS).includes(existingStatus)) {
         return existingStatus;
     }
 
@@ -168,6 +173,7 @@ export function saveState() {
         studentTimelineFilter: state.studentTimelineFilter,
         evaluationActiveTab: state.evaluationActiveTab,
         selectedEvaluationClassId: state.selectedEvaluationClassId,
+        evaluationSelectedTermId: state.evaluationSelectedTermId,
     };
     localStorage.setItem('teacherDashboardData', JSON.stringify(dataToSave));
     
@@ -198,6 +204,10 @@ export function loadState() {
                 updatedAt: activity?.updatedAt || activity?.createdAt || new Date().toISOString(),
                 startDate: activity?.startDate || '',
                 endDate: activity?.endDate || '',
+                weight: typeof activity?.weight === 'number' && !Number.isNaN(activity.weight)
+                    ? activity.weight
+                    : 1,
+                statusIsManual: Boolean(activity?.statusIsManual),
             };
             normalized.rubric = normalizeRubricStructure(activity?.rubric);
             normalized.status = calculateLearningActivityStatus(normalized);
@@ -217,6 +227,7 @@ export function loadState() {
         state.studentTimelineFilter = parsedData.studentTimelineFilter || 'all';
         state.evaluationActiveTab = parsedData.evaluationActiveTab || 'activities';
         state.selectedEvaluationClassId = parsedData.selectedEvaluationClassId || null;
+        state.evaluationSelectedTermId = parsedData.evaluationSelectedTermId || 'all';
     }
 
     state.activities.forEach(activity => {

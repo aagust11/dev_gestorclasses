@@ -1,7 +1,7 @@
 // views.js: Contiene todas las funciones que generan el HTML de las vistas.
 
 import { state, LEARNING_ACTIVITY_STATUS, RUBRIC_LEVELS, calculateLearningActivityStatus } from './state.js';
-import { darkenColor, getWeekStartDate, getWeekDateRange, formatDate, isSameDate, findNextSession, findPreviousSession, DAY_KEYS, findNextClassSession, getCurrentTermDateRange, getWeeksForCourse, isHoliday, normalizeStudentAnnotation, STUDENT_ATTENDANCE_STATUS } from './utils.js';
+import { darkenColor, getWeekStartDate, getWeekDateRange, formatDate, isSameDate, findNextSession, findPreviousSession, DAY_KEYS, findNextClassSession, getCurrentTermDateRange, getWeeksForCourse, isHoliday, normalizeStudentAnnotation, STUDENT_ATTENDANCE_STATUS, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
 
 const sortStudentsByName = (studentA, studentB) => studentA.name.localeCompare(studentB.name);
@@ -486,6 +486,11 @@ export function renderEvaluationView() {
         .filter(activity => activity.type === 'class')
         .sort((a, b) => a.name.localeCompare(b.name));
 
+    const availableTermIds = new Set((state.terms || []).map(term => term.id));
+    if (state.evaluationSelectedTermId !== 'all' && !availableTermIds.has(state.evaluationSelectedTermId)) {
+        state.evaluationSelectedTermId = 'all';
+    }
+
     const tabs = [
         { id: 'activities', label: t('evaluation_tab_activities'), icon: 'clipboard-list' },
         { id: 'grades', label: t('evaluation_tab_grades'), icon: 'graduation-cap' }
@@ -562,6 +567,26 @@ function renderEvaluationActivitiesTab(classes) {
         return date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
     };
 
+    const selectedTermId = state.evaluationSelectedTermId || 'all';
+    const termRange = getTermDateRangeById(selectedTermId);
+    const filterBySelectedTerm = (activity) => {
+        if (!termRange) {
+            return true;
+        }
+        const start = activity.startDate ? new Date(`${activity.startDate}T00:00:00`) : null;
+        const end = activity.endDate ? new Date(`${activity.endDate}T23:59:59`) : null;
+        if (start && end) {
+            return end >= termRange.start && start <= termRange.end;
+        }
+        if (start) {
+            return start >= termRange.start && start <= termRange.end;
+        }
+        if (end) {
+            return end >= termRange.start && end <= termRange.end;
+        }
+        return true;
+    };
+
     if (classes.length === 0) {
         return `
             <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
@@ -594,6 +619,7 @@ function renderEvaluationActivitiesTab(classes) {
     const classCards = classes.map(cls => {
         const classActivities = state.learningActivities
             .filter(activity => activity.classId === cls.id)
+            .filter(filterBySelectedTerm)
             .map(activity => {
                 const status = calculateLearningActivityStatus(activity);
                 return {
@@ -696,6 +722,15 @@ function renderEvaluationGradesTab(classes) {
         `;
     }
 
+    const locale = document.documentElement.lang || 'ca';
+    const formatDateForDisplay = (value) => {
+        if (!value) return '';
+        const normalized = value.includes('T') ? value : `${value}T00:00:00`;
+        const date = new Date(normalized);
+        if (Number.isNaN(date.getTime())) return '';
+        return date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
     let selectedClass = classes.find(cls => cls.id === state.selectedEvaluationClassId) || null;
     if (!selectedClass) {
         selectedClass = classes[0] || null;
@@ -712,10 +747,53 @@ function renderEvaluationGradesTab(classes) {
         return `<button data-action="select-evaluation-class" data-class-id="${cls.id}" class="${baseClasses} ${isActive ? activeClasses : inactiveClasses}">${escapeHtml(cls.name)}</button>`;
     }).join('');
 
+    const selectedTermId = state.evaluationSelectedTermId || 'all';
+    const termRange = getTermDateRangeById(selectedTermId);
+    const hasTerms = Array.isArray(state.terms) && state.terms.length > 0;
+    const termOptionsHtml = hasTerms
+        ? state.terms.map(term => {
+            const start = formatDateForDisplay(term.startDate);
+            const end = formatDateForDisplay(term.endDate);
+            const range = start && end ? ` (${start} - ${end})` : '';
+            const isSelected = term.id === selectedTermId;
+            return `<option value="${term.id}" ${isSelected ? 'selected' : ''}>${escapeHtml(`${term.name}${range}`)}</option>`;
+        }).join('')
+        : '';
+    const termFilterHtml = hasTerms
+        ? `
+            <div class="w-full sm:w-auto">
+                <label for="evaluation-term-filter" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('evaluation_term_filter_label')}</label>
+                <select id="evaluation-term-filter" data-action="select-evaluation-term" class="w-full sm:w-64 p-2.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm text-gray-700 dark:text-gray-200">
+                    <option value="all" ${selectedTermId === 'all' ? 'selected' : ''}>${t('view_all_terms')}</option>
+                    ${termOptionsHtml}
+                </select>
+            </div>
+        `
+        : '';
+
+    const filterBySelectedTerm = (activity) => {
+        if (!termRange) {
+            return true;
+        }
+        const start = activity.startDate ? new Date(`${activity.startDate}T00:00:00`) : null;
+        const end = activity.endDate ? new Date(`${activity.endDate}T23:59:59`) : null;
+        if (start && end) {
+            return end >= termRange.start && start <= termRange.end;
+        }
+        if (start) {
+            return start >= termRange.start && start <= termRange.end;
+        }
+        if (end) {
+            return end >= termRange.start && end <= termRange.end;
+        }
+        return true;
+    };
+
     if (!selectedClass) {
         return `
             <div class="space-y-4">
                 <div class="flex flex-wrap gap-2">${classButtonsHtml}</div>
+                ${termFilterHtml}
                 <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
                     <p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_grades_select_class')}</p>
                 </div>
@@ -730,6 +808,7 @@ function renderEvaluationGradesTab(classes) {
 
     const learningActivities = state.learningActivities
         .filter(activity => activity.classId === selectedClass.id)
+        .filter(filterBySelectedTerm)
         .sort((a, b) => getActivitySortOrder(a) - getActivitySortOrder(b));
 
     const competencies = Array.isArray(selectedClass.competencies) ? selectedClass.competencies : [];
@@ -892,6 +971,7 @@ function renderEvaluationGradesTab(classes) {
     return `
         <div class="space-y-4">
             <div class="flex flex-wrap gap-2">${classButtonsHtml}</div>
+            ${termFilterHtml}
             <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6 shadow-sm">
                 ${contentHtml}
             </div>
@@ -956,6 +1036,44 @@ export function renderLearningActivityEditorView() {
 
     const startDateValue = draft.startDate || '';
     const endDateValue = draft.endDate || '';
+    const currentStatusValue = draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)
+        ? draft.status
+        : 'auto';
+    const automaticStatusPreview = calculateLearningActivityStatus({
+        ...draft,
+        statusIsManual: false,
+    });
+    const automaticStatusLabelKey = {
+        [LEARNING_ACTIVITY_STATUS.SCHEDULED]: 'learning_activity_status_scheduled',
+        [LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS]: 'learning_activity_status_open',
+        [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: 'learning_activity_status_pending',
+    }[automaticStatusPreview] || 'learning_activity_status_scheduled';
+    const automaticStatusLabel = t(automaticStatusLabelKey);
+    const statusOptions = [
+        { value: 'auto', label: t('learning_activity_status_auto') },
+        { value: LEARNING_ACTIVITY_STATUS.SCHEDULED, label: t('learning_activity_status_scheduled') },
+        { value: LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS, label: t('learning_activity_status_open') },
+        { value: LEARNING_ACTIVITY_STATUS.PENDING_REVIEW, label: t('learning_activity_status_pending') },
+    ];
+    const statusSelectOptions = statusOptions.map(option => `
+        <option value="${option.value}" ${option.value === currentStatusValue ? 'selected' : ''}>${escapeHtml(option.label)}</option>
+    `).join('');
+    const weightValue = draft.weight === '' ? '' : draft.weight;
+    const weightInputValue = weightValue === '' ? '' : String(weightValue);
+    const statusHelpText = (() => {
+        const raw = t('activities_form_status_help');
+        if (!raw || raw.startsWith('[')) {
+            return '';
+        }
+        return raw.replace('{{status}}', automaticStatusLabel);
+    })();
+    const weightHelpText = (() => {
+        const raw = t('activities_form_weight_help');
+        if (!raw || raw.startsWith('[')) {
+            return '';
+        }
+        return raw;
+    })();
 
     const selectedCriteriaHtml = selectedCriteria.length > 0
         ? `<ul class="space-y-2">${selectedCriteria.map(item => `
@@ -1081,16 +1199,26 @@ export function renderLearningActivityEditorView() {
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_description_label')}</label>
                             <textarea data-action="update-learning-activity-description" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md h-36" placeholder="${t('activities_form_description_placeholder')}">${draft.description || ''}</textarea>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('start_date')}</label>
-                                <input type="date" id="learning-activity-start-date" value="${startDateValue}" data-action="update-learning-activity-start-date" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('end_date')}</label>
-                                <input type="date" id="learning-activity-end-date" value="${endDateValue}" data-action="update-learning-activity-end-date" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
-                            </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('start_date')}</label>
+                            <input type="date" id="learning-activity-start-date" value="${startDateValue}" data-action="update-learning-activity-start-date" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
                         </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('end_date')}</label>
+                            <input type="date" id="learning-activity-end-date" value="${endDateValue}" data-action="update-learning-activity-end-date" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_status_label')}</label>
+                            <select data-action="update-learning-activity-status" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">${statusSelectOptions}</select>
+                            ${statusHelpText ? `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(statusHelpText)}</p>` : ''}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_weight_label')}</label>
+                            <input type="number" min="0" step="0.1" value="${escapeHtml(weightInputValue)}" data-action="update-learning-activity-weight" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                            ${weightHelpText ? `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(weightHelpText)}</p>` : ''}
+                        </div>
+                    </div>
                     </div>
 
                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
