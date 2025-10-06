@@ -1,5 +1,15 @@
-body { 
-    font-family: 'Inter', sans-serif; 
+body {
+    font-family: 'Inter', sans-serif;
+}
+
+.rubric-assessment-table tbody tr:nth-child(odd) th,
+.rubric-assessment-table tbody tr:nth-child(odd) td {
+    background-color: #f9fafb;
+}
+
+html.dark .rubric-assessment-table tbody tr:nth-child(odd) th,
+html.dark .rubric-assessment-table tbody tr:nth-child(odd) td {
+    background-color: rgba(148, 163, 184, 0.12);
 }
 
 .animate-fade-in { 
