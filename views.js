@@ -1731,77 +1731,116 @@ export function renderLearningActivityRubricView() {
         AE: { active: 'bg-emerald-600 text-white border-emerald-700', inactive: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-200 dark:border-emerald-700' }
     };
 
-    const assessmentHeadersHtml = rubricItems.map(item => {
-        const competency = competencies.find(comp => comp.id === item.competencyId);
-        const fallbackCriterion = availableCriteria.find(opt => opt.criterion?.id === item.criterionId)?.criterion || null;
-        const criterion = competency?.criteria?.find(cr => cr.id === item.criterionId) || fallbackCriterion;
-        const competencyLabel = competency?.code || t('competency_without_code');
-        const criterionCode = criterion?.code || t('criterion_without_code');
-        const criterionDescription = criterion?.description || t('criterion_without_description');
-        const weightValue = typeof item.weight === 'number' && !Number.isNaN(item.weight) ? item.weight : 1;
-        return `<th scope="col" class="px-4 py-3 text-left align-top text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[14rem]">
-            <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(competencyLabel)} · ${escapeHtml(criterionCode)}</div>
-            <div class="text-xs text-gray-600 dark:text-gray-300 mt-1">${escapeHtml(criterionDescription)}</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400 mt-2">${t('rubric_weight_label')}: <span class="font-semibold text-gray-700 dark:text-gray-200">${weightValue}</span></div>
-        </th>`;
+    const searchTerm = (state.learningActivityRubricFilter || '').toLowerCase().trim();
+    const filteredStudents = searchTerm
+        ? studentsInClass.filter(student => (student?.name || '').toLowerCase().includes(searchTerm))
+        : studentsInClass;
+
+    const levelHeaderCells = RUBRIC_LEVELS.map(level => {
+        const levelLabel = t(`rubric_level_${level}_label`);
+        return `<th scope="col" class="px-2 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">${escapeHtml(level)}<span class="sr-only"> — ${escapeHtml(levelLabel)}</span></th>`;
     }).join('');
 
-    const assessmentRowsHtml = rubricItems.length === 0 || studentsInClass.length === 0 ? '' : studentsInClass.map(student => {
-        const evaluation = evaluations[student.id] || {};
-        const scores = evaluation.scores && typeof evaluation.scores === 'object' ? evaluation.scores : {};
-        const comment = evaluation.comment || '';
-        const scoreCells = rubricItems.map(item => {
-            const currentLevel = scores[item.id] || '';
-            const buttons = RUBRIC_LEVELS.map(level => {
-                const levelLabel = t(`rubric_level_${level}_label`);
-                const template = item.levelComments?.[level]?.trim() || '';
-                const tooltip = template ? `${levelLabel} · ${template}` : levelLabel;
-                const isActive = currentLevel === level;
-                const classes = isActive
-                    ? `${levelStyles[level].active} inline-flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-md text-xs font-semibold`
-                    : `${levelStyles[level].inactive} inline-flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-md text-xs font-semibold`;
+    const baseLevelButtonClass = 'w-full px-2 py-2 text-xs font-semibold rounded-md border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600';
+
+    const assessmentRowsHtml = rubricItems.length === 0 || filteredStudents.length === 0
+        ? ''
+        : filteredStudents.map(student => {
+            const evaluation = evaluations[student.id] || {};
+            const scores = evaluation.scores && typeof evaluation.scores === 'object' ? evaluation.scores : {};
+            const comment = evaluation.comment || '';
+
+            const studentRows = rubricItems.map((item, index) => {
+                const competency = competencies.find(comp => comp.id === item.competencyId);
+                const fallbackCriterion = availableCriteria.find(opt => opt.criterion?.id === item.criterionId)?.criterion || null;
+                const criterion = competency?.criteria?.find(cr => cr.id === item.criterionId) || fallbackCriterion;
+                const competencyLabel = competency?.code || t('competency_without_code');
+                const criterionCode = criterion?.code || t('criterion_without_code');
+                const criterionDescription = criterion?.description || t('criterion_without_description');
+                const currentLevel = scores[item.id] || '';
+
+                const scoreCells = RUBRIC_LEVELS.map(level => {
+                    const levelLabel = t(`rubric_level_${level}_label`);
+                    const template = item.levelComments?.[level]?.trim() || '';
+                    const tooltip = template ? `${levelLabel} · ${template}` : levelLabel;
+                    const isActive = currentLevel === level;
+                    const buttonClasses = `${baseLevelButtonClass} ${isActive ? levelStyles[level].active : levelStyles[level].inactive}`;
+                    return `<td class="px-2 py-2 text-center align-top">
+                        <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${buttonClasses}" aria-pressed="${isActive}" title="${escapeHtml(tooltip)}">
+                            <span class="block text-[11px] font-bold leading-none">${level}</span>
+                            <span class="block text-[10px] leading-tight">${escapeHtml(levelLabel)}</span>
+                        </button>
+                    </td>`;
+                }).join('');
+
+                const nameCell = index === 0
+                    ? `<th scope="row" rowspan="${rubricItems.length}" class="px-3 py-3 text-sm font-semibold text-gray-700 dark:text-gray-200 align-top min-w-[10rem]">${escapeHtml(student.name)}</th>`
+                    : '';
+
+                const commentCell = index === 0
+                    ? `<td rowspan="${rubricItems.length}" class="px-3 py-3 align-top min-w-[16rem]">
+                            <textarea data-action="update-rubric-general-comment" data-learning-activity-id="${activity.id}" data-student-id="${student.id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm min-h-[6rem]" placeholder="${t('rubric_general_comment_placeholder')}">${escapeHtml(comment)}</textarea>
+                        </td>`
+                    : '';
+
                 return `
-                    <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${classes}" aria-pressed="${isActive}" title="${escapeHtml(tooltip)}">
-                        <span class="text-[10px] font-bold">${level}</span>
-                        <span class="text-[10px] leading-tight">${escapeHtml(levelLabel)}</span>
-                    </button>
+                    <tr>
+                        ${nameCell}
+                        <td class="px-3 py-3 align-top min-w-[14rem]">
+                            <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(criterionCode)}</div>
+                            <div class="text-xs text-gray-600 dark:text-gray-300">${escapeHtml(competencyLabel)}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${escapeHtml(criterionDescription)}</div>
+                        </td>
+                        ${scoreCells}
+                        ${commentCell}
+                    </tr>
                 `;
             }).join('');
-            return `<td class="px-4 py-3 align-top"><div class="grid grid-cols-2 gap-2">${buttons}</div></td>`;
+
+            return studentRows;
         }).join('');
 
-        return `
-            <tr>
-                <th scope="row" class="px-3 py-3 text-sm font-semibold text-gray-700 dark:text-gray-200 align-top" style="width:10%">${escapeHtml(student.name)}</th>
-                ${scoreCells}
-                <td class="px-3 py-3 align-top min-w-[16rem]">
-                    <textarea data-action="update-rubric-general-comment" data-learning-activity-id="${activity.id}" data-student-id="${student.id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm min-h-[6rem]" placeholder="${t('rubric_general_comment_placeholder')}">${escapeHtml(comment)}</textarea>
-                </td>
-            </tr>
+    const studentSearchHtml = rubricItems.length === 0 || studentsInClass.length === 0
+        ? ''
+        : `
+            <div class="mb-4">
+                <label for="rubric-student-search" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('rubric_student_search_label')}</label>
+                <div class="relative">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <input id="rubric-student-search" type="text" value="${escapeHtml(state.learningActivityRubricFilter || '')}" data-action="filter-learning-activity-rubric-students" class="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600" placeholder="${t('rubric_student_search_placeholder')}">
+                </div>
+            </div>
         `;
-    }).join('');
+
+    const noStudentsMessage = searchTerm && studentsInClass.length > 0
+        ? `<p class="text-sm text-gray-500 dark:text-gray-400">${t('rubric_no_students_search')}</p>`
+        : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('rubric_no_students_assessment')}</p>`;
+
+    const assessmentTableHtml = assessmentRowsHtml
+        ? `
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-white dark:bg-gray-800">
+                        <tr>
+                            <th scope="col" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[10rem]">${t('rubric_students_column')}</th>
+                            <th scope="col" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[14rem]">${t('rubric_criterion_column')}</th>
+                            ${levelHeaderCells}
+                            <th scope="col" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[16rem]">${t('rubric_general_comment_column')}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+                        ${assessmentRowsHtml}
+                    </tbody>
+                </table>
+            </div>
+        `
+        : noStudentsMessage;
 
     const assessmentContent = rubricItems.length === 0
         ? `<p class="text-sm text-gray-500 dark:text-gray-400">${t('rubric_no_items_assessment')}</p>`
         : studentsInClass.length === 0
             ? `<p class="text-sm text-gray-500 dark:text-gray-400">${t('rubric_no_students_assessment')}</p>`
-            : `
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-white dark:bg-gray-800">
-                            <tr>
-                                <th scope="col" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400" style="width:10%">${t('rubric_students_column')}</th>
-                                ${assessmentHeadersHtml}
-                                <th scope="col" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[16rem]">${t('rubric_general_comment_column')}</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
-                            ${assessmentRowsHtml}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-
+            : `${studentSearchHtml}${assessmentTableHtml}`;
     const descriptionHtml = activity.description?.trim()
         ? `<p class="mt-2 text-sm text-gray-600 dark:text-gray-300">${escapeHtml(activity.description.trim())}</p>`
         : '';

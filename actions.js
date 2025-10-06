@@ -595,11 +595,13 @@ export const actionHandlers = {
         ensureLearningActivityRubric(activity);
         state.activeLearningActivityRubricId = activityId;
         state.learningActivityRubricTab = 'configuration';
+        state.learningActivityRubricFilter = '';
         state.activeView = 'learningActivityRubric';
     },
     'close-learning-activity-rubric': () => {
         state.activeLearningActivityRubricId = null;
         state.learningActivityRubricTab = 'configuration';
+        state.learningActivityRubricFilter = '';
         state.activeView = 'activities';
     },
     'set-learning-activity-rubric-tab': (id, element) => {
@@ -720,6 +722,10 @@ export const actionHandlers = {
         }
         rubric.evaluations[studentId].comment = element.value;
         saveState();
+    },
+    'filter-learning-activity-rubric-students': (id, element) => {
+        if (!element) return;
+        state.learningActivityRubricFilter = element.value;
     },
 
     // --- Student Actions ---
