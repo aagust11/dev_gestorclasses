@@ -1,8 +1,34 @@
 // actions.js: Define toda la lógica de las acciones del usuario.
 
-import { state, saveState, getRandomPastelColor } from './state.js';
+import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS } from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate } from './utils.js';
 import { t } from './i18n.js';
+
+function generateRubricItemId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    const random = Math.random().toString(16).slice(2, 10);
+    return `rubric-item-${Date.now()}-${random}`;
+}
+
+function ensureLearningActivityRubric(activity) {
+    if (!activity) return null;
+    if (!activity.rubric) {
+        activity.rubric = createEmptyRubric();
+    } else {
+        activity.rubric = normalizeRubric(activity.rubric);
+    }
+    return activity.rubric;
+}
+
+function createDefaultLevelComments() {
+    const comments = {};
+    RUBRIC_LEVELS.forEach(level => {
+        comments[level] = '';
+    });
+    return comments;
+}
 
 function escapeRegExp(str) {
     return str.replace(/[-/\^$*+?.()|[\]{}]/g, '\$&');
@@ -341,6 +367,8 @@ export const actionHandlers = {
                     isNew: false,
                     startDate: existing.startDate || '',
                     endDate: existing.endDate || '',
+                    rubric: normalizeRubric(existing?.rubric),
+                    status: existing?.status || LEARNING_ACTIVITY_STATUS.SCHEDULED,
                 };
             } else {
                 state.learningActivityDraft = {
@@ -352,6 +380,8 @@ export const actionHandlers = {
                     isNew: true,
                     startDate: '',
                     endDate: '',
+                    rubric: createEmptyRubric(),
+                    status: LEARNING_ACTIVITY_STATUS.SCHEDULED,
                 };
             }
 
@@ -362,6 +392,8 @@ export const actionHandlers = {
         if (!state.learningActivityDraft.endDate) {
             state.learningActivityDraft.endDate = computeDefaultEndDate(state.learningActivityDraft.startDate);
         }
+
+        state.learningActivityDraft.status = calculateLearningActivityStatus(state.learningActivityDraft);
 
         state.learningActivityGuideVisible = false;
         state.learningActivityCriteriaModalOpen = false;
@@ -386,11 +418,14 @@ export const actionHandlers = {
             isNew: true,
             startDate: '',
             endDate: '',
+            rubric: createEmptyRubric(),
+            status: LEARNING_ACTIVITY_STATUS.SCHEDULED,
         };
 
         const todayString = formatDate(new Date());
         state.learningActivityDraft.startDate = todayString;
         state.learningActivityDraft.endDate = computeDefaultEndDate(todayString);
+        state.learningActivityDraft.status = calculateLearningActivityStatus(state.learningActivityDraft);
 
         state.learningActivityGuideVisible = false;
         state.learningActivityCriteriaModalOpen = false;
@@ -402,6 +437,8 @@ export const actionHandlers = {
         state.learningActivityGuideVisible = false;
         state.learningActivityCriteriaModalOpen = false;
         state.pendingCompetencyHighlightId = null;
+        state.activeLearningActivityRubricId = null;
+        state.learningActivityRubricTab = 'configuration';
         state.activeView = 'activities';
     },
     'update-learning-activity-title': (id, element) => {
@@ -487,6 +524,12 @@ export const actionHandlers = {
         }
 
         const now = new Date().toISOString();
+        const normalizedRubric = normalizeRubric(draft.rubric);
+        const computedStatus = calculateLearningActivityStatus({
+            startDate: draft.startDate,
+            endDate: draft.endDate,
+            status: draft.status,
+        });
 
         if (draft.isNew) {
             state.learningActivities.push({
@@ -499,6 +542,8 @@ export const actionHandlers = {
                 updatedAt: now,
                 startDate: draft.startDate || '',
                 endDate: draft.endDate || '',
+                rubric: normalizedRubric,
+                status: computedStatus,
             });
         } else {
             const index = state.learningActivities.findIndex(act => act.id === draft.id);
@@ -512,6 +557,8 @@ export const actionHandlers = {
                 updatedAt: now,
                 startDate: draft.startDate || '',
                 endDate: draft.endDate || '',
+                rubric: normalizedRubric,
+                status: computedStatus,
             };
             if (index === -1) {
                 state.learningActivities.push(persisted);
@@ -538,6 +585,143 @@ export const actionHandlers = {
         }
         state.expandedLearningActivityClassIds = expanded;
     },
+
+    // --- Rubric Actions ---
+    'open-learning-activity-rubric': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        if (!activityId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        ensureLearningActivityRubric(activity);
+        state.activeLearningActivityRubricId = activityId;
+        state.learningActivityRubricTab = 'configuration';
+        state.activeView = 'learningActivityRubric';
+    },
+    'close-learning-activity-rubric': () => {
+        state.activeLearningActivityRubricId = null;
+        state.learningActivityRubricTab = 'configuration';
+        state.activeView = 'activities';
+    },
+    'set-learning-activity-rubric-tab': (id, element) => {
+        const tab = element?.dataset?.tab;
+        const allowedTabs = ['configuration', 'assessment'];
+        if (allowedTabs.includes(tab)) {
+            state.learningActivityRubricTab = tab;
+        }
+    },
+    'add-rubric-item': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        if (!activityId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        const select = document.getElementById(`rubric-add-select-${activityId}`);
+        if (!select) return;
+        const value = select.value;
+        if (!value) return;
+        const [competencyId = '', criterionId = ''] = value.split('|');
+        rubric.items.push({
+            id: generateRubricItemId(),
+            competencyId,
+            criterionId,
+            weight: 1,
+            levelComments: createDefaultLevelComments(),
+        });
+        select.value = '';
+        saveState();
+        document.dispatchEvent(new CustomEvent('render'));
+    },
+    'remove-rubric-item': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const itemId = element?.dataset?.itemId;
+        if (!activityId || !itemId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        const index = rubric.items.findIndex(item => item.id === itemId);
+        if (index !== -1) {
+            rubric.items.splice(index, 1);
+            saveState();
+            document.dispatchEvent(new CustomEvent('render'));
+        }
+    },
+    'move-rubric-item': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const itemId = element?.dataset?.itemId;
+        const direction = element?.dataset?.direction;
+        if (!activityId || !itemId || !direction) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        const index = rubric.items.findIndex(item => item.id === itemId);
+        if (index === -1) return;
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        if (targetIndex < 0 || targetIndex >= rubric.items.length) return;
+        [rubric.items[index], rubric.items[targetIndex]] = [rubric.items[targetIndex], rubric.items[index]];
+        saveState();
+        document.dispatchEvent(new CustomEvent('render'));
+    },
+    'update-rubric-item-weight': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const itemId = element?.dataset?.itemId;
+        if (!activityId || !itemId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        const item = rubric.items.find(entry => entry.id === itemId);
+        if (!item) return;
+        const value = parseFloat(element.value);
+        item.weight = Number.isFinite(value) ? value : 1;
+        saveState();
+    },
+    'update-rubric-item-comment': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const itemId = element?.dataset?.itemId;
+        const level = element?.dataset?.level;
+        if (!activityId || !itemId || !level || !RUBRIC_LEVELS.includes(level)) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        const item = rubric.items.find(entry => entry.id === itemId);
+        if (!item) return;
+        item.levelComments[level] = element.value;
+        saveState();
+    },
+    'set-rubric-score': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const itemId = element?.dataset?.itemId;
+        const studentId = element?.dataset?.studentId;
+        const level = element?.dataset?.level;
+        if (!activityId || !itemId || !studentId || !level || !RUBRIC_LEVELS.includes(level)) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        if (!rubric.evaluations[studentId]) {
+            rubric.evaluations[studentId] = { scores: {}, comment: '' };
+        }
+        const current = rubric.evaluations[studentId].scores[itemId];
+        if (current === level) {
+            delete rubric.evaluations[studentId].scores[itemId];
+        } else {
+            rubric.evaluations[studentId].scores[itemId] = level;
+        }
+        saveState();
+        document.dispatchEvent(new CustomEvent('render'));
+    },
+    'update-rubric-general-comment': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const studentId = element?.dataset?.studentId;
+        if (!activityId || !studentId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        if (!rubric.evaluations[studentId]) {
+            rubric.evaluations[studentId] = { scores: {}, comment: '' };
+        }
+        rubric.evaluations[studentId].comment = element.value;
+        saveState();
+    },
+
     // --- Student Actions ---
     'add-student-to-class': (id, element) => {
         const activityId = element.dataset.activityId;

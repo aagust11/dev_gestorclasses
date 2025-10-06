@@ -23,6 +23,7 @@ function render() {
         case 'classes': viewContent = views.renderClassesView(); break;
         case 'activities': viewContent = views.renderActivitiesView(); break;
         case 'learningActivityEditor': viewContent = views.renderLearningActivityEditorView(); break;
+        case 'learningActivityRubric': viewContent = views.renderLearningActivityRubricView(); break;
         case 'settings': viewContent = views.renderSettingsView(); break;
         case 'competencyDetail': viewContent = views.renderCompetencyDetailView(); break;
         case 'activityDetail': viewContent = views.renderActivityDetailView(); break;
@@ -61,7 +62,8 @@ function updateMobileHeader() {
         activityDetail: 'activity_detail_view_title',
         studentDetail: 'student_detail_view_title',
         competencyDetail: 'competency_detail_view_title',
-        learningActivityEditor: 'activities_editor_header'
+        learningActivityEditor: 'activities_editor_header',
+        learningActivityRubric: 'learning_activity_rubric_view_title'
     };
     mobileHeaderTitle.textContent = t(keyMap[state.activeView] || 'app_title');
 }
@@ -106,7 +108,9 @@ function handleAction(action, element, event) {
         'open-learning-activity-editor', 'open-learning-activity-quick', 'back-to-activities',
         'save-learning-activity-draft', 'toggle-learning-activity-list', 'toggle-competency-guide',
         'toggle-learning-activity-criterion', 'open-learning-activity-criteria',
-        'close-learning-activity-criteria', 'go-to-competency-settings'
+        'close-learning-activity-criteria', 'go-to-competency-settings',
+        'open-learning-activity-rubric', 'close-learning-activity-rubric', 'set-learning-activity-rubric-tab',
+        'add-rubric-item', 'remove-rubric-item', 'move-rubric-item', 'set-rubric-score'
     ];
 
     if (actionHandlers[action]) {
