@@ -2154,7 +2154,7 @@ export function renderLearningActivityRubricView() {
     const flagButtonBaseClass = 'inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600';
     const flagButtonVariants = {
         notPresented: {
-            active: 'bg-red-600 text-white border-red-700 shadow-sm',
+            active: 'bg-gray-700 text-white border-gray-800 shadow-sm',
             inactive: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-200 dark:border-red-700 dark:hover:bg-red-900/40'
         },
         deliveredLate: {
@@ -2208,9 +2208,6 @@ export function renderLearningActivityRubricView() {
                 }).join('');
 
                 const statusBadges = [];
-                if (isNotPresented) {
-                    statusBadges.push(`<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/40 dark:text-red-200 dark:border-red-700"><i data-lucide="shredder" class="w-3 h-3"></i>${escapeHtml(t('rubric_flag_not_presented_short'))}</span>`);
-                }
                 if (isDeliveredLate && !isNotPresented) {
                     statusBadges.push(`<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700"><i data-lucide="file-clock" class="w-3 h-3"></i>${escapeHtml(t('rubric_flag_delivered_late_badge'))}</span>`);
                 }
