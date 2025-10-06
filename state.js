@@ -6,7 +6,8 @@ const pastelColors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A
 export const LEARNING_ACTIVITY_STATUS = {
     SCHEDULED: 'scheduled',
     OPEN_SUBMISSIONS: 'open_submissions',
-    PENDING_REVIEW: 'pending_review'
+    PENDING_REVIEW: 'pending_review',
+    CORRECTED: 'corrected'
 };
 
 export const RUBRIC_LEVELS = ['NA', 'AS', 'AN', 'AE'];
@@ -110,6 +111,67 @@ function parseDateValue(dateString, endOfDay = false) {
     return date;
 }
 
+function isLearningActivityFullyAssessed(activity) {
+    if (!activity || !activity.classId) {
+        return false;
+    }
+
+    const targetClass = state.activities.find(cls => cls.id === activity.classId);
+    if (!targetClass) {
+        return false;
+    }
+
+    const studentIds = Array.isArray(targetClass.studentIds)
+        ? targetClass.studentIds.filter(Boolean)
+        : [];
+
+    if (studentIds.length === 0) {
+        return false;
+    }
+
+    const rubric = activity.rubric && typeof activity.rubric === 'object' ? activity.rubric : null;
+    if (!rubric) {
+        return false;
+    }
+
+    const rubricItems = Array.isArray(rubric.items) ? rubric.items : [];
+    if (rubricItems.length === 0) {
+        return false;
+    }
+
+    const evaluations = rubric.evaluations && typeof rubric.evaluations === 'object'
+        ? rubric.evaluations
+        : {};
+
+    return studentIds.every(studentId => {
+        const evaluation = evaluations[studentId];
+        if (!evaluation || typeof evaluation !== 'object') {
+            return false;
+        }
+
+        const flags = evaluation.flags && typeof evaluation.flags === 'object'
+            ? evaluation.flags
+            : {};
+
+        if (flags.notPresented) {
+            return true;
+        }
+
+        const scores = evaluation.scores && typeof evaluation.scores === 'object'
+            ? evaluation.scores
+            : {};
+
+        return rubricItems.every(item => {
+            const value = scores[item.id];
+            if (typeof value !== 'string') {
+                return false;
+            }
+            const normalized = value.trim();
+            return RUBRIC_LEVELS.includes(normalized);
+        });
+    });
+}
+
 export function calculateLearningActivityStatus(activity, referenceDate = new Date()) {
     if (!activity) {
         return LEARNING_ACTIVITY_STATUS.SCHEDULED;
@@ -117,6 +179,10 @@ export function calculateLearningActivityStatus(activity, referenceDate = new Da
 
     if (activity.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(activity.status)) {
         return activity.status;
+    }
+
+    if (isLearningActivityFullyAssessed(activity)) {
+        return LEARNING_ACTIVITY_STATUS.CORRECTED;
     }
 
     const today = new Date(referenceDate);
