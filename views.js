@@ -1766,9 +1766,9 @@ export function renderLearningActivityRubricView() {
                     const isActive = currentLevel === level;
                     const buttonClasses = `${baseLevelButtonClass} ${isActive ? levelStyles[level].active : levelStyles[level].inactive}`;
                     return `<td class="px-2 py-2 text-center align-top">
-                        <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${buttonClasses}" aria-pressed="${isActive}" title="${escapeHtml(tooltip)}">
+                        <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${buttonClasses}" aria-pressed="${isActive}" aria-label="${escapeHtml(levelLabel)}" title="${escapeHtml(tooltip)}">
                             <span class="block text-[11px] font-bold leading-none">${level}</span>
-                            <span class="block text-[10px] leading-tight">${escapeHtml(levelLabel)}</span>
+                            <span class="sr-only">${escapeHtml(levelLabel)}</span>
                         </button>
                     </td>`;
                 }).join('');
@@ -1819,7 +1819,7 @@ export function renderLearningActivityRubricView() {
     const assessmentTableHtml = assessmentRowsHtml
         ? `
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 rubric-assessment-table">
                     <thead class="bg-white dark:bg-gray-800">
                         <tr>
                             <th scope="col" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[10rem]">${t('rubric_students_column')}</th>
