@@ -2767,6 +2767,10 @@ export function renderLearningActivityRubricView() {
         : [];
 
     const levelStyles = {
+        NP: {
+            active: 'bg-gray-700 text-white border-gray-800',
+            inactive: 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600'
+        },
         NA: { active: 'bg-red-600 text-white border-red-700', inactive: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-200 dark:border-red-700' },
         AS: { active: 'bg-amber-500 text-white border-amber-600', inactive: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-700' },
         AN: { active: 'bg-blue-600 text-white border-blue-700', inactive: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-200 dark:border-blue-700' },
