@@ -82,6 +82,8 @@ export function loadState() {
             criteriaRefs: Array.isArray(activity?.criteriaRefs) ? activity.criteriaRefs : [],
             createdAt: activity?.createdAt || new Date().toISOString(),
             updatedAt: activity?.updatedAt || activity?.createdAt || new Date().toISOString(),
+            startDate: activity?.startDate || '',
+            endDate: activity?.endDate || '',
         }));
         state.students = parsedData.students || [];
         state.timeSlots = parsedData.timeSlots || [];
