@@ -110,7 +110,8 @@ function handleAction(action, element, event) {
         'toggle-learning-activity-criterion', 'open-learning-activity-criteria',
         'close-learning-activity-criteria', 'go-to-competency-settings',
         'open-learning-activity-rubric', 'close-learning-activity-rubric', 'set-learning-activity-rubric-tab',
-        'add-rubric-item', 'remove-rubric-item', 'move-rubric-item', 'set-rubric-score'
+        'add-rubric-item', 'remove-rubric-item', 'move-rubric-item', 'set-rubric-score',
+        'filter-learning-activity-rubric-students'
     ];
 
     if (actionHandlers[action]) {

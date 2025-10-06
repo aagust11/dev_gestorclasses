@@ -40,6 +40,7 @@ export const state = {
     pendingCompetencyHighlightId: null,
     activeLearningActivityRubricId: null,
     learningActivityRubricTab: 'configuration',
+    learningActivityRubricFilter: '',
 };
 
 function generateId(prefix = 'id') {
