@@ -1,6 +1,15 @@
 // views.js: Contiene todas las funciones que generan el HTML de las vistas.
 
-import { state, LEARNING_ACTIVITY_STATUS, RUBRIC_LEVELS, calculateLearningActivityStatus } from './state.js';
+import {
+    state,
+    LEARNING_ACTIVITY_STATUS,
+    RUBRIC_LEVELS,
+    calculateLearningActivityStatus,
+    normalizeEvaluationSettings,
+    EVALUATION_TYPES,
+    TERM_EVALUATION_METHODS,
+    COMPETENCIAL_LEVEL_ORDER
+} from './state.js';
 import { darkenColor, getWeekStartDate, getWeekDateRange, formatDate, isSameDate, findNextSession, findPreviousSession, DAY_KEYS, findNextClassSession, getCurrentTermDateRange, getWeeksForCourse, isHoliday, normalizeStudentAnnotation, STUDENT_ATTENDANCE_STATUS, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
 
@@ -1674,6 +1683,7 @@ export function renderSettingsView() {
         { id: 'calendar', labelKey: 'settings_tab_calendar', icon: 'calendar-days' },
         { id: 'schedule', labelKey: 'settings_tab_schedule', icon: 'clock' },
         { id: 'activities', labelKey: 'settings_tab_activities', icon: 'users' },
+        { id: 'evaluation', labelKey: 'settings_tab_evaluation', icon: 'scale' },
         { id: 'competencies', labelKey: 'settings_tab_competencies', icon: 'target' },
         { id: 'data', labelKey: 'settings_tab_data', icon: 'database' }
     ];
@@ -1979,6 +1989,189 @@ export function renderSettingsView() {
         </div>
     `;
 
+    const evaluationClasses = state.activities
+        .filter(activity => activity.type === 'class')
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    const levelLabelKeys = {
+        NP: 'evaluation_level_np',
+        NA: 'evaluation_level_na',
+        AS: 'evaluation_level_as',
+        AN: 'evaluation_level_an',
+        AE: 'evaluation_level_ae'
+    };
+
+    const evaluationCardsHtml = evaluationClasses.map(cls => {
+        const settings = normalizeEvaluationSettings(cls.evaluationSettings);
+        cls.evaluationSettings = settings;
+        const evaluationType = settings.type;
+        const competencial = settings.competencial;
+
+        const evaluationTypeOptions = [
+            { value: EVALUATION_TYPES.COMPETENCIAL, label: t('evaluation_type_competencial') },
+            { value: EVALUATION_TYPES.NUMERICAL, label: t('evaluation_type_numerical') }
+        ].map(option => {
+            const isSelected = option.value === evaluationType;
+            return `<option value="${option.value}" ${isSelected ? 'selected' : ''}>${escapeHtml(option.label)}</option>`;
+        }).join('');
+
+        const levelRows = COMPETENCIAL_LEVEL_ORDER.map(level => {
+            const labelKey = levelLabelKeys[level] || level;
+            const label = t(labelKey);
+            const value = Number.isFinite(competencial.levelValues[level])
+                ? competencial.levelValues[level]
+                : '';
+            const valueAttr = escapeAttribute(String(value));
+            return `
+                <tr class="border-b border-gray-100 dark:border-gray-700 last:border-0">
+                    <th scope="row" class="py-2 pr-4 text-left text-sm font-medium text-gray-700 dark:text-gray-200">${escapeHtml(label)}</th>
+                    <td class="py-2">
+                        <input type="number" step="0.1" class="w-28 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm"
+                            value="${valueAttr}"
+                            data-action="update-competencial-level-value"
+                            data-activity-id="${cls.id}"
+                            data-level="${level}">
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        const minimumRows = ['NA', 'AS', 'AN', 'AE'].map(level => {
+            const labelKey = levelLabelKeys[level] || level;
+            const label = t(labelKey);
+            if (level === 'NA') {
+                return `
+                    <div class="flex items-center justify-between gap-4">
+                        <div class="text-sm font-medium text-gray-700 dark:text-gray-200">${escapeHtml(label)}</div>
+                        <input type="number" value="0" disabled class="w-28 p-2 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
+                    </div>
+                `;
+            }
+            const value = Number.isFinite(competencial.levelMinimums[level])
+                ? competencial.levelMinimums[level]
+                : '';
+            const valueAttr = escapeAttribute(String(value));
+            return `
+                <div class="flex items-center justify-between gap-4">
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-200" for="evaluation-min-${cls.id}-${level}">${escapeHtml(label)}</label>
+                    <input id="evaluation-min-${cls.id}-${level}" type="number" min="0" step="0.1" class="w-28 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm"
+                        value="${valueAttr}"
+                        data-action="update-competencial-minimum"
+                        data-activity-id="${cls.id}"
+                        data-level="${level}">
+                </div>
+            `;
+        }).join('');
+
+        const termMethodOptions = [
+            { value: TERM_EVALUATION_METHODS.WEIGHTED_AVERAGE, label: t('evaluation_term_method_weighted') },
+            { value: TERM_EVALUATION_METHODS.MAJORITY, label: t('evaluation_term_method_majority') }
+        ].map(option => {
+            const isSelected = option.value === competencial.termEvaluationMethod;
+            return `<option value="${option.value}" ${isSelected ? 'selected' : ''}>${escapeHtml(option.label)}</option>`;
+        }).join('');
+
+        const competencialContent = evaluationType === EVALUATION_TYPES.COMPETENCIAL
+            ? `
+                <div class="grid gap-6 lg:grid-cols-2">
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900/30 lg:col-span-2">
+                        <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_competencial_level_values_title')}</h4>
+                        <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">${t('evaluation_competencial_level_values_help')}</p>
+                        <div class="mt-3 overflow-x-auto">
+                            <table class="min-w-full text-left text-sm">
+                                <thead>
+                                    <tr class="text-xs uppercase text-gray-500 dark:text-gray-400">
+                                        <th scope="col" class="py-2 pr-4 font-semibold">${t('evaluation_competencial_level_column')}</th>
+                                        <th scope="col" class="py-2 font-semibold">${t('evaluation_competencial_value_column')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${levelRows}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900">
+                        <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_competencial_minimums_title')}</h4>
+                        <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">${t('evaluation_competencial_minimums_help')}</p>
+                        <div class="mt-3 space-y-3">
+                            ${minimumRows}
+                        </div>
+                    </div>
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900">
+                        <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_competencial_max_not_achieved_title')}</h4>
+                        <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">${t('evaluation_competencial_max_not_achieved_help')}</p>
+                        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" for="evaluation-max-term-${cls.id}">${t('evaluation_competencial_max_not_achieved_term_label')}</label>
+                                <input id="evaluation-max-term-${cls.id}" type="number" min="0" step="1" class="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm"
+                                    value="${escapeAttribute(String(competencial.maxNotAchieved.term))}"
+                                    data-action="update-evaluation-max-not-achieved"
+                                    data-activity-id="${cls.id}"
+                                    data-scope="term">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" for="evaluation-max-course-${cls.id}">${t('evaluation_competencial_max_not_achieved_course_label')}</label>
+                                <input id="evaluation-max-course-${cls.id}" type="number" min="0" step="1" class="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm"
+                                    value="${escapeAttribute(String(competencial.maxNotAchieved.course))}"
+                                    data-action="update-evaluation-max-not-achieved"
+                                    data-activity-id="${cls.id}"
+                                    data-scope="course">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900 lg:col-span-2">
+                        <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_term_method_title')}</h4>
+                        <div class="mt-2">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" for="evaluation-term-method-${cls.id}">${t('evaluation_term_method_select_label')}</label>
+                            <select id="evaluation-term-method-${cls.id}" class="mt-1 w-full sm:w-64 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm"
+                                data-action="update-term-evaluation-method"
+                                data-activity-id="${cls.id}">
+                                ${termMethodOptions}
+                            </select>
+                        </div>
+                        <ul class="mt-3 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                            <li><span class="font-medium text-gray-700 dark:text-gray-200">${t('evaluation_term_method_weighted')}</span>: ${t('evaluation_term_method_help_weighted')}</li>
+                            <li><span class="font-medium text-gray-700 dark:text-gray-200">${t('evaluation_term_method_majority')}</span>: ${t('evaluation_term_method_help_majority')}</li>
+                        </ul>
+                    </div>
+                </div>
+            `
+            : `
+                <div class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4 text-sm text-yellow-800 dark:text-yellow-100">
+                    <p class="font-medium">${t('evaluation_type_numerical_placeholder_title')}</p>
+                    <p class="mt-1">${t('evaluation_type_numerical_placeholder_body')}</p>
+                </div>
+            `;
+
+        return `
+            <section class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-5">
+                <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(cls.name)}</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">${t('evaluation_settings_class_subtitle')}</p>
+                    </div>
+                </header>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200" for="evaluation-type-${cls.id}">${t('evaluation_type_label')}</label>
+                        <select id="evaluation-type-${cls.id}" class="mt-1 w-full sm:w-72 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm"
+                            data-action="update-evaluation-type"
+                            data-activity-id="${cls.id}">
+                            ${evaluationTypeOptions}
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${t('evaluation_type_help')}</p>
+                    </div>
+                    ${competencialContent}
+                </div>
+            </section>
+        `;
+    }).join('');
+
+    const evaluationTabContent = evaluationClasses.length === 0
+        ? `<div class="p-6 text-gray-500 dark:text-gray-400">${t('evaluation_settings_no_classes')}</div>`
+        : `<div class="space-y-6">${evaluationCardsHtml}</div>`;
+
     // --- Competencies Tab Content ---
     const classesWithStudents = state.activities.filter(a => a.type === 'class').sort((a, b) => a.name.localeCompare(b.name));
 
@@ -2074,6 +2267,7 @@ export function renderSettingsView() {
         case 'calendar': activeTabContent = calendarTabContent; break;
         case 'schedule': activeTabContent = scheduleTabContent; break;
         case 'activities': activeTabContent = activitiesTabContent; break;
+        case 'evaluation': activeTabContent = evaluationTabContent; break;
         case 'competencies': activeTabContent = competenciesTabContent; break;
         case 'data': activeTabContent = dataTabContent; break;
         default: activeTabContent = calendarTabContent;
