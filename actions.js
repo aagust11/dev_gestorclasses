@@ -17,6 +17,7 @@ import {
 } from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate } from './utils.js';
 import { t } from './i18n.js';
+import { calculateAndMergeTermGrades, setManualGrade } from './grades.js';
 
 function generateRubricItemId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -432,11 +433,11 @@ export const actionHandlers = {
 
     'set-evaluation-tab': (id, element) => {
         const tab = element?.dataset?.tab;
-        const allowedTabs = ['activities', 'grades'];
+        const allowedTabs = ['activities', 'grades', 'term-grades'];
         if (!tab || !allowedTabs.includes(tab)) return;
         state.evaluationActiveTab = tab;
 
-        if (tab === 'grades') {
+        if (tab === 'grades' || tab === 'term-grades') {
             const classes = state.activities
                 .filter(activity => activity.type === 'class')
                 .sort((a, b) => a.name.localeCompare(b.name));
@@ -460,6 +461,45 @@ export const actionHandlers = {
         state.evaluationSelectedTermId = value !== 'all' && !validIds.has(value) ? 'all' : value;
     },
 
+    'calculate-term-grades': (id, element) => {
+        const classId = element?.dataset?.classId || state.selectedEvaluationClassId;
+        const termId = element?.dataset?.termId || state.evaluationSelectedTermId || 'all';
+        if (!classId || !termId) {
+            return;
+        }
+
+        const calculation = calculateAndMergeTermGrades(classId, termId);
+        if (!state.termGrades[classId]) {
+            state.termGrades[classId] = {};
+        }
+        state.termGrades[classId][termId] = calculation;
+        saveState();
+    },
+
+    'update-term-grade-field': (id, element) => {
+        if (!element) return;
+        const { classId, termId, studentId, scope, targetId, field } = element.dataset;
+        if (!classId || !termId || !studentId || !scope || !targetId || !field) return;
+
+        const classGrades = state.termGrades?.[classId]?.[termId];
+        if (!classGrades) {
+            return;
+        }
+
+        setManualGrade(state.termGrades, classId, termId, studentId, scope, targetId, (entry) => {
+            if (field === 'numeric') {
+                const rawValue = element.value;
+                const parsed = rawValue === '' ? null : Number.parseFloat(rawValue);
+                entry.numeric = Number.isFinite(parsed) ? parsed : null;
+            } else if (field === 'level') {
+                const levelValue = element.value;
+                entry.level = RUBRIC_LEVELS.includes(levelValue) ? levelValue : '';
+            }
+            entry.markers = {};
+        });
+
+        state.termGrades[classId][termId].lastCalculatedAt = new Date().toISOString();
+        saveState();
     'update-evaluation-type': (id, element) => {
         const activityId = element?.dataset?.activityId;
         const value = element?.value;

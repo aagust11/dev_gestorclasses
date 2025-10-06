@@ -58,6 +58,7 @@ export const state = {
     selectedEvaluationClassId: null,
     evaluationSelectedTermId: 'all',
     learningActivityRubricReturnView: null,
+    termGrades: {},
 };
 
 export function createDefaultEvaluationSettings() {
@@ -284,6 +285,7 @@ export function saveState() {
         evaluationActiveTab: state.evaluationActiveTab,
         selectedEvaluationClassId: state.selectedEvaluationClassId,
         evaluationSelectedTermId: state.evaluationSelectedTermId,
+        termGrades: state.termGrades,
     };
     localStorage.setItem('teacherDashboardData', JSON.stringify(dataToSave));
     
@@ -338,6 +340,9 @@ export function loadState() {
         state.evaluationActiveTab = parsedData.evaluationActiveTab || 'activities';
         state.selectedEvaluationClassId = parsedData.selectedEvaluationClassId || null;
         state.evaluationSelectedTermId = parsedData.evaluationSelectedTermId || 'all';
+        state.termGrades = parsedData.termGrades && typeof parsedData.termGrades === 'object'
+            ? parsedData.termGrades
+            : {};
     }
 
     state.activities.forEach(activity => {
