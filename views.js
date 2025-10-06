@@ -341,6 +341,11 @@ export function renderActivitiesView() {
                 : `<span class="inline-flex items-center gap-1"><i data-lucide="crosshair" class="w-3 h-3"></i>${t('activities_assigned_criteria_none')}</span>`;
             const createdDate = formatDateForDisplay(activity.createdAt);
             const description = activity.description?.trim();
+            const startDateDisplay = formatDateForDisplay(activity.startDate);
+            const endDateDisplay = formatDateForDisplay(activity.endDate);
+            const dateRangeHtml = (startDateDisplay || endDateDisplay)
+                ? `<div class="mt-3 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2"><i data-lucide="calendar-range" class="w-4 h-4"></i><span>${[startDateDisplay, endDateDisplay].filter(Boolean).join(' · ')}</span></div>`
+                : '';
             return `
                 <button
                     data-action="open-learning-activity-editor"
@@ -353,6 +358,7 @@ export function renderActivitiesView() {
                         <span class="text-xs text-blue-600 dark:text-blue-400">${assignedLabelContent}</span>
                     </div>
                     <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">${description || t('activities_no_description')}</p>
+                    ${dateRangeHtml}
                     ${createdDate ? `<div class="mt-3 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2"><i data-lucide="calendar" class="w-4 h-4"></i><span>${t('activities_created_on')} ${createdDate}</span></div>` : ''}
                 </button>
             `;
@@ -482,6 +488,9 @@ export function renderLearningActivityEditorView() {
         };
     }).filter(Boolean);
 
+    const startDateValue = draft.startDate || '';
+    const endDateValue = draft.endDate || '';
+
     const selectedCriteriaHtml = selectedCriteria.length > 0
         ? `<ul class="space-y-2">${selectedCriteria.map(item => `
                 <li class="px-3 py-2 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-gray-700 dark:text-gray-200">
@@ -605,6 +614,16 @@ export function renderLearningActivityEditorView() {
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_description_label')}</label>
                             <textarea data-action="update-learning-activity-description" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md h-36" placeholder="${t('activities_form_description_placeholder')}">${draft.description || ''}</textarea>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('start_date')}</label>
+                                <input type="date" id="learning-activity-start-date" value="${startDateValue}" data-action="update-learning-activity-start-date" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('end_date')}</label>
+                                <input type="date" id="learning-activity-end-date" value="${endDateValue}" data-action="update-learning-activity-end-date" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                            </div>
                         </div>
                     </div>
 
@@ -1493,6 +1512,70 @@ export function renderActivityDetailView() {
         .filter(s => state.selectedActivity.studentIds?.includes(s.id))
         .sort(sortStudentsByName);
 
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+    const activeLearningActivities = state.learningActivities
+        .filter(act => act.classId === activityId)
+        .map(act => {
+            const startDate = act.startDate ? new Date(act.startDate + 'T00:00:00') : null;
+            const endDate = act.endDate ? new Date(act.endDate + 'T23:59:59') : null;
+            return {
+                activity: act,
+                startDate,
+                endDate,
+            };
+        })
+        .filter(item => {
+            if (item.startDate && todayStart < item.startDate) {
+                return false;
+            }
+            if (item.endDate && todayStart > item.endDate) {
+                return false;
+            }
+            return true;
+        })
+        .map(item => ({
+            ...item,
+            daysRemaining: item.endDate ? Math.max(0, Math.ceil((item.endDate.getTime() - todayStart.getTime()) / MS_PER_DAY)) : null,
+        }))
+        .sort((a, b) => {
+            if (a.endDate && b.endDate) {
+                return a.endDate - b.endDate;
+            }
+            if (a.endDate) return -1;
+            if (b.endDate) return 1;
+            return (a.activity.title || '').localeCompare(b.activity.title || '');
+        });
+
+    const formatDueLabel = (item) => {
+        if (!item.endDate) {
+            return t('due_in_days_open');
+        }
+        const days = item.daysRemaining ?? 0;
+        if (days <= 0) {
+            return t('due_in_days_today');
+        }
+        if (days === 1) {
+            return t('due_in_days_one');
+        }
+        return t('due_in_days_other').replace('%COUNT%', days);
+    };
+
+    const activeLearningActivitiesListHtml = activeLearningActivities.length > 0
+        ? `<ul class="space-y-2">${activeLearningActivities.map(item => {
+            const title = item.activity.title?.trim() || t('activities_untitled_label');
+            const dueLabel = formatDueLabel(item);
+            return `
+                <li class="flex items-center justify-between gap-3 p-2 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800">
+                    <span class="text-sm font-medium text-blue-900 dark:text-blue-100">${title}</span>
+                    <span class="text-xs font-semibold text-blue-700 dark:text-blue-200">${dueLabel}</span>
+                </li>
+            `;
+        }).join('')}</ul>`
+        : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('no_active_learning_activities')}</p>`;
+
     const attendanceOptions = [
         {
             status: STUDENT_ATTENDANCE_STATUS.LATE_SHORT,
@@ -1678,8 +1761,12 @@ export function renderActivityDetailView() {
                 ${prevButton}
                 ${nextButton}
             </div>
-            <div class="grid md:grid-cols-2 gap-6 items-start">
-                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md space-y-4">
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md space-y-6">
+                    <div>
+                        <h3 class="text-xs font-semibold tracking-wide text-blue-700 dark:text-blue-200 uppercase">${t('active_learning_activities_title')}</h3>
+                        <div class="mt-3">${activeLearningActivitiesListHtml}</div>
+                    </div>
                     <div><label class="block text-lg font-semibold mb-2 text-gray-700 dark:text-gray-300">${t('planning_for_today')}</label><textarea data-action="planned-change" placeholder="${t('planning_placeholder')}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-32">${entry.planned || ''}</textarea></div>
                     <div><label class="block text-lg font-semibold mb-2 text-gray-700 dark:text-gray-300">${t('summary_of_session')}</label><textarea data-action="completed-change" placeholder="${t('summary_placeholder')}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-32">${entry.completed || ''}</textarea></div>
                 </div>

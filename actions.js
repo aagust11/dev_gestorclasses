@@ -1,7 +1,7 @@
 // actions.js: Define toda la lógica de las acciones del usuario.
 
 import { state, saveState, getRandomPastelColor } from './state.js';
-import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal } from './utils.js';
+import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate } from './utils.js';
 import { t } from './i18n.js';
 
 function escapeRegExp(str) {
@@ -122,6 +122,20 @@ function getNextCompetencyCode(activity) {
     const padded = String(nextNumber).padStart(maxDigits, '0');
     const prefix = defaultPrefix || '';
     return `CE${prefix}${padded}`;
+}
+
+function computeDefaultEndDate(startDateString) {
+    if (!startDateString) {
+        return '';
+    }
+
+    const startDate = new Date(startDateString + 'T00:00:00');
+    if (Number.isNaN(startDate.getTime())) {
+        return '';
+    }
+
+    startDate.setDate(startDate.getDate() + 6);
+    return formatDate(startDate);
 }
 
 function showImportSummary(data) {
@@ -317,24 +331,36 @@ export const actionHandlers = {
         if (!targetClass) return;
 
         const activityId = element.dataset.learningActivityId;
-        if (activityId) {
-            const existing = state.learningActivities.find(act => act.id === activityId);
-            if (!existing) return;
+            if (activityId) {
+                const existing = state.learningActivities.find(act => act.id === activityId);
+                if (!existing) return;
 
-            state.learningActivityDraft = {
-                ...existing,
-                criteriaRefs: Array.isArray(existing.criteriaRefs) ? [...existing.criteriaRefs] : [],
-                isNew: false,
-            };
-        } else {
-            state.learningActivityDraft = {
-                id: crypto.randomUUID(),
-                classId,
-                title: '',
-                description: '',
-                criteriaRefs: [],
-                isNew: true,
-            };
+                state.learningActivityDraft = {
+                    ...existing,
+                    criteriaRefs: Array.isArray(existing.criteriaRefs) ? [...existing.criteriaRefs] : [],
+                    isNew: false,
+                    startDate: existing.startDate || '',
+                    endDate: existing.endDate || '',
+                };
+            } else {
+                state.learningActivityDraft = {
+                    id: crypto.randomUUID(),
+                    classId,
+                    title: '',
+                    description: '',
+                    criteriaRefs: [],
+                    isNew: true,
+                    startDate: '',
+                    endDate: '',
+                };
+            }
+
+        const todayString = formatDate(new Date());
+        if (!state.learningActivityDraft.startDate) {
+            state.learningActivityDraft.startDate = todayString;
+        }
+        if (!state.learningActivityDraft.endDate) {
+            state.learningActivityDraft.endDate = computeDefaultEndDate(state.learningActivityDraft.startDate);
         }
 
         state.learningActivityGuideVisible = false;
@@ -358,7 +384,13 @@ export const actionHandlers = {
             description: '',
             criteriaRefs: [],
             isNew: true,
+            startDate: '',
+            endDate: '',
         };
+
+        const todayString = formatDate(new Date());
+        state.learningActivityDraft.startDate = todayString;
+        state.learningActivityDraft.endDate = computeDefaultEndDate(todayString);
 
         state.learningActivityGuideVisible = false;
         state.learningActivityCriteriaModalOpen = false;
@@ -379,6 +411,31 @@ export const actionHandlers = {
     'update-learning-activity-description': (id, element) => {
         if (!state.learningActivityDraft) return;
         state.learningActivityDraft.description = element.value;
+    },
+    'update-learning-activity-start-date': (id, element) => {
+        if (!state.learningActivityDraft) return;
+        const value = element.value;
+        state.learningActivityDraft.startDate = value;
+
+        const endInput = document.getElementById('learning-activity-end-date');
+
+        if (!value) {
+            state.learningActivityDraft.endDate = '';
+            if (endInput) {
+                endInput.value = '';
+            }
+            return;
+        }
+
+        const computedEnd = computeDefaultEndDate(value);
+        state.learningActivityDraft.endDate = computedEnd;
+        if (endInput) {
+            endInput.value = computedEnd;
+        }
+    },
+    'update-learning-activity-end-date': (id, element) => {
+        if (!state.learningActivityDraft) return;
+        state.learningActivityDraft.endDate = element.value;
     },
     'toggle-learning-activity-criterion': (id, element) => {
         if (!state.learningActivityDraft) return;
@@ -440,6 +497,8 @@ export const actionHandlers = {
                 criteriaRefs: Array.isArray(draft.criteriaRefs) ? [...draft.criteriaRefs] : [],
                 createdAt: now,
                 updatedAt: now,
+                startDate: draft.startDate || '',
+                endDate: draft.endDate || '',
             });
         } else {
             const index = state.learningActivities.findIndex(act => act.id === draft.id);
@@ -451,6 +510,8 @@ export const actionHandlers = {
                 criteriaRefs: Array.isArray(draft.criteriaRefs) ? [...draft.criteriaRefs] : [],
                 createdAt: draft.createdAt || now,
                 updatedAt: now,
+                startDate: draft.startDate || '',
+                endDate: draft.endDate || '',
             };
             if (index === -1) {
                 state.learningActivities.push(persisted);
