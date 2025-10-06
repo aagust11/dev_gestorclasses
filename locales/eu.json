@@ -128,6 +128,7 @@
   "evaluation_status_not_started": "Hasi gabe",
   "evaluation_class_no_pending": "Ikasgai honek ez du jarduera zainik.",
   "evaluation_class_pending_count": "Zain dauden jarduerak: {{count}}",
+  "evaluation_open_activity_assessment": "Ireki {{title}}(r)en ebaluazioa",
   "evaluation_grades_select_class": "Hautatu ikasgai bat kalifikazioak ikusteko.",
   "evaluation_grades_no_students": "Ez dago ikasgai honekin lotutako ikaslerik.",
   "evaluation_grades_no_activities": "Ikasgai honek ez du ebaluazio jarduerarik oraindik.",

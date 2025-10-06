@@ -128,6 +128,7 @@
   "evaluation_status_not_started": "No iniciadas",
   "evaluation_class_no_pending": "No hay actividades pendientes en esta asignatura.",
   "evaluation_class_pending_count": "Actividades pendientes: {{count}}",
+  "evaluation_open_activity_assessment": "Abrir la evaluación de {{title}}",
   "evaluation_grades_select_class": "Selecciona una asignatura para ver las calificaciones.",
   "evaluation_grades_no_students": "No hay alumnado asignado a esta asignatura.",
   "evaluation_grades_no_activities": "Esta asignatura todavía no tiene actividades de evaluación.",

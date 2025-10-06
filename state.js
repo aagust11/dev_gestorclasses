@@ -43,6 +43,7 @@ export const state = {
     learningActivityRubricFilter: '',
     evaluationActiveTab: 'activities',
     selectedEvaluationClassId: null,
+    learningActivityRubricReturnView: null,
 };
 
 function generateId(prefix = 'id') {
