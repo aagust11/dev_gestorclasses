@@ -113,8 +113,7 @@ function handleAction(action, element, event) {
         'close-learning-activity-criteria', 'go-to-competency-settings',
         'open-learning-activity-rubric', 'close-learning-activity-rubric', 'set-learning-activity-rubric-tab',
         'add-rubric-item', 'remove-rubric-item', 'move-rubric-item', 'set-rubric-score',
-        'filter-learning-activity-rubric-students', 'set-evaluation-tab', 'select-evaluation-class',
-        'set-evaluation-term', 'update-evaluation-setting', 'calculate-term-grades', 'update-term-grade-override'
+        'filter-learning-activity-rubric-students', 'set-evaluation-tab', 'select-evaluation-class'
     ];
     const forceRenderActions = ['toggle-rubric-not-presented', 'toggle-rubric-delivered-late'];
     const shouldForceRender = forceRenderActions.includes(action);
@@ -126,13 +125,6 @@ function handleAction(action, element, event) {
             const previousSelection = (() => {
                 if (action === 'filter-learning-activity-rubric-students' && element instanceof HTMLInputElement) {
                     return {
-                        start: element.selectionStart,
-                        end: element.selectionEnd
-                    };
-                }
-                if (action === 'update-term-grade-override' && element instanceof HTMLInputElement) {
-                    return {
-                        elementId: element.id,
                         start: element.selectionStart,
                         end: element.selectionEnd
                     };
@@ -160,22 +152,6 @@ function handleAction(action, element, event) {
                                 searchInput.setSelectionRange(caretPosition, selectionEnd);
                             } catch (err) {
                                 // Some input types do not support setSelectionRange; ignore in that case.
-                            }
-                        }
-                    });
-                }
-                if (action === 'update-term-grade-override' && previousSelection?.elementId) {
-                    requestAnimationFrame(() => {
-                        const target = document.getElementById(previousSelection.elementId);
-                        if (target instanceof HTMLInputElement) {
-                            target.focus({ preventScroll: true });
-                            const { start, end } = previousSelection;
-                            if (typeof start === 'number' && typeof end === 'number') {
-                                try {
-                                    target.setSelectionRange(start, end);
-                                } catch (err) {
-                                    // Ignore selection errors for unsupported input types
-                                }
                             }
                         }
                     });
