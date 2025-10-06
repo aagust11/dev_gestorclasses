@@ -50,10 +50,9 @@ function isActivityWithinTermRange(activity, termRange) {
 }
 
 function renderEvaluationTermFilter() {
-    const rawCurrent = state.evaluationSelectedTermId || 'global';
-    const current = rawCurrent === 'all' ? 'global' : rawCurrent;
+    const current = state.evaluationSelectedTermId || 'all';
     const options = [
-        `<option value="global"${current === 'global' ? ' selected' : ''}>${t('evaluation_term_global_option')}</option>`,
+        `<option value="all"${current === 'all' ? ' selected' : ''}>${t('evaluation_term_all_option')}</option>`,
         ...state.terms.map(term => {
             const name = term.name || t('evaluation_term_default_name');
             const selected = current === term.id ? ' selected' : '';
@@ -79,46 +78,6 @@ function formatNumericValue(value) {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     });
-}
-
-const LEVEL_STYLE_META = {
-    NP: {
-        badge: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/40 dark:text-rose-200 dark:border-rose-700',
-        text: 'text-rose-600 dark:text-rose-300'
-    },
-    NA: {
-        badge: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700',
-        text: 'text-amber-600 dark:text-amber-300'
-    },
-    AS: {
-        badge: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/40 dark:text-sky-200 dark:border-sky-700',
-        text: 'text-sky-600 dark:text-sky-300'
-    },
-    AN: {
-        badge: 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-200 dark:border-indigo-700',
-        text: 'text-indigo-600 dark:text-indigo-300'
-    },
-    AE: {
-        badge: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-700',
-        text: 'text-emerald-600 dark:text-emerald-300'
-    }
-};
-
-function getLevelTextClass(level) {
-    return LEVEL_STYLE_META[level]?.text || 'text-gray-600 dark:text-gray-300';
-}
-
-function renderLevelBadge(level, { size = 'md', showTooltip = true } = {}) {
-    if (!level || !LEVEL_STYLE_META[level]) {
-        return '';
-    }
-    const sizeClasses = size === 'lg'
-        ? 'px-2.5 py-1 text-sm'
-        : size === 'sm'
-            ? 'px-1.5 py-0.5 text-xs'
-            : 'px-2 py-0.5 text-xs';
-    const titleAttr = showTooltip ? ` title="${escapeAttribute(formatQualitativeLabel(level))}"` : '';
-    return `<span class="inline-flex items-center justify-center font-semibold rounded-full border ${LEVEL_STYLE_META[level].badge} ${sizeClasses}"${titleAttr}>${escapeHtml(level)}</span>`;
 }
 
 function formatQualitativeLabel(level) {
@@ -187,18 +146,11 @@ function renderResultCellContent(result) {
         return '<span class="text-gray-400">—</span>';
     }
     const numeric = formatNumericValue(result.numeric);
-    const hasNumeric = numeric !== '—';
-    const badge = renderLevelBadge(result.level, { size: 'sm' });
-    const markers = renderFootnoteMarkers(result.notes);
-    if (!hasNumeric && !badge) {
+    const qualitative = formatQualitativeLabel(result.level);
+    if (numeric === '—' && qualitative === '—') {
         return '<span class="text-gray-400">—</span>';
     }
-    const numericHtml = hasNumeric
-        ? `<span class="font-semibold text-gray-800 dark:text-gray-100">${numeric}${markers}</span>`
-        : '';
-    const badgeHtml = badge ? `<span>${badge}</span>` : '';
-    const markerFallback = !hasNumeric && markers ? `<span>${markers}</span>` : '';
-    return `<div class="flex flex-col items-center justify-center gap-1">${numericHtml}${badgeHtml}${markerFallback}</div>`;
+    return `<span class="font-medium text-gray-800 dark:text-gray-100">${numeric}</span> <span class="text-sm text-gray-600 dark:text-gray-300">(${qualitative})</span>${renderFootnoteMarkers(result.notes)}`;
 }
 function renderMobileHeaderActions(actions) {
     const container = document.getElementById('mobile-header-actions');
@@ -990,7 +942,7 @@ function renderEvaluationGradesTab(classes) {
             const rubricCriterionItems = rubricItems.filter(item => item.type !== 'section');
             const colSpan = Math.max(rubricCriterionItems.length, 1);
             const title = activity.title?.trim() || t('activities_untitled_label');
-            return `<th scope="col" colspan="${colSpan}" class="px-3 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">${escapeHtml(title)}</th>`;
+            return `<th scope="col" colspan="${colSpan}" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${escapeHtml(title)}</th>`;
         }).join('');
 
         const headerRow2 = learningActivities.map(activity => {
@@ -999,7 +951,6 @@ function renderEvaluationGradesTab(classes) {
             if (rubricCriterionItems.length === 0) {
                 return `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${t('evaluation_grades_no_criteria')}</th>`;
             }
-            return rubricItems.map(item => `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center min-w-[11rem]">${getCriterionHeader(item)}</th>`).join('');
             return rubricCriterionItems.map(item => `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-left min-w-[11rem]">${getCriterionHeader(item)}</th>`).join('');
         }).join('');
 
@@ -1031,15 +982,19 @@ function renderEvaluationGradesTab(classes) {
                     const textClasses = isNotPresented
                         ? 'text-red-600 dark:text-red-300 font-semibold'
                         : isDeliveredLate
-                            ? '<span class="text-amber-600 dark:text-amber-300 font-semibold">—</span>'
-                            : '<span class="text-gray-400">—</span>';
-                    const statusIcon = isNotPresented
-                        ? '<i data-lucide="shredder" class="w-3.5 h-3.5 text-red-500 dark:text-red-300"></i>'
+                            ? 'text-amber-600 dark:text-amber-300 font-semibold'
+                            : 'text-gray-400';
+                    const label = isNotPresented
+                        ? t('rubric_flag_not_presented_short')
                         : isDeliveredLate
-                            ? '<i data-lucide="file-clock" class="w-3.5 h-3.5 text-amber-500 dark:text-amber-300"></i>'
+                            ? t('rubric_flag_delivered_late_short')
+                            : '—';
+                    const statusIcon = isNotPresented
+                        ? '<i data-lucide="shredder" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
+                        : isDeliveredLate
+                            ? '<i data-lucide="file-clock" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
                             : '';
-                    const iconHtml = statusIcon ? `<span class="inline-flex items-center">${statusIcon}</span>` : '';
-                    return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><div class="flex items-center justify-center gap-1">${mainContent}${iconHtml}</div></td>`;
+                    return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><span class="${textClasses}">${escapeHtml(label)}</span>${statusIcon}</td>`;
                 }
 
                 return rubricCriterionItems.map(item => {
@@ -1072,12 +1027,11 @@ function renderEvaluationGradesTab(classes) {
                             : 'text-gray-400';
                     }
                     const statusIcon = isNotPresented
-                        ? '<i data-lucide="shredder" class="w-3.5 h-3.5 text-red-500 dark:text-red-300"></i>'
-                        : isDeliveredLate
-                            ? '<i data-lucide="file-clock" class="w-3.5 h-3.5 text-amber-500 dark:text-amber-300"></i>'
+                        ? '<i data-lucide="shredder" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
+                        : isDeliveredLate && !scoreLevel
+                            ? '<i data-lucide="file-clock" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
                             : '';
-                    const iconHtml = statusIcon ? `<span class="inline-flex items-center">${statusIcon}</span>` : '';
-                    return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><div class="flex items-center justify-center gap-1">${mainContent}${iconHtml}</div></td>`;
+                    return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><span class="${textClasses}">${escapeHtml(label)}</span>${statusIcon}</td>`;
                 }).join('');
             }).join('');
 
@@ -1154,8 +1108,8 @@ function renderEvaluationTermGradesTab(classes) {
     }
 
     const termFilterHtml = renderEvaluationTermFilter();
-    const termId = state.evaluationSelectedTermId || 'global';
-    const termKey = termId && termId !== 'global' ? termId : 'global';
+    const termId = state.evaluationSelectedTermId || 'all';
+    const termKey = termId && termId !== 'all' ? termId : 'all';
     const classResults = state.evaluationResults[selectedClass.id] || {};
     const snapshot = classResults[termKey] || null;
     const overrides = snapshot?.overrides?.final || {};
@@ -1191,9 +1145,9 @@ function renderEvaluationTermGradesTab(classes) {
     `;
 }
 
-function renderFinalGradeCell(studentId, finalResult, override, thresholds, levelValues, classId, termKey, metadata) {
+function renderFinalGradeCell(studentId, finalResult, override, thresholds, levelValues, classId, termKey) {
     const computedNumeric = formatNumericValue(finalResult?.numeric);
-    const computedBadge = renderLevelBadge(finalResult?.level, { size: 'sm' });
+    const computedLabel = formatQualitativeLabel(finalResult?.level);
     const computedMarkers = renderFootnoteMarkers(finalResult?.notes);
 
     const overrideNumeric = typeof override?.numeric === 'number' && !Number.isNaN(override.numeric)
@@ -1206,12 +1160,14 @@ function renderFinalGradeCell(studentId, finalResult, override, thresholds, leve
     const displayNumericRaw = overrideNumeric !== null ? overrideNumeric : finalResult?.numeric;
     const displayLevel = override?.qualitative || overrideLevel || finalResult?.level || '';
     const displayNumeric = formatNumericValue(displayNumericRaw);
-    const displayBadge = renderLevelBadge(displayLevel, { size: 'lg' });
+    const displayLabel = formatQualitativeLabel(displayLevel);
 
     const manualOverrideActive = overrideNumeric !== null || (override?.qualitative && override.qualitative !== '');
     const manualBadge = manualOverrideActive
-        ? `<span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200">${t('evaluation_term_manual_badge')}</span>`
+        ? `<span class="ml-2 inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200">${t('evaluation_term_manual_badge')}</span>`
         : '';
+
+    const computedInfo = `<div class="text-xs text-gray-500 dark:text-gray-400">${t('evaluation_term_calculated_reference')} ${computedNumeric} (${computedLabel})${computedMarkers}</div>`;
 
     const forcedMessage = (() => {
         if (!finalResult?.forced) return '';
@@ -1225,8 +1181,6 @@ function renderFinalGradeCell(studentId, finalResult, override, thresholds, leve
     const numericInputId = `term-grade-override-numeric-${classId}-${termKey}-${studentId}`;
     const qualitativeSelectId = `term-grade-override-qualitative-${classId}-${termKey}-${studentId}`;
     const overrideNumericValue = overrideNumeric !== null ? overrideNumeric : '';
-    const commentValue = typeof override?.comment === 'string' ? override.comment : '';
-    const commentInputId = `term-grade-override-comment-${classId}-${termKey}-${studentId}`;
 
     const optionsHtml = [''].concat(RUBRIC_LEVELS).map(level => {
         if (!level) {
@@ -1236,68 +1190,19 @@ function renderFinalGradeCell(studentId, finalResult, override, thresholds, leve
         return `<option value="${level}"${selected}>${formatQualitativeLabel(level)}</option>`;
     }).join('');
 
-    const breakdownHtml = renderFinalGradeBreakdown(finalResult, metadata);
-
-    const computedInfo = `<div class="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap items-center gap-1">${t('evaluation_term_calculated_reference')} <span class="font-medium text-gray-700 dark:text-gray-200">${computedNumeric}</span>${computedBadge ? `<span>${computedBadge}</span>` : ''}${computedMarkers}</div>`;
-
     return `
-        <div class="flex flex-col lg:flex-row gap-4">
-            <div class="flex-1 space-y-3">
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                        <div class="flex items-center gap-2 justify-center sm:justify-start">
-                            <span class="text-2xl font-bold text-gray-800 dark:text-gray-100">${displayNumeric}</span>
-                            ${displayBadge ? `<span>${displayBadge}</span>` : ''}
-                        </div>
-                        ${manualBadge}
-                    </div>
-                </div>
-                ${computedInfo}
-                ${forcedMessage}
-                ${breakdownHtml}
-                <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                    <input id="${numericInputId}" type="number" step="0.01" placeholder="—" class="w-24 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm" data-action="update-term-grade-override" data-class-id="${classId}" data-student-id="${studentId}" data-field="numeric" data-term-id="${termKey}" value="${overrideNumericValue}">
-                    <select id="${qualitativeSelectId}" class="p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm" data-action="update-term-grade-override" data-class-id="${classId}" data-student-id="${studentId}" data-field="qualitative" data-term-id="${termKey}">${optionsHtml}</select>
-                </div>
+        <div class="space-y-2">
+            <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                ${displayNumeric} <span class="font-normal text-gray-600 dark:text-gray-300">(${displayLabel})</span>${manualBadge}
             </div>
-            <div class="w-full lg:w-60 space-y-1">
-                <label for="${commentInputId}" class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide">${t('evaluation_term_comment_label')}</label>
-                <textarea id="${commentInputId}" class="w-full h-24 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm" placeholder="${t('evaluation_term_comment_placeholder')}" data-action="update-term-grade-override" data-class-id="${classId}" data-student-id="${studentId}" data-field="comment" data-term-id="${termKey}">${escapeHtml(commentValue)}</textarea>
+            ${computedInfo}
+            ${forcedMessage}
+            <div class="flex flex-wrap gap-2 items-center">
+                <input id="${numericInputId}" type="number" step="0.01" placeholder="—" class="w-24 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm" data-action="update-term-grade-override" data-class-id="${classId}" data-student-id="${studentId}" data-field="numeric" data-term-id="${termKey}" value="${overrideNumericValue}">
+                <select id="${qualitativeSelectId}" class="p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm" data-action="update-term-grade-override" data-class-id="${classId}" data-student-id="${studentId}" data-field="qualitative" data-term-id="${termKey}">${optionsHtml}</select>
             </div>
         </div>
     `;
-}
-
-function renderFinalGradeBreakdown(finalResult, metadata) {
-    const terms = finalResult?.breakdown?.terms;
-    if (!terms || typeof terms !== 'object') {
-        return '';
-    }
-    const entries = Object.values(terms);
-    if (entries.length === 0) {
-        return '';
-    }
-    const nameMap = new Map(Array.isArray(metadata?.termSummaries) ? metadata.termSummaries.map(entry => [entry.id || '', entry.name || '']) : []);
-    const rows = entries.map(entry => {
-        const rawName = entry?.name || nameMap.get(entry?.id || '') || t('evaluation_term_default_name');
-        const numeric = formatNumericValue(entry?.numeric);
-        const hasNumeric = numeric !== '—';
-        const badge = renderLevelBadge(entry?.level, { size: 'sm' });
-        const parts = [];
-        if (hasNumeric) {
-            parts.push(`<span class="font-semibold">${numeric}</span>`);
-        }
-        if (badge) {
-            parts.push(`<span>${badge}</span>`);
-        }
-        const valueHtml = parts.length > 0 ? parts.join('<span class="text-gray-400">·</span>') : '<span class="text-gray-400">—</span>';
-        return `<div class="flex items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-300"><span class="font-medium">${escapeHtml(rawName)}</span><span class="flex items-center gap-2">${valueHtml}</span></div>`;
-    }).join('');
-
-    return `<div class="rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-3 space-y-1">
-        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">${t('evaluation_term_breakdown_heading')}</p>
-        ${rows}
-    </div>`;
 }
 
 function renderTermGradeTable(selectedClass, data, overrides, termKey) {
@@ -1345,11 +1250,11 @@ function renderTermGradeTable(selectedClass, data, overrides, termKey) {
         const cells = struct.criteriaEntries.map(entry => {
             const label = entry.meta.code || t('criterion_without_code');
             const description = entry.meta.description || t('criterion_without_description');
-            return `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center" title="${escapeAttribute(description)}">${escapeHtml(label)}</th>`;
+            return `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-left" title="${escapeAttribute(description)}">${escapeHtml(label)}</th>`;
         });
         const competencyLabel = struct.competency.code || struct.competency.name || t('competency_without_code');
         const competencyDescription = struct.competency.description || '';
-        cells.push(`<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center" title="${escapeAttribute(competencyDescription)}">${escapeHtml(competencyLabel)}</th>`);
+        cells.push(`<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-left" title="${escapeAttribute(competencyDescription)}">${escapeHtml(competencyLabel)}</th>`);
         return cells.join('');
     }).join('');
 
@@ -1366,9 +1271,9 @@ function renderTermGradeTable(selectedClass, data, overrides, termKey) {
 
         const finalResult = data.final?.[student.id] || null;
         const override = overrides[student.id] || {};
-        const finalCell = renderFinalGradeCell(student.id, finalResult, override, thresholds, levelValues, selectedClass.id, termKey, data.metadata);
+        const finalCell = renderFinalGradeCell(student.id, finalResult, override, thresholds, levelValues, selectedClass.id, termKey);
 
-        return `<tr class="border-b border-gray-100 dark:border-gray-800"><th scope="row" class="px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 text-left min-w-[12rem]">${escapeHtml(student.name)}</th>${cells}<td class="px-3 py-2 align-top text-center">${finalCell}</td></tr>`;
+        return `<tr class="border-b border-gray-100 dark:border-gray-800"><th scope="row" class="px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 text-left min-w-[12rem]">${escapeHtml(student.name)}</th>${cells}<td class="px-3 py-2 align-top">${finalCell}</td></tr>`;
     }).join('');
 
     return `
@@ -1378,7 +1283,7 @@ function renderTermGradeTable(selectedClass, data, overrides, termKey) {
                     <tr>
                         <th scope="col" rowspan="2" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide align-bottom">${t('evaluation_grades_student_column')}</th>
                         ${headerRow1}
-                        <th scope="col" rowspan="2" class="px-3 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide align-bottom">${t('evaluation_term_final_proposal')}</th>
+                        <th scope="col" rowspan="2" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide align-bottom">${t('evaluation_term_final_proposal')}</th>
                     </tr>
                     <tr>${headerRow2}</tr>
                 </thead>
@@ -2473,10 +2378,6 @@ export function renderSettingsView() {
         const levelValues = competencial.levelValues || {};
         const thresholds = competencial.minimumThresholds || {};
         const maxNotAchieved = competencial.maxNotAchieved || { competencies: {}, criteria: {} };
-        const globalConfig = competencial.globalEvaluation || { mode: 'term-average', competencyWeights: {} };
-        const globalMode = globalConfig.mode === 'course-competencies' ? 'course-competencies' : 'term-average';
-        const competencyWeightsConfig = globalConfig.competencyWeights || {};
-        const classCompetencies = Array.isArray(cls.competencies) ? cls.competencies : [];
         const levelInputsHtml = RUBRIC_LEVELS.map(level => {
             const value = typeof levelValues[level] === 'number' && !Number.isNaN(levelValues[level])
                 ? levelValues[level]
@@ -2523,35 +2424,6 @@ export function renderSettingsView() {
                 <option value="majority"${termMethod === 'majority' ? ' selected' : ''}>${t('evaluation_settings_term_method_majority')}</option>
             </select>
         `;
-
-        const globalModeSelect = `
-            <select data-action="update-evaluation-setting" data-class-id="${cls.id}" data-section="competencial" data-field="globalEvaluationMode" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
-                <option value="term-average"${globalMode === 'term-average' ? ' selected' : ''}>${t('evaluation_settings_global_mode_term_average')}</option>
-                <option value="course-competencies"${globalMode === 'course-competencies' ? ' selected' : ''}>${t('evaluation_settings_global_mode_competency')}</option>
-            </select>
-        `;
-
-        const competencyWeightInputs = classCompetencies.map(comp => {
-            const rawWeight = competencyWeightsConfig[comp.id];
-            const weightValue = typeof rawWeight === 'number' && !Number.isNaN(rawWeight) ? rawWeight : 1;
-            const label = comp.code || comp.name || t('competency_without_code');
-            return `
-                <div>
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">${escapeHtml(label)}</label>
-                    <input type="number" step="0.1" min="0" value="${weightValue}" data-action="update-evaluation-setting" data-class-id="${cls.id}" data-section="competencial" data-field="globalCompetencyWeight" data-competency-id="${comp.id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
-                </div>
-            `;
-        }).join('');
-
-        const globalWeightsDescription = globalMode === 'course-competencies'
-            ? t('evaluation_settings_global_weights_help')
-            : t('evaluation_settings_global_term_average_info');
-
-        const globalWeightsContent = globalMode === 'course-competencies'
-            ? (classCompetencies.length > 0
-                ? `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${competencyWeightInputs}</div>`
-                : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('evaluation_settings_global_weights_empty')}</p>`)
-            : '';
 
         const competencialConfigHtml = `
             <div class="mt-6 space-y-6">
@@ -2600,19 +2472,6 @@ export function renderSettingsView() {
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('evaluation_settings_term_method_label')}</label>
                     ${termMethodSelect}
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${t('evaluation_settings_term_method_help')}</p>
-                </div>
-                <div class="space-y-3">
-                    <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_settings_global_title')}</h4>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('evaluation_settings_global_mode_label')}</label>
-                        ${globalModeSelect}
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${t('evaluation_settings_global_mode_help')}</p>
-                    </div>
-                    <div>
-                        <h5 class="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-1">${t('evaluation_settings_global_weights_title')}</h5>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">${globalWeightsDescription}</p>
-                        ${globalWeightsContent}
-                    </div>
                 </div>
             </div>
         `;

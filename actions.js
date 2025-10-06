@@ -13,7 +13,7 @@ import {
     normalizeEvaluationSettings,
     recalculateLearningActivityStatus
 } from './state.js';
-import { computeClassTermEvaluation, computeClassGlobalEvaluation } from './evaluation.js';
+import { computeClassTermEvaluation } from './evaluation.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate } from './utils.js';
 import { t } from './i18n.js';
 
@@ -176,13 +176,10 @@ function removeRubricItemsForCriterion(rubric, competencyId, criterionId) {
 }
 
 function getEvaluationTermKey(termId) {
-    if (!termId || termId === 'all') {
-        return 'global';
-    }
-    return termId;
+    return termId && termId !== 'all' ? termId : 'all';
 }
 
-function ensureEvaluationResultSnapshot(classId, termId = 'global') {
+function ensureEvaluationResultSnapshot(classId, termId = 'all') {
     if (!classId) return null;
     const key = getEvaluationTermKey(termId);
     if (!state.evaluationResults[classId]) {
@@ -202,17 +199,12 @@ function ensureEvaluationResultSnapshot(classId, termId = 'global') {
         if (!snapshot.overrides.final || typeof snapshot.overrides.final !== 'object') {
             snapshot.overrides.final = {};
         }
-        Object.values(snapshot.overrides.final).forEach(entry => {
-            if (entry && typeof entry === 'object' && typeof entry.comment !== 'string') {
-                entry.comment = '';
-            }
-        });
     }
     return state.evaluationResults[classId][key];
 }
 
 function getTermRangeById(termId) {
-    if (!termId || termId === 'all' || termId === 'global') {
+    if (!termId || termId === 'all') {
         return null;
     }
     const term = state.terms.find(entry => entry.id === termId);
@@ -515,11 +507,7 @@ export const actionHandlers = {
     },
     'set-evaluation-term': (id, element) => {
         const value = element?.value || element?.dataset?.termId;
-        if (!value || value === 'all' || value === 'global') {
-            state.evaluationSelectedTermId = 'global';
-        } else {
-            state.evaluationSelectedTermId = value;
-        }
+        state.evaluationSelectedTermId = value && value !== 'all' ? value : 'all';
     },
     'update-evaluation-setting': (id, element) => {
         const classId = element?.dataset?.classId;
@@ -536,12 +524,6 @@ export const actionHandlers = {
                 hasChanges = true;
             }
         } else if (section === 'competencial') {
-            if (!current.competencial.globalEvaluation) {
-                current.competencial.globalEvaluation = {
-                    mode: 'term-average',
-                    competencyWeights: {}
-                };
-            }
             if (field === 'termEvaluationMethod') {
                 const value = element?.value === 'majority' ? 'majority' : 'weighted';
                 if (current.competencial.termEvaluationMethod !== value) {
@@ -579,22 +561,6 @@ export const actionHandlers = {
                         hasChanges = true;
                     }
                 }
-            } else if (field === 'globalEvaluationMode') {
-                const value = element?.value === 'course-competencies' ? 'course-competencies' : 'term-average';
-                if (current.competencial.globalEvaluation.mode !== value) {
-                    current.competencial.globalEvaluation.mode = value;
-                    hasChanges = true;
-                }
-            } else if (field === 'globalCompetencyWeight') {
-                const competencyId = element?.dataset?.competencyId;
-                if (competencyId) {
-                    const parsed = parseFloat(element.value);
-                    const nextValue = Number.isFinite(parsed) && parsed >= 0 ? parsed : (current.competencial.globalEvaluation.competencyWeights[competencyId] ?? 0);
-                    if (current.competencial.globalEvaluation.competencyWeights[competencyId] !== nextValue) {
-                        current.competencial.globalEvaluation.competencyWeights[competencyId] = nextValue;
-                        hasChanges = true;
-                    }
-                }
             }
         }
 
@@ -610,28 +576,17 @@ export const actionHandlers = {
         const classData = state.activities.find(activity => activity.id === classId && activity.type === 'class');
         if (!classData) return;
         const settings = ensureEvaluationSettingsForClass(classId);
-        const termId = state.evaluationSelectedTermId || 'global';
+        const termId = state.evaluationSelectedTermId || 'all';
+        const termRange = getTermRangeById(termId);
         const studentIds = Array.isArray(classData.studentIds) ? classData.studentIds : [];
         const students = state.students.filter(student => studentIds.includes(student.id));
-        let result;
-        if (termId === 'global') {
-            result = computeClassGlobalEvaluation({
-                classData,
-                students,
-                learningActivities: state.learningActivities,
-                settings,
-                terms: state.terms
-            });
-        } else {
-            const termRange = getTermRangeById(termId);
-            result = computeClassTermEvaluation({
-                classData,
-                students,
-                learningActivities: state.learningActivities,
-                termRange,
-                settings,
-            });
-        }
+        const result = computeClassTermEvaluation({
+            classData,
+            students,
+            learningActivities: state.learningActivities,
+            termRange,
+            settings,
+        });
         const snapshot = ensureEvaluationResultSnapshot(classId, termId);
         if (!snapshot) return;
         snapshot.data = result;
@@ -644,60 +599,33 @@ export const actionHandlers = {
         const studentId = element?.dataset?.studentId;
         const field = element?.dataset?.field;
         if (!classId || !studentId || !field) return;
-        const termId = element?.dataset?.termId || state.evaluationSelectedTermId || 'global';
+        const termId = element?.dataset?.termId || state.evaluationSelectedTermId || 'all';
         const snapshot = ensureEvaluationResultSnapshot(classId, termId);
         if (!snapshot) return;
         const overrides = snapshot.overrides?.final || {};
         snapshot.overrides.final = overrides;
         if (!overrides[studentId]) {
-            overrides[studentId] = { numeric: null, qualitative: '', comment: '' };
-        } else if (typeof overrides[studentId].comment !== 'string') {
-            overrides[studentId].comment = '';
+            overrides[studentId] = { numeric: null, qualitative: '' };
         }
-        let changed = false;
         if (field === 'numeric') {
             const raw = element.value;
             if (raw === '') {
-                if (overrides[studentId].numeric !== null) {
-                    overrides[studentId].numeric = null;
-                    changed = true;
-                }
+                overrides[studentId].numeric = null;
             } else {
                 const parsed = parseFloat(raw);
                 if (Number.isFinite(parsed)) {
-                    if (overrides[studentId].numeric !== parsed) {
-                        overrides[studentId].numeric = parsed;
-                        changed = true;
-                    }
+                    overrides[studentId].numeric = parsed;
                 }
             }
         } else if (field === 'qualitative') {
             const value = element.value;
-            const nextValue = RUBRIC_LEVELS.includes(value) ? value : '';
-            if (overrides[studentId].qualitative !== nextValue) {
-                overrides[studentId].qualitative = nextValue;
-                changed = true;
-            }
-        } else if (field === 'comment') {
-            const value = typeof element.value === 'string' ? element.value : '';
-            if (overrides[studentId].comment !== value) {
-                overrides[studentId].comment = value;
-                changed = true;
-            }
+            overrides[studentId].qualitative = RUBRIC_LEVELS.includes(value) ? value : '';
         }
 
-        const overrideEntry = overrides[studentId];
-        const numericEmpty = overrideEntry.numeric === null || Number.isNaN(overrideEntry.numeric);
-        const qualitativeEmpty = !overrideEntry.qualitative || overrideEntry.qualitative === '';
-        const commentEmpty = !overrideEntry.comment || overrideEntry.comment.trim() === '';
-        if (numericEmpty && qualitativeEmpty && commentEmpty) {
+        if ((overrides[studentId].numeric === null || Number.isNaN(overrides[studentId].numeric)) && (!overrides[studentId].qualitative || overrides[studentId].qualitative === '')) {
             delete overrides[studentId];
-            changed = true;
         }
-        if (changed) {
-            saveState();
-        }
-        return { shouldRerender: field !== 'comment' && changed };
+        saveState();
     },
 
     // --- Load Example Action ---
