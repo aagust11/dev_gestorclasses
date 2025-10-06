@@ -122,8 +122,18 @@ function handleAction(action, element, event) {
     if (actionHandlers[action]) {
         const result = actionHandlers[action](id, element, event);
 
-        if (shouldForceRender || reRenderActions.includes(action)) {
-            const previousSelection = (() => {
+        const defaultShouldRerender = shouldForceRender || reRenderActions.includes(action);
+
+        const getOverrideInfo = (value) => {
+            if (value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'shouldRerender')) {
+                return { hasOverride: true, value: Boolean(value.shouldRerender) };
+            }
+            return { hasOverride: false, value: false };
+        };
+
+        let previousSelection = null;
+        if (defaultShouldRerender) {
+            previousSelection = (() => {
                 if (action === 'filter-learning-activity-rubric-students' && element instanceof HTMLInputElement) {
                     return {
                         start: element.selectionStart,
@@ -181,12 +191,23 @@ function handleAction(action, element, event) {
                     });
                 }
             };
+            const handleResult = (actionResult) => {
+                const overrideInfo = getOverrideInfo(actionResult);
+                const shouldRerender = shouldForceRender || (overrideInfo.hasOverride ? overrideInfo.value : reRenderActions.includes(action));
+                if (shouldRerender) {
+                    rerender();
+                }
+            };
 
             if (!shouldForceRender && result && typeof result.then === 'function') {
-                result.then(rerender).catch(console.error);
+                result.then(resolved => {
+                    handleResult(resolved);
+                }).catch(console.error);
             } else {
-                rerender();
+                handleResult(result);
             }
+        } else if (result && typeof result.then === 'function') {
+            result.catch(console.error);
         }
     }
 }
@@ -195,10 +216,18 @@ function attachEventListeners() {
     const elements = document.querySelectorAll('[data-action]');
     elements.forEach(el => {
         const action = el.dataset.action;
-        const eventType = ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) ? 'input' : 'click';
-        
+        let eventType;
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) {
+            eventType = 'input';
+            if (action === 'update-term-grade-override' && el.tagName !== 'TEXTAREA') {
+                eventType = 'change';
+            }
+        } else {
+            eventType = 'click';
+        }
+
         if (el.dataset.listenerAttached === 'true') return;
-        
+
         if (action === 'import-data-mobile') return;
 
         const listener = (e) => {

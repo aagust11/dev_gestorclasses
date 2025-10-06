@@ -168,7 +168,9 @@ export function computeClassTermEvaluation({
     students,
     learningActivities,
     termRange,
-    settings
+    settings,
+    scope = 'term',
+    competencyWeights = null
 }) {
     if (!classData) {
         return {
@@ -183,6 +185,16 @@ export function computeClassTermEvaluation({
     const thresholds = settings?.competencial?.minimumThresholds || DEFAULT_COMPETENCIAL_MINIMUMS;
     const method = settings?.competencial?.termEvaluationMethod || EVALUATION_METHODS.WEIGHTED;
     const footnoteMarkers = new Set();
+    const scopeKey = scope === 'course' ? 'course' : 'term';
+    const normalizedWeights = {};
+    if (competencyWeights && typeof competencyWeights === 'object') {
+        Object.entries(competencyWeights).forEach(([competencyId, weight]) => {
+            const parsed = parseFloat(weight);
+            if (typeof competencyId === 'string' && competencyId && Number.isFinite(parsed) && parsed >= 0) {
+                normalizedWeights[competencyId] = parsed;
+            }
+        });
+    }
 
     const competencies = Array.isArray(classData.competencies) ? classData.competencies : [];
     const criteriaMeta = [];
@@ -311,8 +323,8 @@ export function computeClassTermEvaluation({
         caTie: false
     };
 
-    const maxCompetenciesTerm = settings?.competencial?.maxNotAchieved?.competencies?.term;
-    const maxCriteriaTerm = settings?.competencial?.maxNotAchieved?.criteria?.term;
+    const maxCompetenciesLimit = settings?.competencial?.maxNotAchieved?.competencies?.[scopeKey];
+    const maxCriteriaLimit = settings?.competencial?.maxNotAchieved?.criteria?.[scopeKey];
 
     studentIds.forEach(studentId => {
         const aggregate = {
@@ -327,10 +339,17 @@ export function computeClassTermEvaluation({
         competencyResultsArray.forEach(competency => {
             const result = competency.results?.[studentId];
             if (!result) return;
+            const hasOverride = Object.prototype.hasOwnProperty.call(normalizedWeights, competency.id);
+            const overrideWeight = hasOverride ? normalizedWeights[competency.id] : null;
             if (typeof result.numeric === 'number') {
-                const weight = result.totalWeight > 0 ? result.totalWeight : Math.max(result.evaluationCount, 1);
-                aggregate.totalScore += result.numeric * weight;
-                aggregate.totalWeight += weight;
+                let weight = result.totalWeight > 0 ? result.totalWeight : Math.max(result.evaluationCount, 1);
+                if (hasOverride) {
+                    weight = overrideWeight;
+                }
+                if (Number.isFinite(weight) && weight > 0) {
+                    aggregate.totalScore += result.numeric * weight;
+                    aggregate.totalWeight += weight;
+                }
             }
             addCounts(aggregate.counts, result.counts);
             aggregate.evaluationCount += result.evaluationCount;
@@ -352,11 +371,11 @@ export function computeClassTermEvaluation({
         const notes = new Set(baseResult.notes);
         let forced = null;
 
-        if (typeof maxCompetenciesTerm === 'number' && maxCompetenciesTerm >= 0 && ceNotAchieved > maxCompetenciesTerm) {
+        if (typeof maxCompetenciesLimit === 'number' && maxCompetenciesLimit >= 0 && ceNotAchieved > maxCompetenciesLimit) {
             level = 'NA';
             numeric = levelValues.NA ?? 0;
             forced = 'competencies';
-        } else if (typeof maxCriteriaTerm === 'number' && maxCriteriaTerm >= 0 && caNotAchieved > maxCriteriaTerm) {
+        } else if (typeof maxCriteriaLimit === 'number' && maxCriteriaLimit >= 0 && caNotAchieved > maxCriteriaLimit) {
             level = 'NA';
             numeric = levelValues.NA ?? 0;
             forced = 'criteria';
@@ -428,5 +447,152 @@ export function computeClassTermEvaluation({
         levelValues,
         thresholds,
         termRange
+    };
+}
+
+export function computeClassGlobalEvaluation({
+    classData,
+    students,
+    learningActivities,
+    settings,
+    terms
+}) {
+    if (!classData) {
+        return {
+            criteria: [],
+            competencies: [],
+            final: {},
+            footnotes: [],
+            metadata: { globalMode: 'term-average', termSummaries: [] }
+        };
+    }
+
+    const globalConfig = settings?.competencial?.globalEvaluation || {};
+    const mode = globalConfig.mode === 'course-competencies' ? 'course-competencies' : 'term-average';
+    const competencyWeights = globalConfig.competencyWeights || {};
+
+    const courseData = computeClassTermEvaluation({
+        classData,
+        students,
+        learningActivities,
+        termRange: null,
+        settings,
+        scope: 'course',
+        competencyWeights
+    });
+
+    if (mode === 'course-competencies') {
+        return {
+            ...courseData,
+            metadata: {
+                globalMode: 'course-competencies',
+                competencyWeights: { ...competencyWeights }
+            }
+        };
+    }
+
+    const courseFinal = courseData.final || {};
+    const studentIds = Array.isArray(classData.studentIds) ? classData.studentIds : [];
+
+    const validTerms = Array.isArray(terms) ? terms : [];
+    const termEntries = validTerms.map(term => {
+        if (!term) return null;
+        const start = parseDateValue(term.startDate);
+        const end = parseDateValue(term.endDate, true);
+        if (!start || !end) {
+            return null;
+        }
+        const data = computeClassTermEvaluation({
+            classData,
+            students,
+            learningActivities,
+            termRange: { start, end },
+            settings,
+            scope: 'term'
+        });
+        return {
+            id: term.id || '',
+            name: term.name || '',
+            data
+        };
+    }).filter(Boolean);
+
+    const footnoteMap = new Map();
+    const addFootnotes = (entries) => {
+        if (!Array.isArray(entries)) return;
+        entries.forEach(entry => {
+            if (!entry || typeof entry !== 'object') return;
+            const type = entry.type || entry.marker;
+            if (!type || footnoteMap.has(type)) return;
+            footnoteMap.set(type, entry);
+        });
+    };
+
+    addFootnotes(courseData.footnotes);
+    termEntries.forEach(entry => addFootnotes(entry.data?.footnotes));
+
+    const combinedFootnotes = Array.from(footnoteMap.values());
+
+    const levelValues = settings?.competencial?.levelValues || DEFAULT_COMPETENCIAL_LEVEL_VALUES;
+    const thresholds = settings?.competencial?.minimumThresholds || DEFAULT_COMPETENCIAL_MINIMUMS;
+
+    const finalResults = {};
+    studentIds.forEach(studentId => {
+        const breakdownTerms = {};
+        let numericSum = 0;
+        let numericCount = 0;
+
+        termEntries.forEach((entry, index) => {
+            const termFinal = entry.data?.final?.[studentId] || null;
+            const record = {
+                id: entry.id,
+                name: entry.name,
+                numeric: termFinal?.numeric ?? null,
+                level: termFinal?.level || null
+            };
+            breakdownTerms[entry.id || `term-${index}`] = record;
+            if (typeof termFinal?.numeric === 'number' && !Number.isNaN(termFinal.numeric)) {
+                numericSum += termFinal.numeric;
+                numericCount += 1;
+            }
+        });
+
+        let numeric = numericCount > 0 ? numericSum / numericCount : null;
+        let level = numeric !== null ? mapNumericToLevel(numeric, thresholds, levelValues) : null;
+
+        const courseResult = courseFinal[studentId] || null;
+        const notes = new Set(Array.isArray(courseResult?.notes) ? courseResult.notes : (courseResult?.notes instanceof Set ? Array.from(courseResult.notes) : []));
+        let forced = null;
+
+        if (numeric === null && typeof courseResult?.numeric === 'number' && !Number.isNaN(courseResult.numeric)) {
+            numeric = courseResult.numeric;
+            level = courseResult.level || level;
+        }
+
+        if (courseResult?.forced) {
+            forced = courseResult.forced;
+            numeric = levelValues.NA ?? 0;
+            level = 'NA';
+        }
+
+        finalResults[studentId] = {
+            numeric,
+            level,
+            breakdown: { terms: breakdownTerms },
+            forced,
+            ceNotAchieved: courseResult?.ceNotAchieved ?? 0,
+            caNotAchieved: courseResult?.caNotAchieved ?? 0,
+            notes: Array.from(notes)
+        };
+    });
+
+    return {
+        ...courseData,
+        final: finalResults,
+        footnotes: combinedFootnotes,
+        metadata: {
+            globalMode: 'term-average',
+            termSummaries: termEntries.map(entry => ({ id: entry.id, name: entry.name }))
+        }
     };
 }
