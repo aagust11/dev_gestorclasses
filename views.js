@@ -1,6 +1,6 @@
 // views.js: Contiene todas las funciones que generan el HTML de las vistas.
 
-import { state, LEARNING_ACTIVITY_STATUS, RUBRIC_LEVELS, calculateLearningActivityStatus } from './state.js';
+import { state, LEARNING_ACTIVITY_STATUS, RUBRIC_LEVELS, calculateLearningActivityStatus, ensureEvaluationSettingsForClass } from './state.js';
 import { darkenColor, getWeekStartDate, getWeekDateRange, formatDate, isSameDate, findNextSession, findPreviousSession, DAY_KEYS, findNextClassSession, getCurrentTermDateRange, getWeeksForCourse, isHoliday, normalizeStudentAnnotation, STUDENT_ATTENDANCE_STATUS } from './utils.js';
 import { t } from './i18n.js';
 
@@ -15,6 +15,143 @@ const escapeHtml = (value = '') => String(value)
 
 const escapeAttribute = (value = '') => escapeHtml(value).replace(/\n/g, '&#10;');
 
+function parseEvaluationDate(value, endOfDay = false) {
+    if (!value) return null;
+    const normalized = value.includes('T') ? value : `${value}T${endOfDay ? '23:59:59' : '00:00:00'}`;
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getEvaluationTermRange(termId) {
+    if (!termId || termId === 'all') {
+        return null;
+    }
+    const term = state.terms.find(entry => entry.id === termId);
+    if (!term) {
+        return null;
+    }
+    const start = parseEvaluationDate(term.startDate);
+    const end = parseEvaluationDate(term.endDate, true);
+    if (!start || !end) {
+        return null;
+    }
+    return { start, end };
+}
+
+function isActivityWithinTermRange(activity, termRange) {
+    if (!termRange) return true;
+    const start = parseEvaluationDate(activity?.startDate);
+    const end = parseEvaluationDate(activity?.endDate, true) || start;
+    if (!start && !end) return true;
+    const effectiveStart = start || end;
+    const effectiveEnd = end || start;
+    if (!effectiveStart || !effectiveEnd) return true;
+    return effectiveEnd >= termRange.start && effectiveStart <= termRange.end;
+}
+
+function renderEvaluationTermFilter() {
+    const current = state.evaluationSelectedTermId || 'all';
+    const options = [
+        `<option value="all"${current === 'all' ? ' selected' : ''}>${t('evaluation_term_all_option')}</option>`,
+        ...state.terms.map(term => {
+            const name = term.name || t('evaluation_term_default_name');
+            const selected = current === term.id ? ' selected' : '';
+            return `<option value="${term.id}"${selected}>${escapeHtml(name)}</option>`;
+        })
+    ].join('');
+
+    return `
+        <div class="flex flex-wrap items-center gap-2">
+            <label for="evaluation-term-select" class="text-sm font-medium text-gray-700 dark:text-gray-300">${t('evaluation_term_filter_label')}</label>
+            <select id="evaluation-term-select" data-action="set-evaluation-term" class="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md text-sm">
+                ${options}
+            </select>
+        </div>
+    `;
+}
+
+function formatNumericValue(value) {
+    if (typeof value !== 'number' || Number.isNaN(value)) {
+        return '—';
+    }
+    return value.toLocaleString(document.documentElement.lang || 'ca', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+function formatQualitativeLabel(level) {
+    if (!level || !RUBRIC_LEVELS.includes(level)) {
+        return '—';
+    }
+    const key = `rubric_level_${level}_label`;
+    const translated = t(key);
+    return translated !== `[${key}]` ? translated : level;
+}
+
+function renderFootnoteMarkers(notes) {
+    if (!notes) return '';
+    const entries = Array.isArray(notes) ? notes : notes instanceof Set ? Array.from(notes) : [];
+    const markers = [];
+    if (entries.includes('ca')) {
+        markers.push('**');
+    }
+    if (entries.includes('weighted')) {
+        markers.push('*');
+    }
+    if (markers.length === 0) {
+        return '';
+    }
+    return markers.map(marker => `<sup class="ml-1 text-xs text-blue-500 align-super">${marker}</sup>`).join('');
+}
+
+function deriveLevelFromNumeric(numeric, thresholds, levelValues) {
+    if (typeof numeric !== 'number' || Number.isNaN(numeric)) {
+        return '';
+    }
+    const refThresholds = { ...thresholds };
+    if (numeric >= (refThresholds.AE ?? levelValues.AE ?? 0)) {
+        return 'AE';
+    }
+    if (numeric >= (refThresholds.AN ?? levelValues.AN ?? 0)) {
+        return 'AN';
+    }
+    if (numeric >= (refThresholds.AS ?? levelValues.AS ?? 0)) {
+        return 'AS';
+    }
+    return 'NA';
+}
+
+function renderTermFootnotes(footnotes) {
+    if (!Array.isArray(footnotes) || footnotes.length === 0) {
+        return '';
+    }
+    const items = footnotes.map(entry => {
+        const marker = entry?.marker || '*';
+        const type = entry?.type || 'weighted';
+        const key = `evaluation_footnote_${type}`;
+        const text = t(key);
+        const message = text !== `[${key}]` ? text : type;
+        return `<li><span class="font-semibold text-blue-600 dark:text-blue-300 mr-1">${escapeHtml(marker)}</span>${escapeHtml(message)}</li>`;
+    }).join('');
+    return `
+        <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <ul class="text-xs text-gray-600 dark:text-gray-300 space-y-1">${items}</ul>
+        </div>
+    `;
+}
+
+function renderResultCellContent(result) {
+    if (!result) {
+        return '<span class="text-gray-400">—</span>';
+    }
+    const numeric = formatNumericValue(result.numeric);
+    const qualitative = formatQualitativeLabel(result.level);
+    if (numeric === '—' && qualitative === '—') {
+        return '<span class="text-gray-400">—</span>';
+    }
+    return `<span class="font-medium text-gray-800 dark:text-gray-100">${numeric}</span> <span class="text-sm text-gray-600 dark:text-gray-300">(${qualitative})</span>${renderFootnoteMarkers(result.notes)}`;
+}
 function renderMobileHeaderActions(actions) {
     const container = document.getElementById('mobile-header-actions');
     if (!container) return;
@@ -488,7 +625,8 @@ export function renderEvaluationView() {
 
     const tabs = [
         { id: 'activities', label: t('evaluation_tab_activities'), icon: 'clipboard-list' },
-        { id: 'grades', label: t('evaluation_tab_grades'), icon: 'graduation-cap' }
+        { id: 'grades', label: t('evaluation_tab_grades'), icon: 'graduation-cap' },
+        { id: 'term-grades', label: t('evaluation_tab_term_grades'), icon: 'award' }
     ];
     const allowedTabs = tabs.map(tab => tab.id);
     if (!allowedTabs.includes(state.evaluationActiveTab)) {
@@ -499,6 +637,14 @@ export function renderEvaluationView() {
         const hasSelection = classes.some(cls => cls.id === state.selectedEvaluationClassId);
         if (!hasSelection) {
             state.selectedEvaluationClassId = classes[0]?.id || null;
+        }
+    } else if (state.evaluationActiveTab === 'term-grades') {
+        const hasSelection = classes.some(cls => cls.id === state.selectedEvaluationClassId);
+        if (!hasSelection) {
+            state.selectedEvaluationClassId = classes[0]?.id || null;
+        }
+        if (state.selectedEvaluationClassId) {
+            ensureEvaluationSettingsForClass(state.selectedEvaluationClassId);
         }
     } else if (classes.length === 0) {
         state.selectedEvaluationClassId = null;
@@ -512,9 +658,17 @@ export function renderEvaluationView() {
         return `<button data-action="set-evaluation-tab" data-tab="${tab.id}" class="${baseClasses} ${isActive ? activeClasses : inactiveClasses}"><i data-lucide="${tab.icon}" class="w-4 h-4"></i><span>${escapeHtml(tab.label)}</span></button>`;
     }).join('');
 
-    const tabContent = state.evaluationActiveTab === 'grades'
-        ? renderEvaluationGradesTab(classes)
-        : renderEvaluationActivitiesTab(classes);
+    let tabContent;
+    switch (state.evaluationActiveTab) {
+        case 'grades':
+            tabContent = renderEvaluationGradesTab(classes);
+            break;
+        case 'term-grades':
+            tabContent = renderEvaluationTermGradesTab(classes);
+            break;
+        default:
+            tabContent = renderEvaluationActivitiesTab(classes);
+    }
 
     return `
         <div class="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900/50 min-h-full space-y-6">
@@ -728,9 +882,13 @@ function renderEvaluationGradesTab(classes) {
         .filter(student => studentIds.includes(student.id))
         .sort(sortStudentsByName);
 
+    const termRange = getEvaluationTermRange(state.evaluationSelectedTermId);
     const learningActivities = state.learningActivities
         .filter(activity => activity.classId === selectedClass.id)
+        .filter(activity => isActivityWithinTermRange(activity, termRange))
         .sort((a, b) => getActivitySortOrder(a) - getActivitySortOrder(b));
+
+    const termFilterHtml = renderEvaluationTermFilter();
 
     const competencies = Array.isArray(selectedClass.competencies) ? selectedClass.competencies : [];
     const criterionIndex = new Map();
@@ -892,9 +1050,232 @@ function renderEvaluationGradesTab(classes) {
     return `
         <div class="space-y-4">
             <div class="flex flex-wrap gap-2">${classButtonsHtml}</div>
+            ${termFilterHtml}
             <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6 shadow-sm">
                 ${contentHtml}
             </div>
+        </div>
+    `;
+}
+
+function renderEvaluationTermGradesTab(classes) {
+    if (classes.length === 0) {
+        return `
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
+                <p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_no_classes')}</p>
+            </div>
+        `;
+    }
+
+    let selectedClass = classes.find(cls => cls.id === state.selectedEvaluationClassId) || null;
+    if (!selectedClass) {
+        selectedClass = classes[0] || null;
+        if (selectedClass) {
+            state.selectedEvaluationClassId = selectedClass.id;
+        }
+    }
+
+    const classButtonsHtml = classes.map(cls => {
+        const isActive = selectedClass && cls.id === selectedClass.id;
+        const baseClasses = 'px-3 py-1.5 rounded-full text-sm font-medium border transition-colors';
+        const activeClasses = 'bg-blue-600 text-white border-blue-600 shadow-sm';
+        const inactiveClasses = 'text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700';
+        return `<button data-action="select-evaluation-class" data-class-id="${cls.id}" class="${baseClasses} ${isActive ? activeClasses : inactiveClasses}">${escapeHtml(cls.name)}</button>`;
+    }).join('');
+
+    if (!selectedClass) {
+        return `
+            <div class="space-y-4">
+                <div class="flex flex-wrap gap-2">${classButtonsHtml}</div>
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
+                    <p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_grades_select_class')}</p>
+                </div>
+            </div>
+        `;
+    }
+
+    const termFilterHtml = renderEvaluationTermFilter();
+    const termId = state.evaluationSelectedTermId || 'all';
+    const termKey = termId && termId !== 'all' ? termId : 'all';
+    const classResults = state.evaluationResults[selectedClass.id] || {};
+    const snapshot = classResults[termKey] || null;
+    const overrides = snapshot?.overrides?.final || {};
+    const data = snapshot?.data || null;
+
+    let contentHtml = '';
+    if (!data) {
+        contentHtml = `<p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_term_no_results')}</p>`;
+    } else {
+        contentHtml = renderTermGradeTable(selectedClass, data, overrides, termKey);
+    }
+
+    const lastCalculatedText = snapshot?.computedAt
+        ? new Date(snapshot.computedAt).toLocaleString(document.documentElement.lang || 'ca')
+        : '';
+    const lastCalculatedHtml = lastCalculatedText
+        ? `<span class="text-xs text-gray-500 dark:text-gray-400">${t('evaluation_term_last_calculated')} ${escapeHtml(lastCalculatedText)}</span>`
+        : '';
+
+    const calculateButton = `<button data-action="calculate-term-grades" data-class-id="${selectedClass.id}" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 shadow-sm"><i data-lucide="calculator" class="w-4 h-4"></i>${t('evaluation_term_calculate_button')}</button>`;
+    const footnotesHtml = data ? renderTermFootnotes(data.footnotes) : '';
+
+    return `
+        <div class="space-y-4">
+            <div class="flex flex-wrap gap-2">${classButtonsHtml}</div>
+            ${termFilterHtml}
+            <div class="flex flex-wrap items-center gap-3 text-sm">${calculateButton}${lastCalculatedHtml}</div>
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6 shadow-sm">
+                ${contentHtml}
+                ${footnotesHtml}
+            </div>
+        </div>
+    `;
+}
+
+function renderFinalGradeCell(studentId, finalResult, override, thresholds, levelValues, classId, termKey) {
+    const computedNumeric = formatNumericValue(finalResult?.numeric);
+    const computedLabel = formatQualitativeLabel(finalResult?.level);
+    const computedMarkers = renderFootnoteMarkers(finalResult?.notes);
+
+    const overrideNumeric = typeof override?.numeric === 'number' && !Number.isNaN(override.numeric)
+        ? override.numeric
+        : null;
+    const overrideLevel = override?.qualitative && RUBRIC_LEVELS.includes(override.qualitative)
+        ? override.qualitative
+        : (overrideNumeric !== null ? deriveLevelFromNumeric(overrideNumeric, thresholds, levelValues) : '');
+
+    const displayNumericRaw = overrideNumeric !== null ? overrideNumeric : finalResult?.numeric;
+    const displayLevel = override?.qualitative || overrideLevel || finalResult?.level || '';
+    const displayNumeric = formatNumericValue(displayNumericRaw);
+    const displayLabel = formatQualitativeLabel(displayLevel);
+
+    const manualOverrideActive = overrideNumeric !== null || (override?.qualitative && override.qualitative !== '');
+    const manualBadge = manualOverrideActive
+        ? `<span class="ml-2 inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200">${t('evaluation_term_manual_badge')}</span>`
+        : '';
+
+    const computedInfo = `<div class="text-xs text-gray-500 dark:text-gray-400">${t('evaluation_term_calculated_reference')} ${computedNumeric} (${computedLabel})${computedMarkers}</div>`;
+
+    const forcedMessage = (() => {
+        if (!finalResult?.forced) return '';
+        const key = finalResult.forced === 'competencies'
+            ? 'evaluation_term_forced_competencies'
+            : 'evaluation_term_forced_criteria';
+        const message = t(key);
+        return `<div class="text-xs text-red-600 dark:text-red-400">${message}</div>`;
+    })();
+
+    const numericInputId = `term-grade-override-numeric-${classId}-${termKey}-${studentId}`;
+    const qualitativeSelectId = `term-grade-override-qualitative-${classId}-${termKey}-${studentId}`;
+    const overrideNumericValue = overrideNumeric !== null ? overrideNumeric : '';
+
+    const optionsHtml = [''].concat(RUBRIC_LEVELS).map(level => {
+        if (!level) {
+            return `<option value=""${!override?.qualitative ? ' selected' : ''}>${t('evaluation_term_override_select_placeholder')}</option>`;
+        }
+        const selected = override?.qualitative === level ? ' selected' : '';
+        return `<option value="${level}"${selected}>${formatQualitativeLabel(level)}</option>`;
+    }).join('');
+
+    return `
+        <div class="space-y-2">
+            <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                ${displayNumeric} <span class="font-normal text-gray-600 dark:text-gray-300">(${displayLabel})</span>${manualBadge}
+            </div>
+            ${computedInfo}
+            ${forcedMessage}
+            <div class="flex flex-wrap gap-2 items-center">
+                <input id="${numericInputId}" type="number" step="0.01" placeholder="—" class="w-24 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm" data-action="update-term-grade-override" data-class-id="${classId}" data-student-id="${studentId}" data-field="numeric" data-term-id="${termKey}" value="${overrideNumericValue}">
+                <select id="${qualitativeSelectId}" class="p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm" data-action="update-term-grade-override" data-class-id="${classId}" data-student-id="${studentId}" data-field="qualitative" data-term-id="${termKey}">${optionsHtml}</select>
+            </div>
+        </div>
+    `;
+}
+
+function renderTermGradeTable(selectedClass, data, overrides, termKey) {
+    const studentIds = Array.isArray(selectedClass.studentIds) ? selectedClass.studentIds : [];
+    const students = state.students
+        .filter(student => studentIds.includes(student.id))
+        .sort(sortStudentsByName);
+
+    if (students.length === 0) {
+        return `<p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_grades_no_students')}</p>`;
+    }
+
+    const competencies = Array.isArray(selectedClass.competencies) ? selectedClass.competencies : [];
+    if (competencies.length === 0) {
+        return `<p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_term_no_competencies')}</p>`;
+    }
+
+    const criteriaMap = new Map(Array.isArray(data.criteria) ? data.criteria.map(entry => [entry.id, entry]) : []);
+    const competencyMap = new Map(Array.isArray(data.competencies) ? data.competencies.map(entry => [entry.id, entry]) : []);
+
+    const structures = competencies.map(competency => {
+        const rawCriteria = Array.isArray(competency.criteria) ? competency.criteria : [];
+        const criteriaEntries = rawCriteria
+            .map(criterion => ({ meta: criterion, data: criteriaMap.get(criterion.id) }))
+            .filter(entry => entry.meta && entry.data);
+        const competencyData = competencyMap.get(competency.id) || { results: {} };
+        return {
+            competency,
+            criteriaEntries,
+            competencyData
+        };
+    });
+
+    const thresholds = data.thresholds || {};
+    const levelValues = data.levelValues || {};
+
+    const headerRow1 = structures.map(struct => {
+        const label = struct.competency.code || struct.competency.name || t('competency_without_code');
+        const colSpan = struct.criteriaEntries.length + 1;
+        const title = struct.competency.description || '';
+        return `<th scope="col" colspan="${colSpan}" class="px-3 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide" title="${escapeAttribute(title)}">${escapeHtml(label)}</th>`;
+    }).join('');
+
+    const headerRow2 = structures.map(struct => {
+        const cells = struct.criteriaEntries.map(entry => {
+            const label = entry.meta.code || t('criterion_without_code');
+            const description = entry.meta.description || t('criterion_without_description');
+            return `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-left" title="${escapeAttribute(description)}">${escapeHtml(label)}</th>`;
+        });
+        const competencyLabel = struct.competency.code || struct.competency.name || t('competency_without_code');
+        const competencyDescription = struct.competency.description || '';
+        cells.push(`<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-left" title="${escapeAttribute(competencyDescription)}">${escapeHtml(competencyLabel)}</th>`);
+        return cells.join('');
+    }).join('');
+
+    const rowsHtml = students.map(student => {
+        const cells = structures.map(struct => {
+            const criterionCells = struct.criteriaEntries.map(entry => {
+                const result = entry.data?.results?.[student.id];
+                return `<td class="px-3 py-2 text-sm text-center align-middle">${renderResultCellContent(result)}</td>`;
+            });
+            const competencyResult = struct.competencyData?.results?.[student.id];
+            criterionCells.push(`<td class="px-3 py-2 text-sm text-center align-middle">${renderResultCellContent(competencyResult)}</td>`);
+            return criterionCells.join('');
+        }).join('');
+
+        const finalResult = data.final?.[student.id] || null;
+        const override = overrides[student.id] || {};
+        const finalCell = renderFinalGradeCell(student.id, finalResult, override, thresholds, levelValues, selectedClass.id, termKey);
+
+        return `<tr class="border-b border-gray-100 dark:border-gray-800"><th scope="row" class="px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 text-left min-w-[12rem]">${escapeHtml(student.name)}</th>${cells}<td class="px-3 py-2 align-top">${finalCell}</td></tr>`;
+    }).join('');
+
+    return `
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-left">
+                <thead class="bg-white dark:bg-gray-800">
+                    <tr>
+                        <th scope="col" rowspan="2" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide align-bottom">${t('evaluation_grades_student_column')}</th>
+                        ${headerRow1}
+                        <th scope="col" rowspan="2" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide align-bottom">${t('evaluation_term_final_proposal')}</th>
+                    </tr>
+                    <tr>${headerRow2}</tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>
         </div>
     `;
 }
@@ -956,6 +1337,7 @@ export function renderLearningActivityEditorView() {
 
     const startDateValue = draft.startDate || '';
     const endDateValue = draft.endDate || '';
+    const weightValue = typeof draft.weight === 'number' && !Number.isNaN(draft.weight) ? draft.weight : 1;
 
     const selectedCriteriaHtml = selectedCriteria.length > 0
         ? `<ul class="space-y-2">${selectedCriteria.map(item => `
@@ -1089,6 +1471,28 @@ export function renderLearningActivityEditorView() {
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('end_date')}</label>
                                 <input type="date" id="learning-activity-end-date" value="${endDateValue}" data-action="update-learning-activity-end-date" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('learning_activity_status_label')}</label>
+                                <select data-action="update-learning-activity-status" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                                    ${Object.values(LEARNING_ACTIVITY_STATUS).map(status => {
+                                        const labels = {
+                                            [LEARNING_ACTIVITY_STATUS.SCHEDULED]: t('learning_activity_status_scheduled'),
+                                            [LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS]: t('learning_activity_status_open'),
+                                            [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: t('learning_activity_status_pending')
+                                        };
+                                        const label = labels[status] || status;
+                                        const selected = draft.status === status ? ' selected' : '';
+                                        return `<option value="${status}"${selected}>${label}</option>`;
+                                    }).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('learning_activity_weight_label')}</label>
+                                <input type="number" step="0.1" min="0" value="${weightValue}" data-action="update-learning-activity-weight" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${t('learning_activity_weight_help')}</p>
                             </div>
                         </div>
                     </div>
@@ -1547,6 +1951,7 @@ export function renderSettingsView() {
         { id: 'schedule', labelKey: 'settings_tab_schedule', icon: 'clock' },
         { id: 'activities', labelKey: 'settings_tab_activities', icon: 'users' },
         { id: 'competencies', labelKey: 'settings_tab_competencies', icon: 'target' },
+        { id: 'evaluation', labelKey: 'settings_tab_evaluation', icon: 'graduation-cap' },
         { id: 'data', labelKey: 'settings_tab_data', icon: 'database' }
     ];
 
@@ -1924,6 +2329,135 @@ export function renderSettingsView() {
             </div>
         `;
 
+    const evaluationClasses = state.activities
+        .filter(activity => activity.type === 'class')
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    const evaluationCardsHtml = evaluationClasses.map(cls => {
+        const settings = ensureEvaluationSettingsForClass(cls.id);
+        const evaluationType = settings.evaluationType || 'competencial';
+        const competencial = settings.competencial || {};
+        const levelValues = competencial.levelValues || {};
+        const thresholds = competencial.minimumThresholds || {};
+        const maxNotAchieved = competencial.maxNotAchieved || { competencies: {}, criteria: {} };
+        const levelInputsHtml = RUBRIC_LEVELS.map(level => {
+            const value = typeof levelValues[level] === 'number' && !Number.isNaN(levelValues[level])
+                ? levelValues[level]
+                : 0;
+            const label = t(`rubric_level_${level}_label`);
+            return `
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${escapeHtml(label)}</label>
+                    <input type="number" step="0.1" data-action="update-evaluation-setting" data-class-id="${cls.id}" data-section="competencial" data-field="levelValues" data-level="${level}" value="${value}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                </div>
+            `;
+        }).join('');
+
+        const thresholdLevels = ['AS', 'AN', 'AE'];
+        const thresholdInputsHtml = thresholdLevels.map(level => {
+            const value = typeof thresholds[level] === 'number' && !Number.isNaN(thresholds[level])
+                ? thresholds[level]
+                : 0;
+            const label = t(`rubric_level_${level}_label`);
+            return `
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${escapeHtml(label)}</label>
+                    <input type="number" step="0.1" data-action="update-evaluation-setting" data-class-id="${cls.id}" data-section="competencial" data-field="thresholds" data-level="${level}" value="${value}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                </div>
+            `;
+        }).join('');
+
+        const competenciesTerm = Number.isInteger(maxNotAchieved?.competencies?.term) ? maxNotAchieved.competencies.term : 0;
+        const competenciesCourse = Number.isInteger(maxNotAchieved?.competencies?.course) ? maxNotAchieved.competencies.course : 0;
+        const criteriaTerm = Number.isInteger(maxNotAchieved?.criteria?.term) ? maxNotAchieved.criteria.term : 0;
+        const criteriaCourse = Number.isInteger(maxNotAchieved?.criteria?.course) ? maxNotAchieved.criteria.course : 0;
+
+        const evaluationTypeSelect = `
+            <select data-action="update-evaluation-setting" data-class-id="${cls.id}" data-section="root" data-field="evaluationType" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                <option value="competencial"${evaluationType === 'competencial' ? ' selected' : ''}>${t('evaluation_settings_type_competencial')}</option>
+                <option value="numerica"${evaluationType === 'numerica' ? ' selected' : ''}>${t('evaluation_settings_type_numerical')}</option>
+            </select>
+        `;
+
+        const termMethod = competencial.termEvaluationMethod || 'weighted';
+        const termMethodSelect = `
+            <select data-action="update-evaluation-setting" data-class-id="${cls.id}" data-section="competencial" data-field="termEvaluationMethod" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                <option value="weighted"${termMethod === 'weighted' ? ' selected' : ''}>${t('evaluation_settings_term_method_weighted')}</option>
+                <option value="majority"${termMethod === 'majority' ? ' selected' : ''}>${t('evaluation_settings_term_method_majority')}</option>
+            </select>
+        `;
+
+        const competencialConfigHtml = `
+            <div class="mt-6 space-y-6">
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_settings_levels_title')}</h4>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">${t('evaluation_settings_levels_help')}</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">${levelInputsHtml}</div>
+                </div>
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_settings_thresholds_title')}</h4>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">${t('evaluation_settings_thresholds_help')}</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">${thresholdInputsHtml}</div>
+                </div>
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_settings_max_not_achieved_title')}</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">${t('evaluation_settings_max_competencies_label')}</p>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">${t('evaluation_settings_term_label')}</label>
+                                    <input type="number" min="0" data-action="update-evaluation-setting" data-class-id="${cls.id}" data-section="competencial" data-field="maxNotAchieved" data-group="competencies" data-scope="term" value="${competenciesTerm}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">${t('evaluation_settings_course_label')}</label>
+                                    <input type="number" min="0" data-action="update-evaluation-setting" data-class-id="${cls.id}" data-section="competencial" data-field="maxNotAchieved" data-group="competencies" data-scope="course" value="${competenciesCourse}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">${t('evaluation_settings_max_criteria_label')}</p>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">${t('evaluation_settings_term_label')}</label>
+                                    <input type="number" min="0" data-action="update-evaluation-setting" data-class-id="${cls.id}" data-section="competencial" data-field="maxNotAchieved" data-group="criteria" data-scope="term" value="${criteriaTerm}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">${t('evaluation_settings_course_label')}</label>
+                                    <input type="number" min="0" data-action="update-evaluation-setting" data-class-id="${cls.id}" data-section="competencial" data-field="maxNotAchieved" data-group="criteria" data-scope="course" value="${criteriaCourse}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('evaluation_settings_term_method_label')}</label>
+                    ${termMethodSelect}
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${t('evaluation_settings_term_method_help')}</p>
+                </div>
+            </div>
+        `;
+
+        return `
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(cls.name)}</h3>
+                    <div class="w-full sm:w-56">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('evaluation_settings_type_label')}</label>
+                        ${evaluationTypeSelect}
+                    </div>
+                </div>
+                ${evaluationType === 'competencial'
+                    ? competencialConfigHtml
+                    : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('evaluation_settings_numerical_placeholder')}</p>`}
+            </div>
+        `;
+    }).join('');
+
+    const evaluationTabContent = evaluationClasses.length === 0
+        ? `<div class="p-6 text-gray-500 dark:text-gray-400">${t('no_classes_created')}</div>`
+        : `<div class="space-y-6">${evaluationCardsHtml}</div>`;
+
     // --- Data Tab Content ---
     const dataTabContent = `
         <div class="max-w-xl mx-auto">
@@ -1947,6 +2481,7 @@ export function renderSettingsView() {
         case 'schedule': activeTabContent = scheduleTabContent; break;
         case 'activities': activeTabContent = activitiesTabContent; break;
         case 'competencies': activeTabContent = competenciesTabContent; break;
+        case 'evaluation': activeTabContent = evaluationTabContent; break;
         case 'data': activeTabContent = dataTabContent; break;
         default: activeTabContent = calendarTabContent;
     }
