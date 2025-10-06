@@ -49,7 +49,11 @@ export function createDefaultCompetencialConfig() {
             competencies: { ...DEFAULT_MAX_NOT_ACHIEVED.competencies },
             criteria: { ...DEFAULT_MAX_NOT_ACHIEVED.criteria }
         },
-        termEvaluationMethod: EVALUATION_METHODS.WEIGHTED
+        termEvaluationMethod: EVALUATION_METHODS.WEIGHTED,
+        globalEvaluation: {
+            mode: 'term-average',
+            competencyWeights: {}
+        }
     };
 }
 
@@ -109,11 +113,30 @@ export function normalizeCompetencialConfig(rawConfig) {
         ? method
         : EVALUATION_METHODS.WEIGHTED;
 
+    const rawGlobal = config.globalEvaluation && typeof config.globalEvaluation === 'object'
+        ? config.globalEvaluation
+        : {};
+
+    const mode = rawGlobal.mode === 'course-competencies' ? 'course-competencies' : 'term-average';
+    const competencyWeights = {};
+    if (rawGlobal.competencyWeights && typeof rawGlobal.competencyWeights === 'object') {
+        Object.entries(rawGlobal.competencyWeights).forEach(([competencyId, weight]) => {
+            const parsed = parseFloat(weight);
+            if (typeof competencyId === 'string' && competencyId && Number.isFinite(parsed) && parsed >= 0) {
+                competencyWeights[competencyId] = parsed;
+            }
+        });
+    }
+
     return {
         levelValues,
         minimumThresholds,
         maxNotAchieved,
-        termEvaluationMethod: normalizedMethod
+        termEvaluationMethod: normalizedMethod,
+        globalEvaluation: {
+            mode,
+            competencyWeights
+        }
     };
 }
 
@@ -178,7 +201,7 @@ export const state = {
     learningActivityRubricFilter: '',
     evaluationActiveTab: 'activities',
     selectedEvaluationClassId: null,
-    evaluationSelectedTermId: 'all',
+    evaluationSelectedTermId: 'global',
     evaluationSettings: {},
     evaluationResults: {},
     learningActivityRubricReturnView: null,
@@ -359,7 +382,10 @@ export function loadState() {
         state.studentTimelineFilter = parsedData.studentTimelineFilter || 'all';
         state.evaluationActiveTab = parsedData.evaluationActiveTab || 'activities';
         state.selectedEvaluationClassId = parsedData.selectedEvaluationClassId || null;
-        state.evaluationSelectedTermId = parsedData.evaluationSelectedTermId || 'all';
+        const savedEvaluationTerm = parsedData.evaluationSelectedTermId;
+        state.evaluationSelectedTermId = savedEvaluationTerm === 'all'
+            ? 'global'
+            : (savedEvaluationTerm || 'global');
         state.evaluationSettings = parsedData.evaluationSettings || {};
         state.evaluationResults = parsedData.evaluationResults || {};
     }
@@ -387,11 +413,28 @@ export function loadState() {
     Object.entries(state.evaluationResults || {}).forEach(([classId, perClass]) => {
         if (!state.evaluationSettings[classId]) {
             delete state.evaluationResults[classId];
+            return;
+        }
+        if (perClass && typeof perClass === 'object' && perClass.all && !perClass.global) {
+            perClass.global = perClass.all;
+            delete perClass.all;
         }
         Object.entries(perClass || {}).forEach(([termId, snapshot]) => {
             if (!snapshot || typeof snapshot !== 'object') {
                 delete perClass[termId];
+                return;
             }
+            if (!snapshot.overrides || typeof snapshot.overrides !== 'object') {
+                snapshot.overrides = { final: {} };
+            }
+            if (!snapshot.overrides.final || typeof snapshot.overrides.final !== 'object') {
+                snapshot.overrides.final = {};
+            }
+            Object.values(snapshot.overrides.final).forEach(entry => {
+                if (entry && typeof entry === 'object' && typeof entry.comment !== 'string') {
+                    entry.comment = '';
+                }
+            });
         });
     });
 
