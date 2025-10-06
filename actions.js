@@ -22,19 +22,6 @@ function ensureLearningActivityRubric(activity) {
     return activity.rubric;
 }
 
-function autoUpdateLearningActivityStatus(activity) {
-    if (!activity) return;
-    const autoStatus = calculateLearningActivityStatus({ ...activity, statusIsManual: false });
-    if (autoStatus === LEARNING_ACTIVITY_STATUS.CORRECTED) {
-        activity.status = autoStatus;
-        activity.statusIsManual = false;
-        return;
-    }
-    if (!activity.statusIsManual) {
-        activity.status = autoStatus;
-    }
-}
-
 function ensureRubricEvaluation(rubric, studentId) {
     if (!rubric || !studentId) return null;
     if (!rubric.evaluations[studentId]) {
@@ -865,18 +852,6 @@ export const actionHandlers = {
         state.activeView = returnView;
         state.learningActivityRubricReturnView = null;
     },
-    'go-to-learning-activity-evaluation': (id, element) => {
-        const activityId = element?.dataset?.learningActivityId;
-        if (!activityId) return;
-        const activity = state.learningActivities.find(act => act.id === activityId);
-        if (!activity) return;
-        state.learningActivityDraft = null;
-        state.learningActivityGuideVisible = false;
-        state.learningActivityCriteriaModalOpen = false;
-        state.activeView = 'evaluation';
-        state.evaluationActiveTab = 'grades';
-        state.selectedEvaluationClassId = activity.classId || null;
-    },
     'set-learning-activity-rubric-tab': (id, element) => {
         const tab = element?.dataset?.tab;
         const allowedTabs = ['configuration', 'assessment'];
@@ -991,7 +966,6 @@ export const actionHandlers = {
         } else {
             evaluation.scores[itemId] = level;
         }
-        autoUpdateLearningActivityStatus(activity);
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
     },
@@ -1022,7 +996,6 @@ export const actionHandlers = {
             evaluation.scores = {};
             evaluation.flags.deliveredLate = false;
         }
-        autoUpdateLearningActivityStatus(activity);
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
     },
@@ -1037,7 +1010,6 @@ export const actionHandlers = {
         if (!evaluation) return;
         const current = Boolean(evaluation.flags?.deliveredLate);
         evaluation.flags.deliveredLate = !current;
-        autoUpdateLearningActivityStatus(activity);
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
     },
