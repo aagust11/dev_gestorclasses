@@ -91,10 +91,14 @@ function buildAutomaticGradeFromSummary(summary) {
         const numericLevel = getLevelFromNumeric(numeric);
         if (numericLevel && tieLevels.includes(numericLevel)) {
             level = numericLevel;
+            markers.numericTieBreak = true;
         } else {
             // default to highest level in tie and mark unresolved so a footnote can be displayed
             level = tieLevels[tieLevels.length - 1];
             markers.unresolvedTie = true;
+            if (numeric !== null && numeric !== undefined && !Number.isNaN(numeric)) {
+                markers.numericTieBreak = true;
+            }
         }
     }
 
@@ -280,10 +284,14 @@ function computeFinalGrade(studentData, classConfig) {
                 if (numericPreferred && caLevelCandidates.includes(numericPreferred)) {
                     finalLevel = numericPreferred;
                     markers.caTieBreak = true;
+                    markers.numericTieBreak = true;
                 } else {
                     finalLevel = caLevelCandidates[caLevelCandidates.length - 1];
                     markers.caTieBreak = true;
                     markers.unresolvedTie = true;
+                    if (caSummary.numeric !== null && caSummary.numeric !== undefined && !Number.isNaN(caSummary.numeric)) {
+                        markers.numericTieBreak = true;
+                    }
                 }
             }
         }
