@@ -781,14 +781,38 @@ function renderEvaluationGradesTab(classes) {
                 const evaluation = evaluations[student.id];
                 const scores = evaluation && evaluation.scores && typeof evaluation.scores === 'object' ? evaluation.scores : {};
                 const generalComment = typeof evaluation?.comment === 'string' ? evaluation.comment.trim() : '';
+                const flags = evaluation && typeof evaluation.flags === 'object' ? evaluation.flags : {};
+                const isNotPresented = Boolean(flags.notPresented);
+                const isDeliveredLate = Boolean(flags.deliveredLate);
+                const statusTooltipParts = [];
+                if (isNotPresented) {
+                    statusTooltipParts.push(t('rubric_flag_not_presented'));
+                } else if (isDeliveredLate) {
+                    statusTooltipParts.push(t('rubric_flag_delivered_late'));
+                }
 
                 if (rubricItems.length === 0) {
-                    const tooltipParts = [];
+                    const tooltipParts = [...statusTooltipParts];
                     if (generalComment) {
                         tooltipParts.push(`${t('evaluation_tooltip_general_comment')}: ${generalComment}`);
                     }
                     const tooltipAttr = tooltipParts.length > 0 ? ` title="${escapeAttribute(tooltipParts.join('\\n'))}"` : '';
-                    return `<td class="px-3 py-2 text-sm text-center text-gray-400"${tooltipAttr}>—</td>`;
+                    const textClasses = isNotPresented
+                        ? 'text-red-600 dark:text-red-300 font-semibold'
+                        : isDeliveredLate
+                            ? 'text-amber-600 dark:text-amber-300 font-semibold'
+                            : 'text-gray-400';
+                    const label = isNotPresented
+                        ? t('rubric_flag_not_presented_short')
+                        : isDeliveredLate
+                            ? t('rubric_flag_delivered_late_short')
+                            : '—';
+                    const statusIcon = isNotPresented
+                        ? '<i data-lucide="shredder" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
+                        : isDeliveredLate
+                            ? '<i data-lucide="file-clock" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
+                            : '';
+                    return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><span class="${textClasses}">${escapeHtml(label)}</span>${statusIcon}</td>`;
                 }
 
                 return rubricItems.map(item => {
@@ -796,7 +820,7 @@ function renderEvaluationGradesTab(classes) {
                     const levelComment = scoreLevel && item.levelComments && typeof item.levelComments === 'object'
                         ? (item.levelComments[scoreLevel] || '')
                         : '';
-                    const tooltipParts = [];
+                    const tooltipParts = [...statusTooltipParts];
                     if (levelComment) {
                         tooltipParts.push(`${t('evaluation_tooltip_criterion_comment')}: ${levelComment}`);
                     }
@@ -804,11 +828,28 @@ function renderEvaluationGradesTab(classes) {
                         tooltipParts.push(`${t('evaluation_tooltip_general_comment')}: ${generalComment}`);
                     }
                     const tooltipAttr = tooltipParts.length > 0 ? ` title="${escapeAttribute(tooltipParts.join('\\n'))}"` : '';
-                    const key = scoreLevel ? `rubric_level_${scoreLevel}_label` : '';
-                    const translated = scoreLevel ? t(key) : '';
-                    const label = scoreLevel ? (translated !== `[${key}]` ? translated : scoreLevel) : '—';
-                    const textClasses = scoreLevel ? 'text-gray-800 dark:text-gray-100 font-medium' : 'text-gray-400';
-                    return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><span class="${textClasses}">${escapeHtml(label)}</span></td>`;
+                    let label;
+                    let textClasses;
+                    if (isNotPresented) {
+                        label = t('rubric_flag_not_presented_short');
+                        textClasses = 'text-red-600 dark:text-red-300 font-semibold';
+                    } else if (scoreLevel) {
+                        const key = `rubric_level_${scoreLevel}_label`;
+                        const translated = t(key);
+                        label = translated !== `[${key}]` ? translated : scoreLevel;
+                        textClasses = 'text-gray-800 dark:text-gray-100 font-medium';
+                    } else {
+                        label = isDeliveredLate ? t('rubric_flag_delivered_late_short') : '—';
+                        textClasses = isDeliveredLate
+                            ? 'text-amber-600 dark:text-amber-300 font-semibold'
+                            : 'text-gray-400';
+                    }
+                    const statusIcon = isNotPresented
+                        ? '<i data-lucide="shredder" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
+                        : isDeliveredLate && !scoreLevel
+                            ? '<i data-lucide="file-clock" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
+                            : '';
+                    return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><span class="${textClasses}">${escapeHtml(label)}</span>${statusIcon}</td>`;
                 }).join('');
             }).join('');
 
@@ -2110,6 +2151,17 @@ export function renderLearningActivityRubricView() {
     }).join('');
 
     const baseLevelButtonClass = 'w-full px-2 py-2 text-xs font-semibold rounded-md border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600';
+    const flagButtonBaseClass = 'inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600';
+    const flagButtonVariants = {
+        notPresented: {
+            active: 'bg-red-600 text-white border-red-700 shadow-sm',
+            inactive: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-200 dark:border-red-700 dark:hover:bg-red-900/40'
+        },
+        deliveredLate: {
+            active: 'bg-amber-500 text-white border-amber-600 shadow-sm',
+            inactive: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700 dark:hover:bg-amber-900/40'
+        }
+    };
 
     const assessmentRowsHtml = rubricItems.length === 0 || filteredStudents.length === 0
         ? ''
@@ -2117,6 +2169,9 @@ export function renderLearningActivityRubricView() {
             const evaluation = evaluations[student.id] || {};
             const scores = evaluation.scores && typeof evaluation.scores === 'object' ? evaluation.scores : {};
             const comment = evaluation.comment || '';
+            const flags = evaluation.flags && typeof evaluation.flags === 'object' ? evaluation.flags : {};
+            const isNotPresented = Boolean(flags.notPresented);
+            const isDeliveredLate = Boolean(flags.deliveredLate);
 
             const studentRows = rubricItems.map((item, index) => {
                 const competency = competencies.find(comp => comp.id === item.competencyId);
@@ -2141,17 +2196,52 @@ export function renderLearningActivityRubricView() {
                     }
                     const ariaLabel = ariaLabelParts.join('. ');
                     const isActive = currentLevel === level;
-                    const buttonClasses = `${baseLevelButtonClass} ${isActive ? levelStyles[level].active : levelStyles[level].inactive}`;
+                    const disabledAttr = isNotPresented ? ' disabled' : '';
+                    const disabledClasses = isNotPresented ? ' opacity-60 cursor-not-allowed' : '';
+                    const buttonClasses = `${baseLevelButtonClass} ${isActive ? levelStyles[level].active : levelStyles[level].inactive}${disabledClasses}`;
                     return `<td class="px-2 py-2 text-center align-top">
-                        <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${buttonClasses}" aria-pressed="${isActive}" aria-label="${escapeHtml(ariaLabel)}" title="${escapeHtml(tooltip)}" data-tooltip-comment="${escapeHtml(commentTemplate)}">
+                        <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${buttonClasses}" aria-pressed="${isActive}" aria-label="${escapeHtml(ariaLabel)}" title="${escapeHtml(tooltip)}" data-tooltip-comment="${escapeHtml(commentTemplate)}"${disabledAttr} aria-disabled="${isNotPresented}">
                             <span class="block text-[11px] font-bold leading-none">${level}</span>
                             <span class="sr-only">${escapeHtml(levelLabel)}</span>
                         </button>
                     </td>`;
                 }).join('');
 
+                const statusBadges = [];
+                if (isNotPresented) {
+                    statusBadges.push(`<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/40 dark:text-red-200 dark:border-red-700"><i data-lucide="shredder" class="w-3 h-3"></i>${escapeHtml(t('rubric_flag_not_presented_short'))}</span>`);
+                }
+                if (isDeliveredLate && !isNotPresented) {
+                    statusBadges.push(`<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700"><i data-lucide="file-clock" class="w-3 h-3"></i>${escapeHtml(t('rubric_flag_delivered_late_badge'))}</span>`);
+                }
+                const statusBadgesHtml = statusBadges.length ? `<div class="mt-1 flex flex-wrap gap-1">${statusBadges.join('')}</div>` : '';
+
+                const notPresentedButtonClasses = `${flagButtonBaseClass} ${(isNotPresented ? flagButtonVariants.notPresented.active : flagButtonVariants.notPresented.inactive)}`;
+                const deliveredLateDisabled = isNotPresented;
+                const deliveredLateButtonClasses = `${flagButtonBaseClass} ${(isDeliveredLate ? flagButtonVariants.deliveredLate.active : flagButtonVariants.deliveredLate.inactive)}${deliveredLateDisabled ? ' opacity-60 cursor-not-allowed' : ''}`;
+                const deliveredLateDisabledAttr = deliveredLateDisabled ? ' disabled aria-disabled="true"' : '';
+                const flagButtonsHtml = `
+                    <div class="mt-2 flex flex-col gap-1">
+                        <button type="button" class="${notPresentedButtonClasses}" data-action="toggle-rubric-not-presented" data-learning-activity-id="${activity.id}" data-student-id="${student.id}" aria-pressed="${isNotPresented}" title="${escapeHtml(t('rubric_flag_not_presented_hint'))}">
+                            <i data-lucide="shredder" class="w-3.5 h-3.5"></i>
+                            <span>${escapeHtml(t('rubric_flag_not_presented'))}</span>
+                            <span class="font-bold">(${escapeHtml(t('rubric_flag_not_presented_short'))})</span>
+                        </button>
+                        <button type="button" class="${deliveredLateButtonClasses}" data-action="toggle-rubric-delivered-late" data-learning-activity-id="${activity.id}" data-student-id="${student.id}" aria-pressed="${isDeliveredLate}" title="${escapeHtml(t('rubric_flag_delivered_late_hint'))}"${deliveredLateDisabledAttr}>
+                            <i data-lucide="file-clock" class="w-3.5 h-3.5"></i>
+                            <span>${escapeHtml(t('rubric_flag_delivered_late'))}</span>
+                        </button>
+                    </div>
+                `;
+
                 const nameCell = index === 0
-                    ? `<th scope="row" rowspan="${rubricItems.length}" class="px-3 py-3 text-sm font-semibold text-gray-700 dark:text-gray-200 align-top min-w-[10rem]">${escapeHtml(student.name)}</th>`
+                    ? `<th scope="row" rowspan="${rubricItems.length}" class="px-3 py-3 text-sm font-semibold text-gray-700 dark:text-gray-200 align-top min-w-[10rem]">
+                            <div>
+                                <div>${escapeHtml(student.name)}</div>
+                                ${statusBadgesHtml}
+                                ${flagButtonsHtml}
+                            </div>
+                        </th>`
                     : '';
 
                 const commentCell = index === 0

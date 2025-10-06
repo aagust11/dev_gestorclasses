@@ -80,11 +80,18 @@ function normalizeRubricStructure(rawRubric) {
         Object.entries(rubric.evaluations).forEach(([studentId, evaluation]) => {
             if (!studentId) return;
             const normalizedEvaluation = evaluation && typeof evaluation === 'object' ? evaluation : {};
+            const flags = normalizedEvaluation.flags && typeof normalizedEvaluation.flags === 'object'
+                ? normalizedEvaluation.flags
+                : {};
             normalized.evaluations[studentId] = {
                 scores: normalizedEvaluation.scores && typeof normalizedEvaluation.scores === 'object'
                     ? { ...normalizedEvaluation.scores }
                     : {},
-                comment: typeof normalizedEvaluation.comment === 'string' ? normalizedEvaluation.comment : ''
+                comment: typeof normalizedEvaluation.comment === 'string' ? normalizedEvaluation.comment : '',
+                flags: {
+                    notPresented: Boolean(flags.notPresented),
+                    deliveredLate: Boolean(flags.deliveredLate)
+                }
             };
         });
     }

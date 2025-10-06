@@ -115,11 +115,13 @@ function handleAction(action, element, event) {
         'add-rubric-item', 'remove-rubric-item', 'move-rubric-item', 'set-rubric-score',
         'filter-learning-activity-rubric-students', 'set-evaluation-tab', 'select-evaluation-class'
     ];
+    const forceRenderActions = ['toggle-rubric-not-presented', 'toggle-rubric-delivered-late'];
+    const shouldForceRender = forceRenderActions.includes(action);
 
     if (actionHandlers[action]) {
         const result = actionHandlers[action](id, element, event);
 
-        if (reRenderActions.includes(action)) {
+        if (shouldForceRender || reRenderActions.includes(action)) {
             const previousSelection = (() => {
                 if (action === 'filter-learning-activity-rubric-students' && element instanceof HTMLInputElement) {
                     return {
@@ -156,7 +158,7 @@ function handleAction(action, element, event) {
                 }
             };
 
-            if (result && typeof result.then === 'function') {
+            if (!shouldForceRender && result && typeof result.then === 'function') {
                 result.then(rerender).catch(console.error);
             } else {
                 rerender();
