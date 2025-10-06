@@ -439,6 +439,12 @@ export const actionHandlers = {
             state.selectedEvaluationClassId = classId;
         }
     },
+    'select-evaluation-term': (id, element) => {
+        if (!element) return;
+        const value = element.value || 'all';
+        const validIds = new Set((state.terms || []).map(term => term.id));
+        state.evaluationSelectedTermId = value !== 'all' && !validIds.has(value) ? 'all' : value;
+    },
 
     // --- Load Example Action ---
     'load-example': () => {
@@ -554,6 +560,10 @@ export const actionHandlers = {
                     endDate: existing.endDate || '',
                     rubric: normalizeRubric(existing?.rubric),
                     status: existing?.status || LEARNING_ACTIVITY_STATUS.SCHEDULED,
+                    statusIsManual: Boolean(existing?.statusIsManual),
+                    weight: typeof existing?.weight === 'number' && !Number.isNaN(existing.weight)
+                        ? existing.weight
+                        : 1,
                 };
                 syncRubricWithActivityCriteria(state.learningActivityDraft);
             } else {
@@ -568,6 +578,8 @@ export const actionHandlers = {
                     endDate: '',
                     rubric: createEmptyRubric(),
                     status: LEARNING_ACTIVITY_STATUS.SCHEDULED,
+                    statusIsManual: false,
+                    weight: 1,
                 };
                 syncRubricWithActivityCriteria(state.learningActivityDraft);
             }
@@ -580,7 +592,9 @@ export const actionHandlers = {
             state.learningActivityDraft.endDate = computeDefaultEndDate(state.learningActivityDraft.startDate);
         }
 
-        state.learningActivityDraft.status = calculateLearningActivityStatus(state.learningActivityDraft);
+        if (!state.learningActivityDraft.statusIsManual) {
+            state.learningActivityDraft.status = calculateLearningActivityStatus(state.learningActivityDraft);
+        }
 
         state.learningActivityGuideVisible = false;
         state.learningActivityCriteriaModalOpen = false;
@@ -607,6 +621,8 @@ export const actionHandlers = {
             endDate: '',
             rubric: createEmptyRubric(),
             status: LEARNING_ACTIVITY_STATUS.SCHEDULED,
+            statusIsManual: false,
+            weight: 1,
         };
         syncRubricWithActivityCriteria(state.learningActivityDraft);
 
@@ -661,6 +677,29 @@ export const actionHandlers = {
     'update-learning-activity-end-date': (id, element) => {
         if (!state.learningActivityDraft) return;
         state.learningActivityDraft.endDate = element.value;
+    },
+    'update-learning-activity-status': (id, element) => {
+        if (!state.learningActivityDraft) return;
+        const value = element.value;
+        if (value === 'auto') {
+            state.learningActivityDraft.statusIsManual = false;
+            state.learningActivityDraft.status = calculateLearningActivityStatus(state.learningActivityDraft);
+            return;
+        }
+
+        if (Object.values(LEARNING_ACTIVITY_STATUS).includes(value)) {
+            state.learningActivityDraft.statusIsManual = true;
+            state.learningActivityDraft.status = value;
+        }
+    },
+    'update-learning-activity-weight': (id, element) => {
+        if (!state.learningActivityDraft) return;
+        const parsed = Number.parseFloat(element.value);
+        if (Number.isFinite(parsed) && parsed >= 0) {
+            state.learningActivityDraft.weight = parsed;
+        } else if (element.value === '') {
+            state.learningActivityDraft.weight = '';
+        }
     },
     'toggle-learning-activity-criterion': (id, element) => {
         if (!state.learningActivityDraft) return;
@@ -717,11 +756,18 @@ export const actionHandlers = {
         const now = new Date().toISOString();
         syncRubricWithActivityCriteria(draft);
         const normalizedRubric = normalizeRubric(draft.rubric);
-        const computedStatus = calculateLearningActivityStatus({
-            startDate: draft.startDate,
-            endDate: draft.endDate,
-            status: draft.status,
-        });
+        const weightValue = Number.parseFloat(draft.weight);
+        const normalizedWeight = Number.isFinite(weightValue) && weightValue >= 0 ? weightValue : 1;
+        let persistedStatus;
+        if (draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)) {
+            persistedStatus = draft.status;
+        } else {
+            persistedStatus = calculateLearningActivityStatus({
+                startDate: draft.startDate,
+                endDate: draft.endDate,
+                status: draft.status,
+            });
+        }
 
         if (draft.isNew) {
             state.learningActivities.push({
@@ -735,7 +781,9 @@ export const actionHandlers = {
                 startDate: draft.startDate || '',
                 endDate: draft.endDate || '',
                 rubric: normalizedRubric,
-                status: computedStatus,
+                status: persistedStatus,
+                statusIsManual: Boolean(draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)),
+                weight: normalizedWeight,
             });
         } else {
             const index = state.learningActivities.findIndex(act => act.id === draft.id);
@@ -750,7 +798,9 @@ export const actionHandlers = {
                 startDate: draft.startDate || '',
                 endDate: draft.endDate || '',
                 rubric: normalizedRubric,
-                status: computedStatus,
+                status: persistedStatus,
+                statusIsManual: Boolean(draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)),
+                weight: normalizedWeight,
             };
             if (index === -1) {
                 state.learningActivities.push(persisted);
@@ -1849,6 +1899,9 @@ export const actionHandlers = {
         state.terms = state.terms.filter(term => term.id !== id);
         if (state.selectedTermId === id) {
             state.selectedTermId = 'all';
+        }
+        if (state.evaluationSelectedTermId === id) {
+            state.evaluationSelectedTermId = 'all';
         }
         saveState();
     },

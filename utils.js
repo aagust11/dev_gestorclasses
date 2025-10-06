@@ -145,6 +145,25 @@ export function getCurrentTermDateRange() {
     };
 }
 
+export function getTermDateRangeById(termId) {
+    if (!termId || termId === 'all') {
+        return null;
+    }
+
+    const term = state.terms.find(t => t.id === termId);
+    if (!term || !term.startDate || !term.endDate) {
+        return null;
+    }
+
+    const start = new Date(`${term.startDate}T00:00:00`);
+    const end = new Date(`${term.endDate}T23:59:59`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        return null;
+    }
+
+    return { start, end };
+}
+
 // NUEVA FUNCIÓN: Comprueba si una fecha es festivo
 export function isHoliday(date) {
     const checkDate = new Date(date);
