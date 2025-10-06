@@ -758,18 +758,23 @@ export const actionHandlers = {
         if (!activityId) return;
         const activity = state.learningActivities.find(act => act.id === activityId);
         if (!activity) return;
+        const previousView = state.activeView;
+        const openAssessmentTab = previousView === 'evaluation';
+        state.learningActivityRubricReturnView = previousView;
         syncRubricWithActivityCriteria(activity);
         saveState();
         state.activeLearningActivityRubricId = activityId;
-        state.learningActivityRubricTab = 'configuration';
+        state.learningActivityRubricTab = openAssessmentTab ? 'assessment' : 'configuration';
         state.learningActivityRubricFilter = '';
         state.activeView = 'learningActivityRubric';
     },
     'close-learning-activity-rubric': () => {
+        const returnView = state.learningActivityRubricReturnView || 'activities';
         state.activeLearningActivityRubricId = null;
         state.learningActivityRubricTab = 'configuration';
         state.learningActivityRubricFilter = '';
-        state.activeView = 'activities';
+        state.activeView = returnView;
+        state.learningActivityRubricReturnView = null;
     },
     'set-learning-activity-rubric-tab': (id, element) => {
         const tab = element?.dataset?.tab;

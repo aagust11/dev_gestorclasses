@@ -638,15 +638,28 @@ function renderEvaluationActivitiesTab(classes) {
                         ? `<p class="mt-2 text-sm text-gray-600 dark:text-gray-300">${escapeHtml(activity.description)}</p>`
                         : '';
 
+                    const rawActivityTitle = activity.title?.trim() || t('activities_untitled_label');
+                    const activityTitle = escapeHtml(rawActivityTitle);
+                    const labelTemplate = t('evaluation_open_activity_assessment');
+                    const accessibleLabel = labelTemplate.startsWith('[')
+                        ? activityTitle
+                        : escapeHtml(labelTemplate.replace('{{title}}', rawActivityTitle));
+
                     return `
-                        <article class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white/80 dark:bg-gray-800/70 shadow-sm">
+                        <button
+                            type="button"
+                            data-action="open-learning-activity-rubric"
+                            data-learning-activity-id="${activity.id}"
+                            class="block w-full text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white/80 dark:bg-gray-800/70 shadow-sm hover:border-blue-400 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400/60 dark:hover:border-blue-500 dark:focus:ring-blue-500/60 transition-colors"
+                            aria-label="${accessibleLabel}"
+                        >
                             <div class="flex items-start justify-between gap-3">
-                                <h5 class="text-base font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(activity.title?.trim() || t('activities_untitled_label'))}</h5>
+                                <h5 class="text-base font-semibold text-gray-800 dark:text-gray-100">${activityTitle}</h5>
                                 <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full ${meta.badgeClasses}">${escapeHtml(meta.label)}</span>
                             </div>
                             ${descriptionHtml}
                             ${dateInfo}
-                        </article>
+                        </button>
                     `;
                 }).join('');
 

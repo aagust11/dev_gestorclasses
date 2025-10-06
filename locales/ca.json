@@ -128,6 +128,7 @@
   "evaluation_status_not_started": "No iniciades",
   "evaluation_class_no_pending": "No hi ha activitats pendents en aquesta assignatura.",
   "evaluation_class_pending_count": "Activitats pendents: {{count}}",
+  "evaluation_open_activity_assessment": "Obre l'avaluació de {{title}}",
   "evaluation_grades_select_class": "Selecciona una assignatura per veure les qualificacions.",
   "evaluation_grades_no_students": "No hi ha alumnat assignat a aquesta assignatura.",
   "evaluation_grades_no_activities": "Aquesta assignatura encara no té activitats d'avaluació.",

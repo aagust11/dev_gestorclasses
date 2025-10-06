@@ -128,6 +128,7 @@
   "evaluation_status_not_started": "Non iniciadas",
   "evaluation_class_no_pending": "Non hai actividades pendentes nesta materia.",
   "evaluation_class_pending_count": "Actividades pendentes: {{count}}",
+  "evaluation_open_activity_assessment": "Abrir a avaliación de {{title}}",
   "evaluation_grades_select_class": "Selecciona unha materia para ver as cualificacións.",
   "evaluation_grades_no_students": "Non hai alumnado asignado a esta materia.",
   "evaluation_grades_no_activities": "Esta materia aínda non ten actividades de avaliación.",

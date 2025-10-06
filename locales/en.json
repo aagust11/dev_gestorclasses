@@ -128,6 +128,7 @@
   "evaluation_status_not_started": "Not started",
   "evaluation_class_no_pending": "There are no pending activities for this course.",
   "evaluation_class_pending_count": "Pending activities: {{count}}",
+  "evaluation_open_activity_assessment": "Open assessment for {{title}}",
   "evaluation_grades_select_class": "Select a course to view the grades.",
   "evaluation_grades_no_students": "There are no students enrolled in this course.",
   "evaluation_grades_no_activities": "This course does not have assessment activities yet.",
