@@ -22,6 +22,32 @@ function ensureLearningActivityRubric(activity) {
     return activity.rubric;
 }
 
+function ensureRubricEvaluation(rubric, studentId) {
+    if (!rubric || !studentId) return null;
+    if (!rubric.evaluations[studentId]) {
+        rubric.evaluations[studentId] = {
+            scores: {},
+            comment: '',
+            flags: { notPresented: false, deliveredLate: false }
+        };
+    } else {
+        const evaluation = rubric.evaluations[studentId];
+        if (!evaluation.scores || typeof evaluation.scores !== 'object') {
+            evaluation.scores = {};
+        }
+        if (typeof evaluation.comment !== 'string') {
+            evaluation.comment = '';
+        }
+        if (!evaluation.flags || typeof evaluation.flags !== 'object') {
+            evaluation.flags = { notPresented: false, deliveredLate: false };
+        } else {
+            evaluation.flags.notPresented = Boolean(evaluation.flags.notPresented);
+            evaluation.flags.deliveredLate = Boolean(evaluation.flags.deliveredLate);
+        }
+    }
+    return rubric.evaluations[studentId];
+}
+
 function createDefaultLevelComments() {
     const comments = {};
     RUBRIC_LEVELS.forEach(level => {
@@ -880,14 +906,15 @@ export const actionHandlers = {
         const activity = state.learningActivities.find(act => act.id === activityId);
         if (!activity) return;
         const rubric = ensureLearningActivityRubric(activity);
-        if (!rubric.evaluations[studentId]) {
-            rubric.evaluations[studentId] = { scores: {}, comment: '' };
+        const evaluation = ensureRubricEvaluation(rubric, studentId);
+        if (!evaluation || evaluation.flags?.notPresented) {
+            return;
         }
-        const current = rubric.evaluations[studentId].scores[itemId];
+        const current = evaluation.scores[itemId];
         if (current === level) {
-            delete rubric.evaluations[studentId].scores[itemId];
+            delete evaluation.scores[itemId];
         } else {
-            rubric.evaluations[studentId].scores[itemId] = level;
+            evaluation.scores[itemId] = level;
         }
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
@@ -899,11 +926,42 @@ export const actionHandlers = {
         const activity = state.learningActivities.find(act => act.id === activityId);
         if (!activity) return;
         const rubric = ensureLearningActivityRubric(activity);
-        if (!rubric.evaluations[studentId]) {
-            rubric.evaluations[studentId] = { scores: {}, comment: '' };
-        }
-        rubric.evaluations[studentId].comment = element.value;
+        const evaluation = ensureRubricEvaluation(rubric, studentId);
+        if (!evaluation) return;
+        evaluation.comment = element.value;
         saveState();
+    },
+    'toggle-rubric-not-presented': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const studentId = element?.dataset?.studentId;
+        if (!activityId || !studentId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        const evaluation = ensureRubricEvaluation(rubric, studentId);
+        if (!evaluation) return;
+        const current = Boolean(evaluation.flags?.notPresented);
+        evaluation.flags.notPresented = !current;
+        if (evaluation.flags.notPresented) {
+            evaluation.scores = {};
+            evaluation.flags.deliveredLate = false;
+        }
+        saveState();
+        document.dispatchEvent(new CustomEvent('render'));
+    },
+    'toggle-rubric-delivered-late': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const studentId = element?.dataset?.studentId;
+        if (!activityId || !studentId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        const evaluation = ensureRubricEvaluation(rubric, studentId);
+        if (!evaluation) return;
+        const current = Boolean(evaluation.flags?.deliveredLate);
+        evaluation.flags.deliveredLate = !current;
+        saveState();
+        document.dispatchEvent(new CustomEvent('render'));
     },
     'filter-learning-activity-rubric-students': (id, element) => {
         if (!element) return;
