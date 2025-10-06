@@ -13,6 +13,8 @@ const escapeHtml = (value = '') => String(value)
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+const escapeAttribute = (value = '') => escapeHtml(value).replace(/\n/g, '&#10;');
+
 function renderMobileHeaderActions(actions) {
     const container = document.getElementById('mobile-header-actions');
     if (!container) return;
@@ -472,6 +474,372 @@ export function renderActivitiesView() {
             </div>
             <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
                 ${cardsHtml}
+            </div>
+        </div>
+    `;
+}
+
+export function renderEvaluationView() {
+    renderMobileHeaderActions([]);
+
+    const classes = state.activities
+        .filter(activity => activity.type === 'class')
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    const tabs = [
+        { id: 'activities', label: t('evaluation_tab_activities'), icon: 'clipboard-list' },
+        { id: 'grades', label: t('evaluation_tab_grades'), icon: 'graduation-cap' }
+    ];
+    const allowedTabs = tabs.map(tab => tab.id);
+    if (!allowedTabs.includes(state.evaluationActiveTab)) {
+        state.evaluationActiveTab = 'activities';
+    }
+
+    if (state.evaluationActiveTab === 'grades') {
+        const hasSelection = classes.some(cls => cls.id === state.selectedEvaluationClassId);
+        if (!hasSelection) {
+            state.selectedEvaluationClassId = classes[0]?.id || null;
+        }
+    } else if (classes.length === 0) {
+        state.selectedEvaluationClassId = null;
+    }
+
+    const tabButtonsHtml = tabs.map(tab => {
+        const isActive = state.evaluationActiveTab === tab.id;
+        const baseClasses = 'inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors';
+        const activeClasses = 'bg-blue-600 text-white shadow-sm';
+        const inactiveClasses = 'text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700';
+        return `<button data-action="set-evaluation-tab" data-tab="${tab.id}" class="${baseClasses} ${isActive ? activeClasses : inactiveClasses}"><i data-lucide="${tab.icon}" class="w-4 h-4"></i><span>${escapeHtml(tab.label)}</span></button>`;
+    }).join('');
+
+    const tabContent = state.evaluationActiveTab === 'grades'
+        ? renderEvaluationGradesTab(classes)
+        : renderEvaluationActivitiesTab(classes);
+
+    return `
+        <div class="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900/50 min-h-full space-y-6">
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200">${t('evaluation_view_title')}</h2>
+            <div class="flex flex-wrap gap-2">${tabButtonsHtml}</div>
+            ${tabContent}
+        </div>
+    `;
+}
+
+function getActivitySortOrder(entry) {
+    const candidates = [entry?.endDate, entry?.startDate, entry?.createdAt];
+    for (const candidate of candidates) {
+        if (!candidate) continue;
+        if (candidate instanceof Date) {
+            const timestamp = candidate.getTime();
+            if (!Number.isNaN(timestamp)) {
+                return timestamp;
+            }
+            continue;
+        }
+        if (typeof candidate === 'number') {
+            if (!Number.isNaN(candidate)) {
+                return candidate;
+            }
+            continue;
+        }
+        const candidateStr = String(candidate);
+        const normalized = candidateStr.includes('T') ? candidateStr : `${candidateStr}T00:00:00`;
+        const date = new Date(normalized);
+        if (!Number.isNaN(date.getTime())) {
+            return date.getTime();
+        }
+    }
+    return Number.MAX_SAFE_INTEGER;
+}
+
+function renderEvaluationActivitiesTab(classes) {
+    const locale = document.documentElement.lang || 'ca';
+    const formatDateForDisplay = (value) => {
+        if (!value) return '';
+        const normalized = value.includes('T') ? value : `${value}T00:00:00`;
+        const date = new Date(normalized);
+        if (Number.isNaN(date.getTime())) return '';
+        return date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
+    if (classes.length === 0) {
+        return `
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
+                <p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_no_classes')}</p>
+            </div>
+        `;
+    }
+
+    const statusPriority = [
+        LEARNING_ACTIVITY_STATUS.PENDING_REVIEW,
+        LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS,
+        LEARNING_ACTIVITY_STATUS.SCHEDULED
+    ];
+
+    const statusMeta = {
+        [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: {
+            label: t('learning_activity_status_pending'),
+            badgeClasses: 'bg-amber-500/10 text-amber-600 border border-amber-200 dark:text-amber-200 dark:border-amber-600 dark:bg-amber-900/30'
+        },
+        [LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS]: {
+            label: t('learning_activity_status_open'),
+            badgeClasses: 'bg-emerald-500/10 text-emerald-600 border border-emerald-200 dark:text-emerald-200 dark:border-emerald-600 dark:bg-emerald-900/30'
+        },
+        [LEARNING_ACTIVITY_STATUS.SCHEDULED]: {
+            label: t('evaluation_status_not_started'),
+            badgeClasses: 'bg-gray-500/10 text-gray-600 border border-gray-200 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800/60'
+        }
+    };
+
+    const classCards = classes.map(cls => {
+        const classActivities = state.learningActivities
+            .filter(activity => activity.classId === cls.id)
+            .map(activity => {
+                const status = calculateLearningActivityStatus(activity);
+                return {
+                    ...activity,
+                    status,
+                    startDisplay: formatDateForDisplay(activity.startDate),
+                    endDisplay: formatDateForDisplay(activity.endDate),
+                    description: activity.description?.trim() || ''
+                };
+            })
+            .filter(activity => statusPriority.includes(activity.status));
+
+        const activitiesByStatus = statusPriority.map(status => {
+            const items = classActivities
+                .filter(activity => activity.status === status)
+                .sort((a, b) => getActivitySortOrder(a) - getActivitySortOrder(b));
+            return { status, items };
+        });
+
+        const pendingCount = activitiesByStatus.reduce((acc, entry) => acc + entry.items.length, 0);
+        const rawPendingLabel = t('evaluation_class_pending_count');
+        const pendingLabel = rawPendingLabel.startsWith('[')
+            ? String(pendingCount)
+            : rawPendingLabel.replace('{{count}}', pendingCount);
+
+        const sectionsHtml = activitiesByStatus
+            .filter(entry => entry.items.length > 0)
+            .map(entry => {
+                const meta = statusMeta[entry.status] || statusMeta[LEARNING_ACTIVITY_STATUS.SCHEDULED];
+                const activitiesHtml = entry.items.map(activity => {
+                    const dateParts = [];
+                    if (activity.startDisplay) {
+                        dateParts.push(`${t('start_date')}: ${escapeHtml(activity.startDisplay)}`);
+                    }
+                    if (activity.endDisplay) {
+                        dateParts.push(`${t('end_date')}: ${escapeHtml(activity.endDisplay)}`);
+                    }
+                    const dateInfo = dateParts.length > 0
+                        ? `<div class="mt-3 text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-x-4 gap-y-1">${dateParts.map(part => `<span>${part}</span>`).join('')}</div>`
+                        : '';
+                    const descriptionHtml = activity.description
+                        ? `<p class="mt-2 text-sm text-gray-600 dark:text-gray-300">${escapeHtml(activity.description)}</p>`
+                        : '';
+
+                    return `
+                        <article class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white/80 dark:bg-gray-800/70 shadow-sm">
+                            <div class="flex items-start justify-between gap-3">
+                                <h5 class="text-base font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(activity.title?.trim() || t('activities_untitled_label'))}</h5>
+                                <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full ${meta.badgeClasses}">${escapeHtml(meta.label)}</span>
+                            </div>
+                            ${descriptionHtml}
+                            ${dateInfo}
+                        </article>
+                    `;
+                }).join('');
+
+                return `
+                    <section class="space-y-3">
+                        <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide">${escapeHtml(meta.label)}</h4>
+                        <div class="space-y-3">${activitiesHtml}</div>
+                    </section>
+                `;
+            }).join('');
+
+        const emptyMessage = `<p class="text-sm text-gray-500 dark:text-gray-400">${t('evaluation_class_no_pending')}</p>`;
+
+        return `
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-6 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(cls.name)}</h3>
+                    <span class="text-sm text-gray-500 dark:text-gray-400">${escapeHtml(pendingLabel)}</span>
+                </div>
+                ${sectionsHtml || emptyMessage}
+            </div>
+        `;
+    }).join('');
+
+    return `<div class="space-y-6">${classCards}</div>`;
+}
+
+function renderEvaluationGradesTab(classes) {
+    if (classes.length === 0) {
+        return `
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
+                <p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_no_classes')}</p>
+            </div>
+        `;
+    }
+
+    let selectedClass = classes.find(cls => cls.id === state.selectedEvaluationClassId) || null;
+    if (!selectedClass) {
+        selectedClass = classes[0] || null;
+        if (selectedClass) {
+            state.selectedEvaluationClassId = selectedClass.id;
+        }
+    }
+
+    const classButtonsHtml = classes.map(cls => {
+        const isActive = selectedClass && cls.id === selectedClass.id;
+        const baseClasses = 'px-3 py-1.5 rounded-full text-sm font-medium border transition-colors';
+        const activeClasses = 'bg-blue-600 text-white border-blue-600 shadow-sm';
+        const inactiveClasses = 'text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700';
+        return `<button data-action="select-evaluation-class" data-class-id="${cls.id}" class="${baseClasses} ${isActive ? activeClasses : inactiveClasses}">${escapeHtml(cls.name)}</button>`;
+    }).join('');
+
+    if (!selectedClass) {
+        return `
+            <div class="space-y-4">
+                <div class="flex flex-wrap gap-2">${classButtonsHtml}</div>
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
+                    <p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_grades_select_class')}</p>
+                </div>
+            </div>
+        `;
+    }
+
+    const studentIds = Array.isArray(selectedClass.studentIds) ? selectedClass.studentIds : [];
+    const students = state.students
+        .filter(student => studentIds.includes(student.id))
+        .sort(sortStudentsByName);
+
+    const learningActivities = state.learningActivities
+        .filter(activity => activity.classId === selectedClass.id)
+        .sort((a, b) => getActivitySortOrder(a) - getActivitySortOrder(b));
+
+    const competencies = Array.isArray(selectedClass.competencies) ? selectedClass.competencies : [];
+    const criterionIndex = new Map();
+    competencies.forEach(competency => {
+        const criteria = Array.isArray(competency.criteria) ? competency.criteria : [];
+        criteria.forEach(criterion => {
+            if (criterion && criterion.id) {
+                criterionIndex.set(criterion.id, { competency, criterion });
+            }
+        });
+    });
+
+    const getCriterionHeader = (item) => {
+        const info = criterionIndex.get(item.criterionId) || {};
+        const criterion = info.criterion || {};
+        const competency = info.competency || {};
+        const code = typeof criterion.code === 'string' ? criterion.code.trim() : '';
+        const name = typeof criterion.name === 'string' ? criterion.name.trim() : '';
+        const description = typeof criterion.description === 'string' ? criterion.description.trim() : '';
+        const competencyName = typeof competency.name === 'string' ? competency.name.trim() : '';
+        const primaryParts = [code, name].filter(Boolean);
+        const primary = primaryParts.length > 0 ? primaryParts.join(' · ') : (description || t('evaluation_grades_no_criteria'));
+        const secondaryHtml = competencyName
+            ? `<div class="text-[11px] text-gray-500 dark:text-gray-400 font-normal">${escapeHtml(competencyName)}</div>`
+            : '';
+        return `
+            <div class="space-y-0.5">
+                <div>${escapeHtml(primary)}</div>
+                ${secondaryHtml}
+            </div>
+        `;
+    };
+
+    let contentHtml = '';
+
+    if (learningActivities.length === 0) {
+        contentHtml = `<p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_grades_no_activities')}</p>`;
+    } else if (students.length === 0) {
+        contentHtml = `<p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_grades_no_students')}</p>`;
+    } else {
+        const headerRow1 = learningActivities.map(activity => {
+            const rubricItems = Array.isArray(activity.rubric?.items) ? activity.rubric.items : [];
+            const colSpan = Math.max(rubricItems.length, 1);
+            const title = activity.title?.trim() || t('activities_untitled_label');
+            return `<th scope="col" colspan="${colSpan}" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${escapeHtml(title)}</th>`;
+        }).join('');
+
+        const headerRow2 = learningActivities.map(activity => {
+            const rubricItems = Array.isArray(activity.rubric?.items) ? activity.rubric.items : [];
+            if (rubricItems.length === 0) {
+                return `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${t('evaluation_grades_no_criteria')}</th>`;
+            }
+            return rubricItems.map(item => `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-left min-w-[11rem]">${getCriterionHeader(item)}</th>`).join('');
+        }).join('');
+
+        const rowsHtml = students.map(student => {
+            const activityCells = learningActivities.map(activity => {
+                const rubric = activity.rubric || {};
+                const rubricItems = Array.isArray(rubric.items) ? rubric.items : [];
+                const evaluations = rubric.evaluations && typeof rubric.evaluations === 'object' ? rubric.evaluations : {};
+                const evaluation = evaluations[student.id];
+                const scores = evaluation && evaluation.scores && typeof evaluation.scores === 'object' ? evaluation.scores : {};
+                const generalComment = typeof evaluation?.comment === 'string' ? evaluation.comment.trim() : '';
+
+                if (rubricItems.length === 0) {
+                    const tooltipParts = [];
+                    if (generalComment) {
+                        tooltipParts.push(`${t('evaluation_tooltip_general_comment')}: ${generalComment}`);
+                    }
+                    const tooltipAttr = tooltipParts.length > 0 ? ` title="${escapeAttribute(tooltipParts.join('\\n'))}"` : '';
+                    return `<td class="px-3 py-2 text-sm text-center text-gray-400"${tooltipAttr}>—</td>`;
+                }
+
+                return rubricItems.map(item => {
+                    const scoreLevel = scores[item.id] || '';
+                    const levelComment = scoreLevel && item.levelComments && typeof item.levelComments === 'object'
+                        ? (item.levelComments[scoreLevel] || '')
+                        : '';
+                    const tooltipParts = [];
+                    if (levelComment) {
+                        tooltipParts.push(`${t('evaluation_tooltip_criterion_comment')}: ${levelComment}`);
+                    }
+                    if (generalComment) {
+                        tooltipParts.push(`${t('evaluation_tooltip_general_comment')}: ${generalComment}`);
+                    }
+                    const tooltipAttr = tooltipParts.length > 0 ? ` title="${escapeAttribute(tooltipParts.join('\\n'))}"` : '';
+                    const key = scoreLevel ? `rubric_level_${scoreLevel}_label` : '';
+                    const translated = scoreLevel ? t(key) : '';
+                    const label = scoreLevel ? (translated !== `[${key}]` ? translated : scoreLevel) : '—';
+                    const textClasses = scoreLevel ? 'text-gray-800 dark:text-gray-100 font-medium' : 'text-gray-400';
+                    return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><span class="${textClasses}">${escapeHtml(label)}</span></td>`;
+                }).join('');
+            }).join('');
+
+            return `<tr class="border-b border-gray-100 dark:border-gray-800"><th scope="row" class="px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 text-left min-w-[12rem]">${escapeHtml(student.name)}</th>${activityCells}</tr>`;
+        }).join('');
+
+        contentHtml = `
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-left">
+                    <thead class="bg-white dark:bg-gray-800">
+                        <tr>
+                            <th scope="col" rowspan="2" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[12rem]">${t('evaluation_grades_student_column')}</th>
+                            ${headerRow1}
+                        </tr>
+                        <tr>
+                            ${headerRow2}
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="space-y-4">
+            <div class="flex flex-wrap gap-2">${classButtonsHtml}</div>
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6 shadow-sm">
+                ${contentHtml}
             </div>
         </div>
     `;

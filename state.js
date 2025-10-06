@@ -41,6 +41,8 @@ export const state = {
     activeLearningActivityRubricId: null,
     learningActivityRubricTab: 'configuration',
     learningActivityRubricFilter: '',
+    evaluationActiveTab: 'activities',
+    selectedEvaluationClassId: null,
 };
 
 function generateId(prefix = 'id') {
@@ -156,6 +158,8 @@ export function saveState() {
         holidays: state.holidays,
         settingsActiveTab: state.settingsActiveTab, // Guardar la pestaña activa
         studentTimelineFilter: state.studentTimelineFilter,
+        evaluationActiveTab: state.evaluationActiveTab,
+        selectedEvaluationClassId: state.selectedEvaluationClassId,
     };
     localStorage.setItem('teacherDashboardData', JSON.stringify(dataToSave));
     
@@ -203,6 +207,8 @@ export function loadState() {
         state.holidays = parsedData.holidays || [];
         state.settingsActiveTab = parsedData.settingsActiveTab || 'calendar'; // Cargar la pestaña activa
         state.studentTimelineFilter = parsedData.studentTimelineFilter || 'all';
+        state.evaluationActiveTab = parsedData.evaluationActiveTab || 'activities';
+        state.selectedEvaluationClassId = parsedData.selectedEvaluationClassId || null;
     }
 
     state.activities.forEach(activity => {
