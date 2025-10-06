@@ -115,6 +115,7 @@ function handleAction(action, element, event) {
         'add-rubric-item', 'remove-rubric-item', 'move-rubric-item', 'set-rubric-score',
         'filter-learning-activity-rubric-students', 'set-evaluation-tab', 'select-evaluation-class'
     ];
+    reRenderActions.push('calculate-term-grades', 'update-term-grade-field');
     const forceRenderActions = ['toggle-rubric-not-presented', 'toggle-rubric-delivered-late'];
     const shouldForceRender = forceRenderActions.includes(action);
 
@@ -171,7 +172,12 @@ function attachEventListeners() {
     const elements = document.querySelectorAll('[data-action]');
     elements.forEach(el => {
         const action = el.dataset.action;
-        const eventType = ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) ? 'input' : 'click';
+        const isFormElement = ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+        const eventType = action === 'update-term-grade-field'
+            ? 'change'
+            : isFormElement
+                ? 'input'
+                : 'click';
         
         if (el.dataset.listenerAttached === 'true') return;
         

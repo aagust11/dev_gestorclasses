@@ -3,6 +3,7 @@
 import { state, LEARNING_ACTIVITY_STATUS, RUBRIC_LEVELS, calculateLearningActivityStatus } from './state.js';
 import { darkenColor, getWeekStartDate, getWeekDateRange, formatDate, isSameDate, findNextSession, findPreviousSession, DAY_KEYS, findNextClassSession, getCurrentTermDateRange, getWeeksForCourse, isHoliday, normalizeStudentAnnotation, STUDENT_ATTENDANCE_STATUS, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
+import { formatNumericDisplay, translateLevelLabel } from './grades.js';
 
 const sortStudentsByName = (studentA, studentB) => studentA.name.localeCompare(studentB.name);
 
@@ -493,14 +494,15 @@ export function renderEvaluationView() {
 
     const tabs = [
         { id: 'activities', label: t('evaluation_tab_activities'), icon: 'clipboard-list' },
-        { id: 'grades', label: t('evaluation_tab_grades'), icon: 'graduation-cap' }
+        { id: 'grades', label: t('evaluation_tab_grades'), icon: 'graduation-cap' },
+        { id: 'term-grades', label: t('evaluation_tab_term_grades'), icon: 'line-chart' }
     ];
     const allowedTabs = tabs.map(tab => tab.id);
     if (!allowedTabs.includes(state.evaluationActiveTab)) {
         state.evaluationActiveTab = 'activities';
     }
 
-    if (state.evaluationActiveTab === 'grades') {
+    if (state.evaluationActiveTab === 'grades' || state.evaluationActiveTab === 'term-grades') {
         const hasSelection = classes.some(cls => cls.id === state.selectedEvaluationClassId);
         if (!hasSelection) {
             state.selectedEvaluationClassId = classes[0]?.id || null;
@@ -519,7 +521,9 @@ export function renderEvaluationView() {
 
     const tabContent = state.evaluationActiveTab === 'grades'
         ? renderEvaluationGradesTab(classes)
-        : renderEvaluationActivitiesTab(classes);
+        : state.evaluationActiveTab === 'term-grades'
+            ? renderEvaluationTermGradesTab(classes)
+            : renderEvaluationActivitiesTab(classes);
 
     return `
         <div class="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900/50 min-h-full space-y-6">
@@ -978,6 +982,276 @@ function renderEvaluationGradesTab(classes) {
         </div>
     `;
 }
+
+
+function normalizeTermGradeEntry(entry) {
+    if (!entry || typeof entry !== 'object') {
+        return { numeric: null, level: '', source: 'auto', markers: {} };
+    }
+    const numeric = typeof entry.numeric === 'number' && !Number.isNaN(entry.numeric) ? entry.numeric : null;
+    const level = typeof entry.level === 'string' ? entry.level : '';
+    const source = entry.source === 'manual' ? 'manual' : 'auto';
+    const markers = entry.markers && typeof entry.markers === 'object' ? entry.markers : {};
+    return { numeric, level, source, markers };
+}
+
+function getTermGradeMarkers(entry, footnotes) {
+    if (!entry || !entry.markers) {
+        return '';
+    }
+    const markers = [];
+    if (entry.markers.caTieBreak) {
+        markers.push('**');
+        if (!footnotes.has('**')) {
+            footnotes.set('**', t('evaluation_term_grades_footnote_ca'));
+        }
+    }
+    if (entry.markers.forcedNA) {
+        markers.push('†');
+        if (!footnotes.has('†')) {
+            footnotes.set('†', t('evaluation_term_grades_footnote_forced_na'));
+        }
+    }
+    if (entry.markers.numericTieBreak || entry.markers.unresolvedTie) {
+        markers.push('*');
+        if (!footnotes.has('*')) {
+            footnotes.set('*', t('evaluation_term_grades_footnote_numeric'));
+        }
+    }
+    return markers.join('');
+}
+
+function renderTermGradeCell({ entry, classId, termId, studentId, scope, targetId, footnotes }) {
+    const normalized = normalizeTermGradeEntry(entry);
+    const numericDisplay = formatNumericDisplay(normalized.numeric);
+    const levelKey = translateLevelLabel(normalized.level);
+    const qualitative = levelKey ? t(levelKey) : '';
+    let displayText;
+    if (numericDisplay && qualitative) {
+        displayText = `${numericDisplay} (${qualitative})`;
+    } else if (numericDisplay) {
+        displayText = numericDisplay;
+    } else if (qualitative) {
+        displayText = qualitative;
+    } else {
+        displayText = '—';
+    }
+    const markers = getTermGradeMarkers(normalized, footnotes);
+    const statusLabel = normalized.source === 'manual'
+        ? t('evaluation_term_grades_manual_value')
+        : t('evaluation_term_grades_auto_value');
+
+    const datasetBase = `data-action="update-term-grade-field" data-class-id="${escapeAttribute(classId)}" data-term-id="${escapeAttribute(termId)}" data-student-id="${escapeAttribute(studentId)}" data-scope="${escapeAttribute(scope)}" data-target-id="${escapeAttribute(targetId)}"`;
+    const numericInputValue = normalized.numeric !== null ? formatNumericDisplay(normalized.numeric) : '';
+    const levelOptions = [`<option value="">${escapeHtml(t('evaluation_term_grades_level_placeholder'))}</option>`]
+        .concat(RUBRIC_LEVELS.map(level => {
+            const selected = normalized.level === level ? ' selected' : '';
+            const label = t(translateLevelLabel(level));
+            return `<option value="${escapeAttribute(level)}"${selected}>${escapeHtml(label)}</option>`;
+        })).join('');
+
+    return `
+        <div class="space-y-2" data-grade-cell>
+            <div class="text-sm font-medium text-gray-800 dark:text-gray-100 flex items-baseline gap-1">
+                <span data-grade-preview>${escapeHtml(displayText)}</span>
+                <sup data-grade-markers>${escapeHtml(markers)}</sup>
+            </div>
+            <div class="flex items-center gap-2">
+                <input type="number" min="0" max="10" step="0.1" value="${escapeAttribute(numericInputValue)}" ${datasetBase} data-field="numeric" class="w-20 p-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm text-gray-800 dark:text-gray-100"/>
+                <select ${datasetBase} data-field="level" class="p-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm text-gray-800 dark:text-gray-100">
+                    ${levelOptions}
+                </select>
+            </div>
+            <div class="text-xs text-gray-500 dark:text-gray-400" data-grade-status>${escapeHtml(statusLabel)}</div>
+        </div>
+    `;
+}
+
+function renderEvaluationTermGradesTab(classes) {
+    if (classes.length === 0) {
+        return `
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
+                <p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_no_classes')}</p>
+            </div>
+        `;
+    }
+
+    const locale = document.documentElement.lang || 'ca';
+    const formatDateForDisplay = (value) => {
+        if (!value) return '';
+        const normalized = value.includes('T') ? value : `${value}T00:00:00`;
+        const date = new Date(normalized);
+        if (Number.isNaN(date.getTime())) return '';
+        return date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
+    let selectedClass = classes.find(cls => cls.id === state.selectedEvaluationClassId) || null;
+    if (!selectedClass) {
+        selectedClass = classes[0] || null;
+        if (selectedClass) {
+            state.selectedEvaluationClassId = selectedClass.id;
+        }
+    }
+
+    const classButtonsHtml = classes.map(cls => {
+        const isActive = selectedClass && cls.id === selectedClass.id;
+        const baseClasses = 'px-3 py-1.5 rounded-full text-sm font-medium border transition-colors';
+        const activeClasses = 'bg-blue-600 text-white border-blue-600 shadow-sm';
+        const inactiveClasses = 'text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700';
+        return `<button data-action="select-evaluation-class" data-class-id="${cls.id}" class="${baseClasses} ${isActive ? activeClasses : inactiveClasses}">${escapeHtml(cls.name)}</button>`;
+    }).join('');
+
+    const selectedTermId = state.evaluationSelectedTermId || 'all';
+    const hasTerms = Array.isArray(state.terms) && state.terms.length > 0;
+    const termOptionsHtml = hasTerms
+        ? state.terms.map(term => {
+            const start = formatDateForDisplay(term.startDate);
+            const end = formatDateForDisplay(term.endDate);
+            const range = start && end ? ` (${start} - ${end})` : '';
+            const isSelected = term.id === selectedTermId;
+            return `<option value="${term.id}" ${isSelected ? 'selected' : ''}>${escapeHtml(`${term.name}${range}`)}</option>`;
+        }).join('')
+        : '';
+    const termFilterHtml = hasTerms
+        ? `
+            <div class="w-full sm:w-auto">
+                <label for="evaluation-term-filter" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('evaluation_term_filter_label')}</label>
+                <select id="evaluation-term-filter" data-action="select-evaluation-term" class="w-full sm:w-64 p-2.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm text-gray-700 dark:text-gray-200">
+                    <option value="all" ${selectedTermId === 'all' ? 'selected' : ''}>${t('view_all_terms')}</option>
+                    ${termOptionsHtml}
+                </select>
+            </div>
+        `
+        : '';
+
+    if (!selectedClass) {
+        return `
+            <div class="space-y-4">
+                <div class="flex flex-wrap gap-2">${classButtonsHtml}</div>
+                ${termFilterHtml}
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
+                    <p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_grades_select_class')}</p>
+                </div>
+            </div>
+        `;
+    }
+
+    const studentIds = Array.isArray(selectedClass.studentIds) ? selectedClass.studentIds : [];
+    const students = state.students
+        .filter(student => studentIds.includes(student.id))
+        .sort(sortStudentsByName);
+
+    const competencies = Array.isArray(selectedClass.competencies) ? selectedClass.competencies : [];
+
+    const gradeData = state.termGrades?.[selectedClass.id]?.[selectedTermId] || null;
+    const gradeStudents = gradeData?.students || {};
+    const footnotes = new Map();
+
+    const hasStudents = students.length > 0;
+    const hasCompetencies = competencies.length > 0;
+
+    let contentHtml = '';
+
+    if (!hasStudents) {
+        contentHtml = `<p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_term_grades_no_students')}</p>`;
+    } else if (!hasCompetencies) {
+        contentHtml = `<p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_term_grades_no_competencies')}</p>`;
+    } else {
+        const headerRow1 = competencies.map(competency => {
+            const criteria = Array.isArray(competency.criteria) ? competency.criteria : [];
+            const colSpan = criteria.length + 1;
+            const label = competency.code || t('competency_without_code');
+            return `<th scope="col" colspan="${colSpan}" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${escapeHtml(label)}</th>`;
+        }).join('');
+
+        const headerRow2 = competencies.map(competency => {
+            const criteria = Array.isArray(competency.criteria) ? competency.criteria : [];
+            const criteriaCells = criteria.map(criterion => {
+                const label = criterion.code || t('criterion_without_code');
+                return `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-left">${escapeHtml(label)}</th>`;
+            }).join('');
+            const competencyLabel = competency.code || t('competency_without_code');
+            return `${criteriaCells}<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${escapeHtml(competencyLabel)}</th>`;
+        }).join('');
+
+        const rowsHtml = students.map(student => {
+            const studentGrades = gradeStudents[student.id] || {};
+            const rowCells = competencies.map(competency => {
+                const criteria = Array.isArray(competency.criteria) ? competency.criteria : [];
+                const criterionCells = criteria.map(criterion => {
+                    if (!criterion.id) {
+                        return `<td class="px-3 py-2 align-top text-sm text-gray-500 dark:text-gray-400">—</td>`;
+                    }
+                    const gradeEntry = studentGrades.criteria?.[criterion.id];
+                    return `<td class="px-3 py-2 align-top bg-white dark:bg-gray-900">${renderTermGradeCell({ entry: gradeEntry, classId: selectedClass.id, termId: selectedTermId, studentId: student.id, scope: 'criterion', targetId: criterion.id, footnotes })}</td>`;
+                }).join('');
+                const competencyEntry = studentGrades.competencies?.[competency.id];
+                return `${criterionCells}<td class="px-3 py-2 align-top bg-white dark:bg-gray-900">${renderTermGradeCell({ entry: competencyEntry, classId: selectedClass.id, termId: selectedTermId, studentId: student.id, scope: 'competency', targetId: competency.id, footnotes })}</td>`;
+            }).join('');
+            const summaryEntry = studentGrades.summary;
+            const summaryCell = `<td class="px-3 py-2 align-top bg-white dark:bg-gray-900">${renderTermGradeCell({ entry: summaryEntry, classId: selectedClass.id, termId: selectedTermId, studentId: student.id, scope: 'summary', targetId: 'summary', footnotes })}</td>`;
+            return `<tr class="border-b border-gray-100 dark:border-gray-800"><th scope="row" class="px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 text-left min-w-[12rem]">${escapeHtml(student.name)}</th>${rowCells}${summaryCell}</tr>`;
+        }).join('');
+
+        const footnotesHtml = footnotes.size > 0
+            ? `<div class="mt-4 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                    ${Array.from(footnotes.entries()).map(([symbol, message]) => `<div><sup>${escapeHtml(symbol)}</sup> ${escapeHtml(message)}</div>`).join('')}
+                </div>`
+            : '';
+
+        const lastCalculatedHtml = gradeData?.lastCalculatedAt
+            ? (() => {
+                const lastDate = new Date(gradeData.lastCalculatedAt);
+                if (Number.isNaN(lastDate.getTime())) {
+                    return '';
+                }
+                const formatted = lastDate.toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' });
+                return `<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(t('evaluation_term_grades_last_calculated_prefix'))} ${escapeHtml(formatted)}</p>`;
+            })()
+            : '';
+
+        const infoMessage = !gradeData
+            ? `<p class="mb-4 text-sm text-gray-500 dark:text-gray-400">${t('evaluation_term_grades_generate_message')}</p>`
+            : '';
+
+        contentHtml = `
+            ${infoMessage}
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-left">
+                    <thead class="bg-white dark:bg-gray-800">
+                        <tr>
+                            <th scope="col" rowspan="2" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[12rem]">${t('evaluation_grades_student_column')}</th>
+                            ${headerRow1}
+                            <th scope="col" rowspan="2" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${t('evaluation_term_grades_final_column')}</th>
+                        </tr>
+                        <tr>
+                            ${headerRow2}
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            </div>
+            ${footnotesHtml}
+            ${lastCalculatedHtml}
+        `;
+    }
+
+    const calculateButtonHtml = `<button data-action="calculate-term-grades" data-class-id="${escapeAttribute(selectedClass.id)}" data-term-id="${escapeAttribute(selectedTermId)}" class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"><i data-lucide="calculator" class="w-4 h-4"></i><span>${t('evaluation_term_grades_calculate_button')}</span></button>`;
+
+    return `
+        <div class="space-y-4">
+            <div class="flex flex-wrap gap-2">${classButtonsHtml}</div>
+            ${termFilterHtml}
+            <div class="flex flex-wrap gap-2 items-center">${calculateButtonHtml}</div>
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6 shadow-sm">
+                ${contentHtml}
+            </div>
+        </div>
+    `;
+}
+
 
 export function renderLearningActivityEditorView() {
     const draft = state.learningActivityDraft;
