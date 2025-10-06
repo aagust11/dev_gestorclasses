@@ -30,6 +30,135 @@ function createDefaultLevelComments() {
     return comments;
 }
 
+function makeCriterionKey(competencyId = '', criterionId = '') {
+    return `${competencyId}|||${criterionId}`;
+}
+
+function ensureActivityHasCriterionRef(activity, competencyId, criterionId) {
+    if (!activity) return false;
+    if (!Array.isArray(activity.criteriaRefs)) {
+        activity.criteriaRefs = [];
+    }
+
+    const exists = activity.criteriaRefs.some(ref =>
+        ref.competencyId === competencyId && ref.criterionId === criterionId
+    );
+
+    if (!exists) {
+        activity.criteriaRefs.push({ competencyId, criterionId });
+        return true;
+    }
+
+    return false;
+}
+
+function removeCriterionRefFromActivity(activity, competencyId, criterionId) {
+    if (!activity) return false;
+    if (!Array.isArray(activity.criteriaRefs)) {
+        activity.criteriaRefs = [];
+        return false;
+    }
+
+    const originalLength = activity.criteriaRefs.length;
+    activity.criteriaRefs = activity.criteriaRefs.filter(ref =>
+        !(ref.competencyId === competencyId && ref.criterionId === criterionId)
+    );
+
+    return originalLength !== activity.criteriaRefs.length;
+}
+
+function cleanRubricEvaluations(rubric, removedItemIds = []) {
+    if (!rubric || !Array.isArray(removedItemIds) || removedItemIds.length === 0) {
+        return;
+    }
+
+    const evaluations = rubric.evaluations;
+    if (!evaluations || typeof evaluations !== 'object') {
+        return;
+    }
+
+    Object.values(evaluations).forEach(evaluation => {
+        if (!evaluation || typeof evaluation !== 'object') {
+            return;
+        }
+        const scores = evaluation.scores;
+        if (!scores || typeof scores !== 'object') {
+            return;
+        }
+        removedItemIds.forEach(itemId => {
+            if (itemId in scores) {
+                delete scores[itemId];
+            }
+        });
+    });
+}
+
+function ensureRubricHasItemForCriterion(rubric, competencyId, criterionId) {
+    if (!rubric) return null;
+
+    const exists = Array.isArray(rubric.items)
+        ? rubric.items.some(item => item.competencyId === competencyId && item.criterionId === criterionId)
+        : false;
+
+    if (exists) {
+        return null;
+    }
+
+    const newItem = {
+        id: generateRubricItemId(),
+        competencyId,
+        criterionId,
+        weight: 1,
+        levelComments: createDefaultLevelComments(),
+    };
+
+    rubric.items.push(newItem);
+    return newItem;
+}
+
+function removeRubricItemsForCriterion(rubric, competencyId, criterionId) {
+    if (!rubric || !Array.isArray(rubric.items)) {
+        return [];
+    }
+
+    const removedIds = [];
+    rubric.items = rubric.items.filter(item => {
+        const matches = item.competencyId === competencyId && item.criterionId === criterionId;
+        if (matches) {
+            removedIds.push(item.id);
+        }
+        return !matches;
+    });
+
+    cleanRubricEvaluations(rubric, removedIds);
+    return removedIds;
+}
+
+function syncRubricWithActivityCriteria(activity) {
+    if (!activity) return;
+
+    const rubric = ensureLearningActivityRubric(activity);
+    if (!Array.isArray(activity.criteriaRefs)) {
+        activity.criteriaRefs = [];
+    }
+
+    const assignedKeys = new Set(activity.criteriaRefs.map(ref => makeCriterionKey(ref.competencyId, ref.criterionId)));
+
+    if (Array.isArray(rubric.items)) {
+        rubric.items.forEach(item => {
+            const key = makeCriterionKey(item.competencyId, item.criterionId);
+            if (!assignedKeys.has(key)) {
+                ensureActivityHasCriterionRef(activity, item.competencyId, item.criterionId);
+                assignedKeys.add(key);
+            }
+        });
+    }
+
+    activity.criteriaRefs.forEach(ref => {
+        ensureRubricHasItemForCriterion(rubric, ref.competencyId, ref.criterionId);
+    });
+}
+
 function escapeRegExp(str) {
     return str.replace(/[-/\^$*+?.()|[\]{}]/g, '\$&');
 }
@@ -312,6 +441,9 @@ export const actionHandlers = {
                         }
                     });
                 });
+                state.learningActivities.forEach(activity => {
+                    syncRubricWithActivityCriteria(activity);
+                });
                 saveState();
                 showImportSummary(data);
             } catch (error) {
@@ -361,6 +493,9 @@ export const actionHandlers = {
                 const existing = state.learningActivities.find(act => act.id === activityId);
                 if (!existing) return;
 
+                syncRubricWithActivityCriteria(existing);
+                saveState();
+
                 state.learningActivityDraft = {
                     ...existing,
                     criteriaRefs: Array.isArray(existing.criteriaRefs) ? [...existing.criteriaRefs] : [],
@@ -370,6 +505,7 @@ export const actionHandlers = {
                     rubric: normalizeRubric(existing?.rubric),
                     status: existing?.status || LEARNING_ACTIVITY_STATUS.SCHEDULED,
                 };
+                syncRubricWithActivityCriteria(state.learningActivityDraft);
             } else {
                 state.learningActivityDraft = {
                     id: crypto.randomUUID(),
@@ -383,6 +519,7 @@ export const actionHandlers = {
                     rubric: createEmptyRubric(),
                     status: LEARNING_ACTIVITY_STATUS.SCHEDULED,
                 };
+                syncRubricWithActivityCriteria(state.learningActivityDraft);
             }
 
         const todayString = formatDate(new Date());
@@ -421,6 +558,7 @@ export const actionHandlers = {
             rubric: createEmptyRubric(),
             status: LEARNING_ACTIVITY_STATUS.SCHEDULED,
         };
+        syncRubricWithActivityCriteria(state.learningActivityDraft);
 
         const todayString = formatDate(new Date());
         state.learningActivityDraft.startDate = todayString;
@@ -483,6 +621,7 @@ export const actionHandlers = {
             state.learningActivityDraft.criteriaRefs = [];
         }
 
+        const rubric = ensureLearningActivityRubric(state.learningActivityDraft);
         const existingIndex = state.learningActivityDraft.criteriaRefs.findIndex(ref =>
             ref.competencyId === competencyId && ref.criterionId === criterionId
         );
@@ -491,8 +630,10 @@ export const actionHandlers = {
             if (existingIndex === -1) {
                 state.learningActivityDraft.criteriaRefs.push({ competencyId, criterionId });
             }
+            ensureRubricHasItemForCriterion(rubric, competencyId, criterionId);
         } else if (existingIndex !== -1) {
             state.learningActivityDraft.criteriaRefs.splice(existingIndex, 1);
+            removeRubricItemsForCriterion(rubric, competencyId, criterionId);
         }
     },
     'open-learning-activity-criteria': () => {
@@ -524,6 +665,7 @@ export const actionHandlers = {
         }
 
         const now = new Date().toISOString();
+        syncRubricWithActivityCriteria(draft);
         const normalizedRubric = normalizeRubric(draft.rubric);
         const computedStatus = calculateLearningActivityStatus({
             startDate: draft.startDate,
@@ -592,7 +734,8 @@ export const actionHandlers = {
         if (!activityId) return;
         const activity = state.learningActivities.find(act => act.id === activityId);
         if (!activity) return;
-        ensureLearningActivityRubric(activity);
+        syncRubricWithActivityCriteria(activity);
+        saveState();
         state.activeLearningActivityRubricId = activityId;
         state.learningActivityRubricTab = 'configuration';
         state.learningActivityRubricFilter = '';
@@ -629,6 +772,7 @@ export const actionHandlers = {
             weight: 1,
             levelComments: createDefaultLevelComments(),
         });
+        ensureActivityHasCriterionRef(activity, competencyId, criterionId);
         select.value = '';
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
@@ -642,7 +786,16 @@ export const actionHandlers = {
         const rubric = ensureLearningActivityRubric(activity);
         const index = rubric.items.findIndex(item => item.id === itemId);
         if (index !== -1) {
-            rubric.items.splice(index, 1);
+            const [removed] = rubric.items.splice(index, 1);
+            if (removed) {
+                cleanRubricEvaluations(rubric, [removed.id]);
+                const stillPresent = rubric.items.some(item =>
+                    item.competencyId === removed.competencyId && item.criterionId === removed.criterionId
+                );
+                if (!stillPresent) {
+                    removeCriterionRefFromActivity(activity, removed.competencyId, removed.criterionId);
+                }
+            }
             saveState();
             document.dispatchEvent(new CustomEvent('render'));
         }
