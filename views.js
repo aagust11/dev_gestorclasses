@@ -908,10 +908,11 @@ function renderEvaluationGradesTab(classes) {
                         : isDeliveredLate
                             ? t('rubric_flag_delivered_late_short')
                             : '—';
+                    const deliveredLateIcon = '<i data-lucide="file-clock" class="w-3.5 h-3.5 inline-block align-text-top ml-1 text-amber-500 dark:text-amber-300"></i>';
                     const statusIcon = isNotPresented
                         ? '<i data-lucide="shredder" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
                         : isDeliveredLate
-                            ? '<i data-lucide="file-clock" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
+                            ? deliveredLateIcon
                             : '';
                     return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><span class="${textClasses}">${escapeHtml(label)}</span>${statusIcon}</td>`;
                 }
@@ -929,28 +930,32 @@ function renderEvaluationGradesTab(classes) {
                         tooltipParts.push(`${t('evaluation_tooltip_general_comment')}: ${generalComment}`);
                     }
                     const tooltipAttr = tooltipParts.length > 0 ? ` title="${escapeAttribute(tooltipParts.join('\\n'))}"` : '';
-                    let label;
+                    let labelHtml;
                     let textClasses;
                     if (isNotPresented) {
-                        label = t('rubric_flag_not_presented_short');
                         textClasses = 'text-red-600 dark:text-red-300 font-semibold';
+                        labelHtml = `<span class="${textClasses}">${escapeHtml(t('rubric_flag_not_presented_short'))}</span>`;
                     } else if (scoreLevel) {
                         const key = `rubric_level_${scoreLevel}_label`;
                         const translated = t(key);
-                        label = translated !== `[${key}]` ? translated : scoreLevel;
                         textClasses = 'text-gray-800 dark:text-gray-100 font-medium';
+                        const srOnlyLabel = translated !== `[${key}]`
+                            ? `<span class="sr-only"> (${escapeHtml(translated)})</span>`
+                            : '';
+                        labelHtml = `<span class="${textClasses}">${escapeHtml(scoreLevel)}</span>${srOnlyLabel}`;
                     } else {
-                        label = isDeliveredLate ? t('rubric_flag_delivered_late_short') : '—';
                         textClasses = isDeliveredLate
                             ? 'text-amber-600 dark:text-amber-300 font-semibold'
                             : 'text-gray-400';
+                        labelHtml = `<span class="${textClasses}">${escapeHtml(isDeliveredLate ? t('rubric_flag_delivered_late_short') : '—')}</span>`;
                     }
+                    const deliveredLateIcon = '<i data-lucide="file-clock" class="w-3.5 h-3.5 inline-block align-text-top ml-1 text-amber-500 dark:text-amber-300"></i>';
                     const statusIcon = isNotPresented
                         ? '<i data-lucide="shredder" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
-                        : isDeliveredLate && !scoreLevel
-                            ? '<i data-lucide="file-clock" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
+                        : isDeliveredLate
+                            ? deliveredLateIcon
                             : '';
-                    return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><span class="${textClasses}">${escapeHtml(label)}</span>${statusIcon}</td>`;
+                    return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}>${labelHtml}${statusIcon}</td>`;
                 }).join('');
             }).join('');
 
