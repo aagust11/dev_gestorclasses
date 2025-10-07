@@ -37,6 +37,21 @@ function render() {
     lucide.createIcons();
     attachEventListeners();
 
+    if (state.activeView === 'evaluation' && state.pendingEvaluationHighlightActivityId) {
+        const activityId = state.pendingEvaluationHighlightActivityId;
+        requestAnimationFrame(() => {
+            const target = document.querySelector(`[data-evaluation-activity-id="${activityId}"]`);
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                target.classList.add('ring-4', 'ring-blue-400/60');
+                setTimeout(() => {
+                    target.classList.remove('ring-4', 'ring-blue-400/60');
+                }, 1500);
+            }
+            state.pendingEvaluationHighlightActivityId = null;
+        });
+    }
+
     if (state.activeView === 'settings' && state.pendingCompetencyHighlightId) {
         const targetId = state.pendingCompetencyHighlightId;
         requestAnimationFrame(() => {
@@ -113,7 +128,8 @@ function handleAction(action, element, event) {
         'close-learning-activity-criteria', 'go-to-competency-settings',
         'open-learning-activity-rubric', 'close-learning-activity-rubric', 'set-learning-activity-rubric-tab',
         'add-rubric-item', 'remove-rubric-item', 'move-rubric-item', 'set-rubric-score',
-        'filter-learning-activity-rubric-students', 'set-evaluation-tab', 'select-evaluation-class'
+        'filter-learning-activity-rubric-students', 'set-evaluation-tab', 'select-evaluation-class',
+        'go-to-evaluation-for-learning-activity'
     ];
     const forceRenderActions = ['toggle-rubric-not-presented', 'toggle-rubric-delivered-late'];
     const shouldForceRender = forceRenderActions.includes(action);
