@@ -214,6 +214,8 @@
   "settings_tab_competencies": "Gaitasunak",
   "competencies_tab_title": "Gaitasunak ikasgaiaren arabera",
   "competencies_short_label": "gaitasun",
+  "show_competency_list": "Erakutsi gaitasunak",
+  "hide_competency_list": "Ezkutatu gaitasunak",
   "competency_without_code": "Identifikatzailerik gabe",
   "competency_without_description": "Deskribapenik gabe",
   "no_competencies_in_class": "Ez dago gaitasunik gehituta.",

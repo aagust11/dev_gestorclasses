@@ -214,6 +214,8 @@
   "settings_tab_competencies": "Competencies",
   "competencies_tab_title": "Competencies by subject",
   "competencies_short_label": "competencies",
+  "show_competency_list": "Show competencies",
+  "hide_competency_list": "Hide competencies",
   "competency_without_code": "No identifier",
   "competency_without_description": "No description",
   "no_competencies_in_class": "No competencies added.",

@@ -214,6 +214,8 @@
   "settings_tab_competencies": "Competencias",
   "competencies_tab_title": "Competencias por materia",
   "competencies_short_label": "competencias",
+  "show_competency_list": "Mostrar competencias",
+  "hide_competency_list": "Ocultar competencias",
   "competency_without_code": "Sin identificador",
   "competency_without_description": "Sin descripción",
   "no_competencies_in_class": "No hay competencias añadidas.",

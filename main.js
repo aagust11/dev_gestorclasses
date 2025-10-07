@@ -124,6 +124,7 @@ function handleAction(action, element, event) {
         'add-positive-record', 'add-incident-record', 'set-student-timeline-filter',
         'open-learning-activity-editor', 'open-learning-activity-quick', 'back-to-activities',
         'save-learning-activity-draft', 'toggle-learning-activity-list', 'toggle-competency-guide',
+        'toggle-competency-list',
         'toggle-learning-activity-criterion', 'open-learning-activity-criteria',
         'close-learning-activity-criteria', 'go-to-competency-settings',
         'open-learning-activity-rubric', 'close-learning-activity-rubric', 'set-learning-activity-rubric-tab',

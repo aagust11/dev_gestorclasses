@@ -829,6 +829,22 @@ export const actionHandlers = {
         state.expandedLearningActivityClassIds = expanded;
     },
 
+    'toggle-competency-list': (id, element) => {
+        const classId = element.dataset.classId;
+        if (!classId) return;
+
+        const expanded = Array.isArray(state.expandedCompetencyClassIds)
+            ? [...state.expandedCompetencyClassIds]
+            : [];
+        const index = expanded.indexOf(classId);
+        if (index === -1) {
+            expanded.push(classId);
+        } else {
+            expanded.splice(index, 1);
+        }
+        state.expandedCompetencyClassIds = expanded;
+    },
+
     'go-to-evaluation-for-learning-activity': (id, element) => {
         const draft = state.learningActivityDraft;
         const activityId = element?.dataset?.learningActivityId || draft?.id || null;
@@ -1223,6 +1239,14 @@ export const actionHandlers = {
         }
 
         activity.competencies.push(newCompetency);
+
+        const expanded = Array.isArray(state.expandedCompetencyClassIds)
+            ? [...state.expandedCompetencyClassIds]
+            : [];
+        if (!expanded.includes(activityId)) {
+            expanded.push(activityId);
+        }
+        state.expandedCompetencyClassIds = expanded;
 
         saveState();
     },
