@@ -2050,24 +2050,43 @@ export function renderSettingsView() {
             </button>
         `).join('');
 
+        const isExpanded = Array.isArray(state.expandedCompetencyClassIds)
+            ? state.expandedCompetencyClassIds.includes(c.id)
+            : false;
+        const toggleIcon = isExpanded ? 'chevron-up' : 'chevron-down';
+        const toggleLabel = isExpanded ? t('hide_competency_list') : t('show_competency_list');
+        const listContainerClasses = isExpanded
+            ? 'p-4 flex flex-col gap-4 flex-grow'
+            : 'p-4 flex flex-col gap-4 flex-grow hidden';
+
         return `
             <div id="competency-card-${c.id}" class="bg-white dark:bg-gray-800 rounded-lg shadow-md flex flex-col">
-                <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-t-lg flex flex-col gap-2">
-                    <div>
-                        <h3 class="text-xl font-bold" style="color: ${darkenColor(c.color, 40)}">${c.name}</h3>
-                        <div class="text-sm text-gray-600 dark:text-gray-400 mt-2 flex items-center gap-2">
-                            <i data-lucide="target" class="w-4 h-4"></i>
-                            <span>${competencyCount} ${t('competencies_short_label')}</span>
+                <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-t-lg flex flex-col gap-3">
+                    <h3 class="text-xl font-bold" style="color: ${darkenColor(c.color, 40)}">${c.name}</h3>
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                        <div class="flex items-end gap-3 flex-wrap">
+                            <button data-action="add-competency" data-activity-id="${c.id}" class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800">
+                                <i data-lucide="plus" class="w-5 h-5"></i>
+                                <span class="sr-only">${t('add_competency')}</span>
+                            </button>
+                            <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                <i data-lucide="target" class="w-4 h-4"></i>
+                                <span>${competencyCount} ${t('competencies_short_label')}</span>
+                            </div>
                         </div>
-                    </div>
-                    <div class="mt-auto">
-                        <button data-action="add-competency" data-activity-id="${c.id}" class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800">
-                            <i data-lucide="plus" class="w-5 h-5"></i>
-                            <span class="sr-only">${t('add_competency')}</span>
+                        <button
+                            data-action="toggle-competency-list"
+                            data-class-id="${c.id}"
+                            aria-expanded="${isExpanded}"
+                            aria-controls="competency-list-${c.id}"
+                            class="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-300 hover:underline focus:outline-none"
+                        >
+                            <span>${toggleLabel}</span>
+                            <i data-lucide="${toggleIcon}" class="w-4 h-4"></i>
                         </button>
                     </div>
                 </div>
-                <div class="p-4 flex flex-col gap-4 flex-grow">
+                <div id="competency-list-${c.id}" class="${listContainerClasses}">
                     <div class="space-y-2 max-h-48 overflow-y-auto">
                         ${competenciesHtml || `<p class=\"text-sm text-gray-500 dark:text-gray-400\">${t('no_competencies_in_class')}</p>`}
                     </div>

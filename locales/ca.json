@@ -211,6 +211,8 @@
   "settings_tab_competencies": "Competències",
   "competencies_tab_title": "Competències per assignatura",
   "competencies_short_label": "competències",
+  "show_competency_list": "Mostra les competències",
+  "hide_competency_list": "Amaga les competències",
   "competency_without_code": "Sense identificador",
   "competency_without_description": "Sense descripció",
   "no_competencies_in_class": "No hi ha competències afegides.",

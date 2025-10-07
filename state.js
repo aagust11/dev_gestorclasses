@@ -36,6 +36,7 @@ export const state = {
     studentTimelineFilter: 'all',
     learningActivityDraft: null,
     expandedLearningActivityClassIds: [],
+    expandedCompetencyClassIds: [],
     learningActivityGuideVisible: false,
     learningActivityCriteriaModalOpen: false,
     pendingCompetencyHighlightId: null,
@@ -314,6 +315,7 @@ export function loadState() {
 
     state.learningActivityDraft = null;
     state.expandedLearningActivityClassIds = [];
+    state.expandedCompetencyClassIds = [];
     state.learningActivityGuideVisible = false;
     state.learningActivityCriteriaModalOpen = false;
     state.pendingCompetencyHighlightId = null;
