@@ -829,9 +829,23 @@ export const actionHandlers = {
         state.expandedLearningActivityClassIds = expanded;
     },
 
+    'go-to-evaluation-for-learning-activity': (id, element) => {
+        const draft = state.learningActivityDraft;
+        const activityId = element?.dataset?.learningActivityId || draft?.id || null;
+        const classId = element?.dataset?.classId || draft?.classId || null;
+
+        if (classId) {
+            state.selectedEvaluationClassId = classId;
+        }
+
+        state.pendingEvaluationHighlightActivityId = activityId;
+        state.evaluationActiveTab = 'activities';
+        state.activeView = 'evaluation';
+    },
+
     // --- Rubric Actions ---
     'open-learning-activity-rubric': (id, element) => {
-        const activityId = element?.dataset?.learningActivityId;
+        const activityId = element?.dataset?.learningActivityId || state.learningActivityDraft?.id;
         if (!activityId) return;
         const activity = state.learningActivities.find(act => act.id === activityId);
         if (!activity) return;

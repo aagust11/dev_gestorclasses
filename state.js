@@ -46,6 +46,7 @@ export const state = {
     selectedEvaluationClassId: null,
     evaluationSelectedTermId: 'all',
     learningActivityRubricReturnView: null,
+    pendingEvaluationHighlightActivityId: null,
 };
 
 function generateId(prefix = 'id') {

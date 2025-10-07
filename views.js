@@ -684,6 +684,7 @@ function renderEvaluationActivitiesTab(classes) {
                             type="button"
                             data-action="open-learning-activity-rubric"
                             data-learning-activity-id="${activity.id}"
+                            data-evaluation-activity-id="${activity.id}"
                             class="block w-full text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white/80 dark:bg-gray-800/70 shadow-sm hover:border-blue-400 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400/60 dark:hover:border-blue-500 dark:focus:ring-blue-500/60 transition-colors"
                             aria-label="${accessibleLabel}"
                         >
@@ -1024,10 +1025,16 @@ export function renderLearningActivityEditorView() {
         `;
     }
 
-    renderMobileHeaderActions([
+    const mobileActions = [
+        ...(draft.isNew ? [] : [
+            { action: 'go-to-evaluation-for-learning-activity', label: t('activities_go_to_evaluation'), icon: 'check-circle-2' },
+            { action: 'open-learning-activity-rubric', label: t('activities_rubric_button_label'), icon: 'table-properties' }
+        ]),
         { action: 'save-learning-activity-draft', label: t('activities_save_button'), icon: 'save' },
         { action: 'back-to-activities', label: t('back_to_activities'), icon: 'arrow-left' }
-    ]);
+    ];
+
+    renderMobileHeaderActions(mobileActions);
 
     const competencies = Array.isArray(targetClass.competencies) ? targetClass.competencies : [];
     const selectedRefs = Array.isArray(draft.criteriaRefs) ? draft.criteriaRefs : [];
@@ -1153,6 +1160,27 @@ export function renderLearningActivityEditorView() {
 
     const selectedCount = selectedCriteria.length;
     const isCriteriaModalOpen = state.learningActivityCriteriaModalOpen;
+    const shortcutButtonsHtml = draft.isNew ? '' : `
+        <button
+            type="button"
+            data-action="go-to-evaluation-for-learning-activity"
+            data-learning-activity-id="${draft.id}"
+            data-class-id="${targetClass.id}"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+        >
+            <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+            <span>${t('activities_go_to_evaluation')}</span>
+        </button>
+        <button
+            type="button"
+            data-action="open-learning-activity-rubric"
+            data-learning-activity-id="${draft.id}"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+        >
+            <i data-lucide="table-properties" class="w-4 h-4"></i>
+            <span>${t('activities_rubric_button_label')}</span>
+        </button>
+    `;
     const criteriaModalHtml = !isCriteriaModalOpen ? '' : `
         <div class="fixed inset-0 z-40 flex items-center justify-center px-4 py-6">
             <div class="absolute inset-0 bg-gray-900/50 dark:bg-gray-900/70" data-action="close-learning-activity-criteria"></div>
@@ -1188,6 +1216,7 @@ export function renderLearningActivityEditorView() {
                         <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">${draft.isNew ? t('activities_editor_title_new') : t('activities_editor_title_edit')}</h2>
                     </div>
                     <div class="flex flex-wrap gap-2 justify-end">
+                        ${shortcutButtonsHtml}
                         <button data-action="back-to-activities" class="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
                             <i data-lucide="arrow-left" class="w-4 h-4"></i>
                             ${t('activities_cancel_button')}
