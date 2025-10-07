@@ -6,7 +6,8 @@ const pastelColors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A
 export const LEARNING_ACTIVITY_STATUS = {
     SCHEDULED: 'scheduled',
     OPEN_SUBMISSIONS: 'open_submissions',
-    PENDING_REVIEW: 'pending_review'
+    PENDING_REVIEW: 'pending_review',
+    CORRECTED: 'corrected'
 };
 
 export const RUBRIC_LEVELS = ['NA', 'AS', 'AN', 'AE'];
@@ -110,6 +111,62 @@ function parseDateValue(dateString, endOfDay = false) {
     return date;
 }
 
+function getLearningActivityStudentIds(activity) {
+    if (!activity || !activity.classId) {
+        return [];
+    }
+    const targetClass = state.activities.find(a => a.id === activity.classId);
+    if (!targetClass || !Array.isArray(targetClass.studentIds)) {
+        return [];
+    }
+    return targetClass.studentIds.filter(id => typeof id === 'string' && id);
+}
+
+function isLearningActivityFullyCorrected(activity) {
+    if (!activity || !activity.rubric) {
+        return false;
+    }
+
+    const rubric = activity.rubric;
+    const rubricItems = Array.isArray(rubric.items) ? rubric.items : [];
+    if (rubricItems.length === 0) {
+        return false;
+    }
+
+    const evaluations = rubric.evaluations && typeof rubric.evaluations === 'object'
+        ? rubric.evaluations
+        : {};
+
+    const studentIds = getLearningActivityStudentIds(activity);
+    if (studentIds.length === 0) {
+        return false;
+    }
+
+    return studentIds.every(studentId => {
+        const evaluation = evaluations[studentId];
+        if (!evaluation || typeof evaluation !== 'object') {
+            return false;
+        }
+
+        const flags = evaluation.flags && typeof evaluation.flags === 'object'
+            ? evaluation.flags
+            : {};
+
+        if (flags.notPresented) {
+            return true;
+        }
+
+        const scores = evaluation.scores && typeof evaluation.scores === 'object'
+            ? evaluation.scores
+            : {};
+
+        return rubricItems.every(item => {
+            const value = scores[item.id];
+            return typeof value === 'string' && RUBRIC_LEVELS.includes(value);
+        });
+    });
+}
+
 export function calculateLearningActivityStatus(activity, referenceDate = new Date()) {
     if (!activity) {
         return LEARNING_ACTIVITY_STATUS.SCHEDULED;
@@ -117,6 +174,10 @@ export function calculateLearningActivityStatus(activity, referenceDate = new Da
 
     if (activity.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(activity.status)) {
         return activity.status;
+    }
+
+    if (isLearningActivityFullyCorrected(activity)) {
+        return LEARNING_ACTIVITY_STATUS.CORRECTED;
     }
 
     const today = new Date(referenceDate);
@@ -156,6 +217,14 @@ export function getRandomPastelColor() {
 
 let saveTimeout;
 export function saveState() {
+    state.learningActivities.forEach(activity => {
+        if (!activity || activity.statusIsManual) {
+            return;
+        }
+        const computedStatus = calculateLearningActivityStatus(activity);
+        activity.status = computedStatus;
+    });
+
     const dataToSave = {
         activities: state.activities,
         learningActivities: state.learningActivities,

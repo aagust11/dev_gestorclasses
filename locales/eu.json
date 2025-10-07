@@ -121,6 +121,7 @@
   "learning_activity_status_scheduled": "Planifikatuta",
   "learning_activity_status_open": "Entrega irekia",
   "learning_activity_status_pending": "Zuzenketaren zain",
+  "learning_activity_status_corrected": "Zuzenduta",
   "learning_activity_status_auto": "Automatikoa",
   "evaluation_view_title": "Ebaluazioa",
   "evaluation_tab_activities": "Jarduerak",

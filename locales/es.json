@@ -121,6 +121,7 @@
   "learning_activity_status_scheduled": "Planificada",
   "learning_activity_status_open": "Abierta a entregas",
   "learning_activity_status_pending": "Pendiente de corrección",
+  "learning_activity_status_corrected": "Corregida",
   "learning_activity_status_auto": "Automático",
   "evaluation_view_title": "Evaluación",
   "evaluation_tab_activities": "Actividades",

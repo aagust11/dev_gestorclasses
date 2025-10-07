@@ -121,6 +121,7 @@
   "learning_activity_status_scheduled": "Planned",
   "learning_activity_status_open": "Open for submissions",
   "learning_activity_status_pending": "Pending review",
+  "learning_activity_status_corrected": "Graded",
   "learning_activity_status_auto": "Automatic",
   "evaluation_view_title": "Assessment",
   "evaluation_tab_activities": "Activities",
