@@ -173,6 +173,7 @@
   "rubric_no_class_message": "La asignatura vinculada a esta actividad ya no está disponible.",
   "rubric_tab_configuration": "Configuración",
   "rubric_tab_assessment": "Evaluación",
+  "rubric_edit_activity_button": "Editar actividad",
   "rubric_add_criterion_label": "Añade un criterio de evaluación",
   "rubric_select_placeholder": "-- Selecciona un criterio --",
   "rubric_add_button": "Añadir a la rúbrica",

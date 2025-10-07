@@ -173,6 +173,7 @@
   "rubric_no_class_message": "L'assignatura vinculada a aquesta activitat ja no està disponible.",
   "rubric_tab_configuration": "Configuració",
   "rubric_tab_assessment": "Avaluació",
+  "rubric_edit_activity_button": "Edita l'activitat",
   "rubric_add_criterion_label": "Afegeix un criteri d'avaluació",
   "rubric_select_placeholder": "-- Selecciona un criteri --",
   "rubric_add_button": "Afegeix a la rúbrica",
