@@ -1667,8 +1667,10 @@ export function renderCompetencyDetailView() {
                     <button data-action="delete-criterion" data-activity-id="${activity.id}" data-competency-id="${competency.id}" data-criterion-id="${criterion.id}" class="text-red-500 hover:text-red-700 mt-6"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('criterion_description_label')}</label>
-                    <textarea data-action="update-criterion-description" data-activity-id="${activity.id}" data-competency-id="${competency.id}" data-criterion-id="${criterion.id}" placeholder="${t('criterion_description_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-20">${criterion.description || ''}</textarea>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('criterion_description_label')}</label>
+                        <textarea data-action="update-criterion-description" data-activity-id="${activity.id}" data-competency-id="${competency.id}" data-criterion-id="${criterion.id}" placeholder="${t('criterion_description_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-20">${criterion.description || ''}</textarea>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('criterion_guidance_label')}</label>
+                    <textarea data-action="update-criterion-guidance" data-activity-id="${activity.id}" data-competency-id="${competency.id}" data-criterion-id="${criterion.id}" placeholder="${t('criterion_guidance_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-20">${criterion.guidance || ''}</textarea>
                 </div>
             </div>
         `).join('')
@@ -2376,6 +2378,21 @@ export function renderLearningActivityRubricView() {
                 const competencyLabel = competency?.code || t('competency_without_code');
                 const criterionCode = criterion?.code || t('criterion_without_code');
                 const criterionDescription = criterion?.description || t('criterion_without_description');
+                const rawGuidance = typeof criterion?.guidance === 'string' ? criterion.guidance : '';
+                const criterionGuidance = rawGuidance.trim();
+                const hasGuidance = criterionGuidance.length > 0;
+                const escapedGuidance = escapeHtml(criterionGuidance).replace(/\n/g, '<br>');
+                const titleHtml = hasGuidance
+                    ? `<div class="text-sm font-semibold text-gray-800 dark:text-gray-100 whitespace-pre-line">${escapedGuidance}</div>`
+                    : `<div class="text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(criterionCode)}</div>`;
+                const indicatorHtml = hasGuidance
+                    ? `<div class="mt-1 text-xs text-gray-600 dark:text-gray-300 flex flex-wrap items-center gap-1">
+                            <span>${escapeHtml(competencyLabel)}</span>
+                            <span class="text-gray-400">·</span>
+                            <span>${escapeHtml(criterionCode)}</span>
+                        </div>`
+                    : `<div class="text-xs text-gray-600 dark:text-gray-300">${escapeHtml(competencyLabel)}</div>`;
+                const descriptionHtml = `<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${escapeHtml(criterionDescription)}</div>`;
                 const currentLevel = scores[item.id] || '';
 
                 const scoreCells = RUBRIC_LEVELS.map(level => {
@@ -2440,9 +2457,9 @@ export function renderLearningActivityRubricView() {
                     <tr>
                         ${nameCell}
                         <td class="px-3 py-3 align-top min-w-[14rem]">
-                            <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(criterionCode)}</div>
-                            <div class="text-xs text-gray-600 dark:text-gray-300">${escapeHtml(competencyLabel)}</div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${escapeHtml(criterionDescription)}</div>
+                            ${titleHtml}
+                            ${indicatorHtml}
+                            ${descriptionHtml}
                         </td>
                         ${scoreCells}
                         ${commentCell}
