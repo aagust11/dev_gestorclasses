@@ -565,6 +565,7 @@ export const actionHandlers = {
                     weight: typeof existing?.weight === 'number' && !Number.isNaN(existing.weight)
                         ? existing.weight
                         : 1,
+                    shortCode: typeof existing?.shortCode === 'string' ? existing.shortCode : '',
                 };
                 syncRubricWithActivityCriteria(state.learningActivityDraft);
             } else {
@@ -581,6 +582,7 @@ export const actionHandlers = {
                     status: LEARNING_ACTIVITY_STATUS.SCHEDULED,
                     statusIsManual: false,
                     weight: 1,
+                    shortCode: '',
                 };
                 syncRubricWithActivityCriteria(state.learningActivityDraft);
             }
@@ -624,6 +626,7 @@ export const actionHandlers = {
             status: LEARNING_ACTIVITY_STATUS.SCHEDULED,
             statusIsManual: false,
             weight: 1,
+            shortCode: '',
         };
         syncRubricWithActivityCriteria(state.learningActivityDraft);
 
@@ -649,6 +652,10 @@ export const actionHandlers = {
     'update-learning-activity-title': (id, element) => {
         if (!state.learningActivityDraft) return;
         state.learningActivityDraft.title = element.value;
+    },
+    'update-learning-activity-short-code': (id, element) => {
+        if (!state.learningActivityDraft) return;
+        state.learningActivityDraft.shortCode = element.value;
     },
     'update-learning-activity-description': (id, element) => {
         if (!state.learningActivityDraft) return;
@@ -754,6 +761,12 @@ export const actionHandlers = {
             return;
         }
 
+        const shortCode = draft.shortCode?.trim() || '';
+        if (!shortCode) {
+            alert(t('activities_identifier_required'));
+            return;
+        }
+
         const now = new Date().toISOString();
         syncRubricWithActivityCriteria(draft);
         const normalizedRubric = normalizeRubric(draft.rubric);
@@ -775,6 +788,7 @@ export const actionHandlers = {
                 id: draft.id,
                 classId: draft.classId,
                 title,
+                shortCode,
                 description: draft.description?.trim() || '',
                 criteriaRefs: Array.isArray(draft.criteriaRefs) ? [...draft.criteriaRefs] : [],
                 createdAt: now,
@@ -792,6 +806,7 @@ export const actionHandlers = {
                 id: draft.id,
                 classId: draft.classId,
                 title,
+                shortCode,
                 description: draft.description?.trim() || '',
                 criteriaRefs: Array.isArray(draft.criteriaRefs) ? [...draft.criteriaRefs] : [],
                 createdAt: draft.createdAt || now,
