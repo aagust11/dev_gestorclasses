@@ -2269,6 +2269,7 @@ export function renderLearningActivityRubricView() {
             const criterionCode = criterion?.code || t('criterion_without_code');
             const criterionDescription = criterion?.description || t('criterion_without_description');
             const weightValue = typeof item.weight === 'number' && !Number.isNaN(item.weight) ? item.weight : 1;
+            const generalCommentValue = escapeHtml(typeof item.generalComment === 'string' ? item.generalComment : '');
             const moveUpDisabled = index === 0 ? 'disabled aria-disabled="true"' : '';
             const moveDownDisabled = index === rubricItems.length - 1 ? 'disabled aria-disabled="true"' : '';
 
@@ -2289,6 +2290,10 @@ export function renderLearningActivityRubricView() {
                         <div>
                             <p class="text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(competencyLabel)} · ${escapeHtml(criterionCode)}</p>
                             <p class="text-sm text-gray-600 dark:text-gray-300">${escapeHtml(criterionDescription)}</p>
+                            <div class="mt-3">
+                                <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1" for="rubric-general-comment-${item.id}">${t('rubric_item_comment_label')}</label>
+                                <input id="rubric-general-comment-${item.id}" type="text" value="${generalCommentValue}" data-action="update-rubric-item-general-comment" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm" placeholder="${t('rubric_item_comment_placeholder')}">
+                            </div>
                         </div>
                         <div class="flex items-center gap-2">
                             <label class="text-sm font-medium text-gray-700 dark:text-gray-200" for="rubric-weight-${item.id}">${t('rubric_weight_label')}</label>

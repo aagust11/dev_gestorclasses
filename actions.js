@@ -906,6 +906,7 @@ export const actionHandlers = {
             competencyId,
             criterionId,
             weight: 1,
+            generalComment: '',
             levelComments: createDefaultLevelComments(),
         });
         ensureActivityHasCriterionRef(activity, competencyId, criterionId);
@@ -963,6 +964,18 @@ export const actionHandlers = {
         if (!item) return;
         const value = parseFloat(element.value);
         item.weight = Number.isFinite(value) ? value : 1;
+        saveState();
+    },
+    'update-rubric-item-general-comment': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const itemId = element?.dataset?.itemId;
+        if (!activityId || !itemId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        const item = rubric.items.find(entry => entry.id === itemId);
+        if (!item) return;
+        item.generalComment = element.value;
         saveState();
     },
     'update-rubric-item-comment': (id, element) => {
