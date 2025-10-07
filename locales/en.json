@@ -96,8 +96,6 @@
   "criterion_identifier_placeholder": "e.g. CA01",
   "criterion_description_label": "Criterion description",
   "criterion_description_placeholder": "Describe the criterion...",
-  "criterion_guidance_label": "Generic note (optional)",
-  "criterion_guidance_placeholder": "Add a general note or guidance for this criterion...",
   "criterion_without_code": "No code",
   "criterion_without_description": "No description",
   "delete_competency": "Delete competency",

@@ -96,8 +96,6 @@
   "criterion_identifier_placeholder": "Ex: CA01",
   "criterion_description_label": "Descripció del criteri",
   "criterion_description_placeholder": "Descriu el criteri...",
-  "criterion_guidance_label": "Indicació genèrica (opcional)",
-  "criterion_guidance_placeholder": "Afegeix una nota o indicació genèrica per a aquest criteri...",
   "criterion_without_code": "Sense codi",
   "criterion_without_description": "Sense descripció",
   "delete_competency": "Elimina competència",

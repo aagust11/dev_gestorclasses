@@ -96,8 +96,6 @@
   "criterion_identifier_placeholder": "Ex: CA01",
   "criterion_description_label": "Descrición do criterio",
   "criterion_description_placeholder": "Describe o criterio...",
-  "criterion_guidance_label": "Indicación xeral (opcional)",
-  "criterion_guidance_placeholder": "Engade unha nota ou indicación xeral para este criterio...",
   "criterion_without_code": "Sen código",
   "criterion_without_description": "Sen descrición",
   "delete_competency": "Eliminar competencia",
