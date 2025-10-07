@@ -355,6 +355,10 @@ export function renderActivitiesView() {
             [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: {
                 label: t('learning_activity_status_pending'),
                 classes: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700'
+            },
+            [LEARNING_ACTIVITY_STATUS.CORRECTED]: {
+                label: t('learning_activity_status_corrected'),
+                classes: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-700'
             }
         };
 
@@ -613,6 +617,10 @@ function renderEvaluationActivitiesTab(classes) {
         [LEARNING_ACTIVITY_STATUS.SCHEDULED]: {
             label: t('evaluation_status_not_started'),
             badgeClasses: 'bg-gray-500/10 text-gray-600 border border-gray-200 dark:text-gray-300 dark:border-gray-700 dark:bg-gray-800/60'
+        },
+        [LEARNING_ACTIVITY_STATUS.CORRECTED]: {
+            label: t('learning_activity_status_corrected'),
+            badgeClasses: 'bg-emerald-500/10 text-emerald-600 border border-emerald-200 dark:text-emerald-200 dark:border-emerald-600 dark:bg-emerald-900/30'
         }
     };
 
@@ -1047,6 +1055,7 @@ export function renderLearningActivityEditorView() {
         [LEARNING_ACTIVITY_STATUS.SCHEDULED]: 'learning_activity_status_scheduled',
         [LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS]: 'learning_activity_status_open',
         [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: 'learning_activity_status_pending',
+        [LEARNING_ACTIVITY_STATUS.CORRECTED]: 'learning_activity_status_corrected',
     }[automaticStatusPreview] || 'learning_activity_status_scheduled';
     const automaticStatusLabel = t(automaticStatusLabelKey);
     const statusOptions = [
@@ -1054,6 +1063,7 @@ export function renderLearningActivityEditorView() {
         { value: LEARNING_ACTIVITY_STATUS.SCHEDULED, label: t('learning_activity_status_scheduled') },
         { value: LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS, label: t('learning_activity_status_open') },
         { value: LEARNING_ACTIVITY_STATUS.PENDING_REVIEW, label: t('learning_activity_status_pending') },
+        { value: LEARNING_ACTIVITY_STATUS.CORRECTED, label: t('learning_activity_status_corrected') },
     ];
     const statusSelectOptions = statusOptions.map(option => `
         <option value="${option.value}" ${option.value === currentStatusValue ? 'selected' : ''}>${escapeHtml(option.label)}</option>
@@ -2160,6 +2170,10 @@ export function renderLearningActivityRubricView() {
         [LEARNING_ACTIVITY_STATUS.PENDING_REVIEW]: {
             label: t('learning_activity_status_pending'),
             classes: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700'
+        },
+        [LEARNING_ACTIVITY_STATUS.CORRECTED]: {
+            label: t('learning_activity_status_corrected'),
+            classes: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-700'
         }
     };
     const status = calculateLearningActivityStatus(activity);
