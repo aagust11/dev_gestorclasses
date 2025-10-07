@@ -117,7 +117,6 @@ function handleAction(action, element, event) {
         'update-evaluation-type', 'update-competencial-level-value', 'update-competencial-minimum',
         'update-evaluation-max-not-achieved', 'update-term-evaluation-method'
     ];
-    reRenderActions.push('calculate-term-grades', 'update-term-grade-field');
     const forceRenderActions = ['toggle-rubric-not-presented', 'toggle-rubric-delivered-late'];
     const shouldForceRender = forceRenderActions.includes(action);
 
@@ -174,12 +173,7 @@ function attachEventListeners() {
     const elements = document.querySelectorAll('[data-action]');
     elements.forEach(el => {
         const action = el.dataset.action;
-        const isFormElement = ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
-        const eventType = action === 'update-term-grade-field'
-            ? 'change'
-            : isFormElement
-                ? 'input'
-                : 'click';
+        const eventType = ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) ? 'input' : 'click';
         
         if (el.dataset.listenerAttached === 'true') return;
         
