@@ -74,6 +74,7 @@ function normalizeRubricStructure(rawRubric) {
                 competencyId: item?.competencyId || '',
                 criterionId: item?.criterionId || '',
                 weight: typeof item?.weight === 'number' && !Number.isNaN(item.weight) ? item.weight : 1,
+                generalComment: typeof item?.generalComment === 'string' ? item.generalComment : '',
                 levelComments: normalizedComments,
             };
         }) : [],
