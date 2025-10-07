@@ -2287,13 +2287,9 @@ export function renderLearningActivityRubricView() {
             return `
                 <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4 bg-white dark:bg-gray-900/40">
                     <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                        <div>
+                        <div class="space-y-1">
                             <p class="text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(competencyLabel)} · ${escapeHtml(criterionCode)}</p>
                             <p class="text-sm text-gray-600 dark:text-gray-300">${escapeHtml(criterionDescription)}</p>
-                            <div class="mt-3">
-                                <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1" for="rubric-general-comment-${item.id}">${t('rubric_item_comment_label')}</label>
-                                <input id="rubric-general-comment-${item.id}" type="text" value="${generalCommentValue}" data-action="update-rubric-item-general-comment" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm" placeholder="${t('rubric_item_comment_placeholder')}">
-                            </div>
                         </div>
                         <div class="flex items-center gap-2">
                             <label class="text-sm font-medium text-gray-700 dark:text-gray-200" for="rubric-weight-${item.id}">${t('rubric_weight_label')}</label>
@@ -2313,6 +2309,10 @@ export function renderLearningActivityRubricView() {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1" for="rubric-general-comment-${item.id}">${t('rubric_item_comment_label')}</label>
+                        <input id="rubric-general-comment-${item.id}" type="text" value="${generalCommentValue}" data-action="update-rubric-item-general-comment" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm" placeholder="${t('rubric_item_comment_placeholder')}">
                     </div>
                     <div class="grid gap-3 sm:grid-cols-2">${levelCommentsHtml}</div>
                 </div>
