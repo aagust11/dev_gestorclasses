@@ -279,6 +279,7 @@ export function loadState() {
                     ? activity.weight
                     : 1,
                 statusIsManual: Boolean(activity?.statusIsManual),
+                shortCode: typeof activity?.shortCode === 'string' ? activity.shortCode : '',
             };
             normalized.rubric = normalizeRubricStructure(activity?.rubric);
             normalized.status = calculateLearningActivityStatus(normalized);

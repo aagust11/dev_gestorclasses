@@ -862,8 +862,10 @@ function renderEvaluationGradesTab(classes) {
         const headerRow1 = learningActivities.map(activity => {
             const rubricItems = Array.isArray(activity.rubric?.items) ? activity.rubric.items : [];
             const colSpan = Math.max(rubricItems.length, 1);
-            const title = activity.title?.trim() || t('activities_untitled_label');
-            return `<th scope="col" colspan="${colSpan}" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${escapeHtml(title)}</th>`;
+            const identifier = activity.shortCode?.trim();
+            const fallbackTitle = activity.title?.trim() || t('activities_untitled_label');
+            const headerLabel = identifier || fallbackTitle;
+            return `<th scope="col" colspan="${colSpan}" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${escapeHtml(headerLabel)}</th>`;
         }).join('');
 
         const headerRow2 = learningActivities.map(activity => {
@@ -1236,8 +1238,17 @@ export function renderLearningActivityEditorView() {
                 <div class="space-y-6">
                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_title_label')}</label>
-                            <input type="text" value="${draft.title || ''}" data-action="update-learning-activity-title" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md" placeholder="${t('activities_form_title_placeholder')}">
+                            <label for="learning-activity-title" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_title_label')}</label>
+                            <div class="flex flex-col sm:flex-row gap-3">
+                                <div class="sm:w-36">
+                                    <label for="learning-activity-short-code" class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1 sm:mb-2">${t('activities_form_identifier_label')}</label>
+                                    <input id="learning-activity-short-code" type="text" value="${draft.shortCode || ''}" data-action="update-learning-activity-short-code" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md" placeholder="${t('activities_form_identifier_placeholder')}" maxlength="32">
+                                </div>
+                                <div class="flex-1">
+                                    <label for="learning-activity-title" class="sr-only">${t('activities_form_title_label')}</label>
+                                    <input id="learning-activity-title" type="text" value="${draft.title || ''}" data-action="update-learning-activity-title" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md" placeholder="${t('activities_form_title_placeholder')}">
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_description_label')}</label>
