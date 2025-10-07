@@ -113,9 +113,7 @@ function handleAction(action, element, event) {
         'close-learning-activity-criteria', 'go-to-competency-settings',
         'open-learning-activity-rubric', 'close-learning-activity-rubric', 'set-learning-activity-rubric-tab',
         'add-rubric-item', 'remove-rubric-item', 'move-rubric-item', 'set-rubric-score',
-        'filter-learning-activity-rubric-students', 'set-evaluation-tab', 'select-evaluation-class',
-        'update-evaluation-type', 'update-competencial-level-value', 'update-competencial-minimum',
-        'update-evaluation-max-not-achieved', 'update-term-evaluation-method'
+        'filter-learning-activity-rubric-students', 'set-evaluation-tab', 'select-evaluation-class'
     ];
     const forceRenderActions = ['toggle-rubric-not-presented', 'toggle-rubric-delivered-late'];
     const shouldForceRender = forceRenderActions.includes(action);
