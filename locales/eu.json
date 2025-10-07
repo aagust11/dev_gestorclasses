@@ -96,8 +96,6 @@
   "criterion_identifier_placeholder": "Adib.: CA01",
   "criterion_description_label": "Irizpidearen deskribapena",
   "criterion_description_placeholder": "Deskribatu irizpidea...",
-  "criterion_guidance_label": "Orientazio orokorra (aukerakoa)",
-  "criterion_guidance_placeholder": "Gehitu irizpide honetarako ohar edo orientazio orokor bat...",
   "criterion_without_code": "Koderik gabe",
   "criterion_without_description": "Azalpenik gabe",
   "delete_competency": "Ezabatu gaitasuna",

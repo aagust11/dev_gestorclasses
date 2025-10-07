@@ -1288,8 +1288,7 @@ export const actionHandlers = {
         competency.criteria.push({
             id: crypto.randomUUID(),
             code: getNextCriterionCode(competency),
-            description: '',
-            guidance: ''
+            description: ''
         });
 
         saveState();
@@ -1328,20 +1327,6 @@ export const actionHandlers = {
         if (!criterion) return;
 
         criterion.description = element.value;
-        saveState();
-    },
-    'update-criterion-guidance': (id, element) => {
-        const { activityId, competencyId, criterionId } = element.dataset;
-        const activity = state.activities.find(a => a.id === activityId);
-        if (!activity) return;
-
-        const competency = activity.competencies?.find(c => c.id === competencyId);
-        if (!competency) return;
-
-        const criterion = competency.criteria?.find(cr => cr.id === criterionId);
-        if (!criterion) return;
-
-        criterion.guidance = element.value;
         saveState();
     },
     'delete-criterion': (id, element) => {
