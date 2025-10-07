@@ -324,6 +324,7 @@ function showImportSummary(data) {
     const content = `
         <ul class="list-disc list-inside space-y-2 text-left">
             <li><strong>${t('import_summary_activities')}:</strong> ${data.activities?.length || 0}</li>
+            <li><strong>${t('import_summary_learning_activities')}:</strong> ${data.learningActivities?.length || 0}</li>
             <li><strong>${t('import_summary_students')}:</strong> ${data.students?.length || 0}</li>
             <li><strong>${t('import_summary_timeslots')}:</strong> ${data.timeSlots?.length || 0}</li>
             <li><strong>${t('import_summary_entries')}:</strong> ${Object.keys(data.classEntries || {}).length}</li>
@@ -1753,6 +1754,7 @@ export const actionHandlers = {
     'export-data': () => {
         const dataStr = JSON.stringify({
             activities: state.activities,
+            learningActivities: state.learningActivities,
             students: state.students,
             timeSlots: state.timeSlots,
             schedule: state.schedule,
@@ -1762,7 +1764,12 @@ export const actionHandlers = {
             courseEndDate: state.courseEndDate,
             terms: state.terms,
             selectedTermId: state.selectedTermId,
-            holidays: state.holidays
+            holidays: state.holidays,
+            settingsActiveTab: state.settingsActiveTab,
+            studentTimelineFilter: state.studentTimelineFilter,
+            evaluationActiveTab: state.evaluationActiveTab,
+            selectedEvaluationClassId: state.selectedEvaluationClassId,
+            evaluationSelectedTermId: state.evaluationSelectedTermId,
         }, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -1797,6 +1804,11 @@ export const actionHandlers = {
                     state.terms = data.terms || [];
                     state.selectedTermId = data.selectedTermId || 'all';
                     state.holidays = data.holidays || [];
+                    state.settingsActiveTab = data.settingsActiveTab || 'calendar';
+                    state.studentTimelineFilter = data.studentTimelineFilter || 'all';
+                    state.evaluationActiveTab = data.evaluationActiveTab || 'activities';
+                    state.selectedEvaluationClassId = data.selectedEvaluationClassId || null;
+                    state.evaluationSelectedTermId = data.evaluationSelectedTermId || 'all';
                     state.activities.forEach(activity => {
                         if (!activity.competencies) {
                             activity.competencies = [];
