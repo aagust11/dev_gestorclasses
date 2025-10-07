@@ -95,6 +95,8 @@
   "criterion_identifier_label": "Identificador do criterio (CA...)",
   "criterion_identifier_placeholder": "Ex: CA01",
   "criterion_description_label": "Descrición do criterio",
+  "criterion_generic_note_label": "Indicación xeral (opcional)",
+  "criterion_generic_note_placeholder": "Escribe unha indicación xeral para este criterio",
   "criterion_description_placeholder": "Describe o criterio...",
   "criterion_without_code": "Sen código",
   "criterion_without_description": "Sen descrición",

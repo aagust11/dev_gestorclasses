@@ -309,6 +309,11 @@ export function loadState() {
             if (!competency.criteria) {
                 competency.criteria = [];
             }
+            competency.criteria.forEach(criterion => {
+                if (typeof criterion.genericNote !== 'string') {
+                    criterion.genericNote = '';
+                }
+            });
         });
     });
 
