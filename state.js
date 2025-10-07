@@ -11,19 +11,6 @@ export const LEARNING_ACTIVITY_STATUS = {
 
 export const RUBRIC_LEVELS = ['NA', 'AS', 'AN', 'AE'];
 
-export const EVALUATION_TYPES = {
-    COMPETENCIAL: 'competencial',
-    NUMERICAL: 'numerical'
-};
-
-export const TERM_EVALUATION_METHODS = {
-    WEIGHTED_AVERAGE: 'weighted_average',
-    MAJORITY: 'majority'
-};
-
-export const COMPETENCIAL_LEVEL_ORDER = ['NP', 'NA', 'AS', 'AN', 'AE'];
-const COMPETENCIAL_LEVELS_WITH_MINIMUMS = ['NA', 'AS', 'AN', 'AE'];
-
 export const state = {
     activeView: 'schedule',
     activities: [],
@@ -59,103 +46,6 @@ export const state = {
     evaluationSelectedTermId: 'all',
     learningActivityRubricReturnView: null,
 };
-
-export function createDefaultEvaluationSettings() {
-    return {
-        type: EVALUATION_TYPES.COMPETENCIAL,
-        competencial: {
-            levelValues: {
-                NP: 0,
-                NA: 1,
-                AS: 2,
-                AN: 3,
-                AE: 4
-            },
-            levelMinimums: {
-                NA: 0,
-                AS: 5,
-                AN: 7,
-                AE: 9
-            },
-            maxNotAchieved: {
-                term: 0,
-                course: 0
-            },
-            termEvaluationMethod: TERM_EVALUATION_METHODS.WEIGHTED_AVERAGE
-        },
-        numerical: {}
-    };
-}
-
-export function normalizeEvaluationSettings(rawSettings) {
-    const defaults = createDefaultEvaluationSettings();
-    const settings = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
-
-    const normalized = {
-        type: Object.values(EVALUATION_TYPES).includes(settings.type)
-            ? settings.type
-            : defaults.type,
-        competencial: { ...defaults.competencial },
-        numerical: settings.numerical && typeof settings.numerical === 'object'
-            ? { ...settings.numerical }
-            : {}
-    };
-
-    const competencial = settings.competencial && typeof settings.competencial === 'object'
-        ? settings.competencial
-        : {};
-
-    const levelValues = competencial.levelValues && typeof competencial.levelValues === 'object'
-        ? competencial.levelValues
-        : {};
-
-    COMPETENCIAL_LEVEL_ORDER.forEach(level => {
-        const value = parseFloat(levelValues[level]);
-        normalized.competencial.levelValues[level] = Number.isFinite(value)
-            ? value
-            : defaults.competencial.levelValues[level];
-    });
-
-    const levelMinimums = competencial.levelMinimums && typeof competencial.levelMinimums === 'object'
-        ? competencial.levelMinimums
-        : {};
-
-    COMPETENCIAL_LEVELS_WITH_MINIMUMS.forEach(level => {
-        const value = parseFloat(levelMinimums[level]);
-        if (level === 'NA') {
-            normalized.competencial.levelMinimums[level] = 0;
-            return;
-        }
-        normalized.competencial.levelMinimums[level] = Number.isFinite(value)
-            ? value
-            : defaults.competencial.levelMinimums[level];
-    });
-
-    const maxNotAchieved = competencial.maxNotAchieved && typeof competencial.maxNotAchieved === 'object'
-        ? competencial.maxNotAchieved
-        : {};
-
-    const termMax = parseInt(maxNotAchieved.term, 10);
-    const courseMax = parseInt(maxNotAchieved.course, 10);
-
-    normalized.competencial.maxNotAchieved = {
-        term: Number.isFinite(termMax) && termMax >= 0 ? termMax : defaults.competencial.maxNotAchieved.term,
-        course: Number.isFinite(courseMax) && courseMax >= 0 ? courseMax : defaults.competencial.maxNotAchieved.course
-    };
-
-    normalized.competencial.termEvaluationMethod = Object.values(TERM_EVALUATION_METHODS).includes(competencial.termEvaluationMethod)
-        ? competencial.termEvaluationMethod
-        : defaults.competencial.termEvaluationMethod;
-
-    if (settings && typeof settings === 'object') {
-        settings.type = normalized.type;
-        settings.competencial = normalized.competencial;
-        settings.numerical = normalized.numerical;
-        return settings;
-    }
-
-    return normalized;
-}
 
 function generateId(prefix = 'id') {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -350,10 +240,6 @@ export function loadState() {
                 competency.criteria = [];
             }
         });
-
-        if (activity.type === 'class') {
-            activity.evaluationSettings = normalizeEvaluationSettings(activity.evaluationSettings);
-        }
     });
 
     state.learningActivityDraft = null;
