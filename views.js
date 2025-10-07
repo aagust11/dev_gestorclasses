@@ -1662,13 +1662,17 @@ export function renderCompetencyDetailView() {
                 <div class="flex items-start gap-2">
                     <div class="flex-1">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('criterion_identifier_label')}</label>
-                        <input type="text" value="${criterion.code || ''}" data-action="update-criterion-code" data-activity-id="${activity.id}" data-competency-id="${competency.id}" data-criterion-id="${criterion.id}" placeholder="${t('criterion_identifier_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md">
+                        <input type="text" value="${escapeAttribute(criterion.code || '')}" data-action="update-criterion-code" data-activity-id="${activity.id}" data-competency-id="${competency.id}" data-criterion-id="${criterion.id}" placeholder="${t('criterion_identifier_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md">
                     </div>
                     <button data-action="delete-criterion" data-activity-id="${activity.id}" data-competency-id="${competency.id}" data-criterion-id="${criterion.id}" class="text-red-500 hover:text-red-700 mt-6"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
                 </div>
                 <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('criterion_generic_note_label')}</label>
+                    <textarea data-action="update-criterion-generic-note" data-activity-id="${activity.id}" data-competency-id="${competency.id}" data-criterion-id="${criterion.id}" placeholder="${t('criterion_generic_note_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-20">${escapeHtml(criterion.genericNote || '')}</textarea>
+                </div>
+                <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('criterion_description_label')}</label>
-                    <textarea data-action="update-criterion-description" data-activity-id="${activity.id}" data-competency-id="${competency.id}" data-criterion-id="${criterion.id}" placeholder="${t('criterion_description_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-20">${criterion.description || ''}</textarea>
+                    <textarea data-action="update-criterion-description" data-activity-id="${activity.id}" data-competency-id="${competency.id}" data-criterion-id="${criterion.id}" placeholder="${t('criterion_description_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-20">${escapeHtml(criterion.description || '')}</textarea>
                 </div>
             </div>
         `).join('')
@@ -2376,6 +2380,20 @@ export function renderLearningActivityRubricView() {
                 const competencyLabel = competency?.code || t('competency_without_code');
                 const criterionCode = criterion?.code || t('criterion_without_code');
                 const criterionDescription = criterion?.description || t('criterion_without_description');
+                const genericNote = typeof criterion?.genericNote === 'string' ? criterion.genericNote.trim() : '';
+                const badgesHtml = [
+                    `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200">${escapeHtml(competencyLabel)}</span>`,
+                    `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-700 dark:bg-purple-900/30 dark:text-purple-200">${escapeHtml(criterionCode)}</span>`
+                ].join('');
+                const criterionInfoHtml = genericNote
+                    ? [
+                        `<div class="text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(genericNote)}</div>`,
+                        `<div class="mt-2 flex flex-wrap gap-2 text-xs font-semibold">${badgesHtml}</div>`
+                    ].join('')
+                    : [
+                        `<div class="text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(criterionCode)}</div>`,
+                        `<div class="text-xs text-gray-600 dark:text-gray-300">${escapeHtml(competencyLabel)}</div>`
+                    ].join('');
                 const currentLevel = scores[item.id] || '';
 
                 const scoreCells = RUBRIC_LEVELS.map(level => {
@@ -2440,8 +2458,7 @@ export function renderLearningActivityRubricView() {
                     <tr>
                         ${nameCell}
                         <td class="px-3 py-3 align-top min-w-[14rem]">
-                            <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(criterionCode)}</div>
-                            <div class="text-xs text-gray-600 dark:text-gray-300">${escapeHtml(competencyLabel)}</div>
+                            ${criterionInfoHtml}
                             <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${escapeHtml(criterionDescription)}</div>
                         </td>
                         ${scoreCells}
