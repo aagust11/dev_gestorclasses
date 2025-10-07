@@ -173,6 +173,7 @@
   "rubric_no_class_message": "Jarduera honi lotutako ikasgaia ez dago erabilgarri.",
   "rubric_tab_configuration": "Konfigurazioa",
   "rubric_tab_assessment": "Ebaluazioa",
+  "rubric_edit_activity_button": "Editatu jarduera",
   "rubric_add_criterion_label": "Gehitu ebaluazio-irizpide bat",
   "rubric_select_placeholder": "-- Hautatu irizpide bat --",
   "rubric_add_button": "Gehitu errubrikan",

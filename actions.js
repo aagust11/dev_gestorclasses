@@ -838,6 +838,22 @@ export const actionHandlers = {
             state.selectedEvaluationClassId = classId;
         }
 
+        if (activityId) {
+            const activity = state.learningActivities.find(act => act.id === activityId);
+            if (activity) {
+                const previousView = state.activeView;
+                state.learningActivityRubricReturnView = previousView;
+                syncRubricWithActivityCriteria(activity);
+                saveState();
+                state.activeLearningActivityRubricId = activityId;
+                state.learningActivityRubricTab = 'assessment';
+                state.learningActivityRubricFilter = '';
+                state.pendingEvaluationHighlightActivityId = null;
+                state.activeView = 'learningActivityRubric';
+                return;
+            }
+        }
+
         state.pendingEvaluationHighlightActivityId = activityId;
         state.evaluationActiveTab = 'activities';
         state.activeView = 'evaluation';

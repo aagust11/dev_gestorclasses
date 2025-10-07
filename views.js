@@ -2221,6 +2221,13 @@ export function renderLearningActivityRubricView() {
         return `<button data-action="set-learning-activity-rubric-tab" data-tab="${tab.key}" class="${classes}" aria-pressed="${isActive}">${tab.label}</button>`;
     }).join('');
 
+    const editActivityButtonHtml = activity.classId
+        ? `<button data-action="open-learning-activity-editor" data-class-id="${activity.classId}" data-learning-activity-id="${activity.id}" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-md border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600">
+                <i data-lucide="pencil" class="w-4 h-4"></i>
+                <span>${t('rubric_edit_activity_button')}</span>
+            </button>`
+        : '';
+
     const criteriaOptions = availableCriteria.map(item => {
         const competencyCode = item.competency?.code || t('competency_without_code');
         const criterionCode = item.criterion?.code || t('criterion_without_code');
@@ -2505,7 +2512,7 @@ export function renderLearningActivityRubricView() {
                         </span>
                     </div>
                 </div>
-                <div class="flex flex-wrap items-center gap-3">${tabButtonsHtml}</div>
+                <div class="flex flex-wrap items-center gap-3">${tabButtonsHtml}${editActivityButtonHtml}</div>
                 <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
                     ${mainContent}
                 </div>

@@ -173,6 +173,7 @@
   "rubric_no_class_message": "The subject linked to this activity is no longer available.",
   "rubric_tab_configuration": "Configuration",
   "rubric_tab_assessment": "Assessment",
+  "rubric_edit_activity_button": "Edit activity",
   "rubric_add_criterion_label": "Add assessment criterion",
   "rubric_select_placeholder": "-- Select a criterion --",
   "rubric_add_button": "Add to rubric",
