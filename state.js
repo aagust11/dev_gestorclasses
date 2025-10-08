@@ -1,5 +1,7 @@
 // state.js: Gestiona el estado global y la persistencia de datos.
 
+import { createDefaultEvaluationConfig, normalizeEvaluationConfig, cloneEvaluationConfig } from './evaluation.js';
+
 const pastelColors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A0C4FF', '#BDB2FF', '#FFC6FF'];
 
 // El estado central de la aplicación.
@@ -48,7 +50,56 @@ export const state = {
     evaluationSelectedTermId: 'all',
     learningActivityRubricReturnView: null,
     pendingEvaluationHighlightActivityId: null,
+    evaluationSettings: {},
+    evaluationSettingsDraft: {},
+    settingsEvaluationSelectedClassId: null,
+    evaluationSettingsFeedback: {},
 };
+
+function ensureSavedEvaluationConfig(classId) {
+    if (!classId) {
+        return null;
+    }
+    const existing = state.evaluationSettings[classId];
+    if (existing) {
+        const normalized = normalizeEvaluationConfig(existing);
+        state.evaluationSettings[classId] = normalized;
+        return normalized;
+    }
+    const created = createDefaultEvaluationConfig();
+    state.evaluationSettings[classId] = created;
+    return created;
+}
+
+export function ensureEvaluationDraft(classId) {
+    if (!classId) {
+        return null;
+    }
+    const saved = ensureSavedEvaluationConfig(classId);
+    if (!state.evaluationSettingsDraft[classId]) {
+        state.evaluationSettingsDraft[classId] = cloneEvaluationConfig(saved);
+    }
+    return state.evaluationSettingsDraft[classId];
+}
+
+export function persistEvaluationDraft(classId) {
+    if (!classId || !state.evaluationSettingsDraft[classId]) {
+        return null;
+    }
+    const normalized = normalizeEvaluationConfig(state.evaluationSettingsDraft[classId]);
+    state.evaluationSettings[classId] = cloneEvaluationConfig(normalized);
+    state.evaluationSettingsDraft[classId] = cloneEvaluationConfig(normalized);
+    return state.evaluationSettings[classId];
+}
+
+export function resetEvaluationDraftToDefault(classId) {
+    if (!classId) {
+        return null;
+    }
+    const defaults = createDefaultEvaluationConfig();
+    state.evaluationSettingsDraft[classId] = cloneEvaluationConfig(defaults);
+    return state.evaluationSettingsDraft[classId];
+}
 
 function generateId(prefix = 'id') {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -246,6 +297,8 @@ export function saveState() {
         evaluationActiveTab: state.evaluationActiveTab,
         selectedEvaluationClassId: state.selectedEvaluationClassId,
         evaluationSelectedTermId: state.evaluationSelectedTermId,
+        evaluationSettings: state.evaluationSettings,
+        settingsEvaluationSelectedClassId: state.settingsEvaluationSelectedClassId,
     };
     localStorage.setItem('teacherDashboardData', JSON.stringify(dataToSave));
     
@@ -301,6 +354,18 @@ export function loadState() {
         state.evaluationActiveTab = parsedData.evaluationActiveTab || 'activities';
         state.selectedEvaluationClassId = parsedData.selectedEvaluationClassId || null;
         state.evaluationSelectedTermId = parsedData.evaluationSelectedTermId || 'all';
+        const rawEvaluationSettings = parsedData.evaluationSettings || {};
+        state.evaluationSettings = {};
+        Object.entries(rawEvaluationSettings).forEach(([classId, config]) => {
+            if (!classId) return;
+            state.evaluationSettings[classId] = normalizeEvaluationConfig(config);
+        });
+        state.evaluationSettingsDraft = {};
+        Object.entries(state.evaluationSettings).forEach(([classId, config]) => {
+            state.evaluationSettingsDraft[classId] = cloneEvaluationConfig(config);
+        });
+        state.settingsEvaluationSelectedClassId = parsedData.settingsEvaluationSelectedClassId || null;
+        state.evaluationSettingsFeedback = {};
     }
 
     state.activities.forEach(activity => {

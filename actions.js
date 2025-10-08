@@ -1,8 +1,9 @@
 // actions.js: Define toda la lógica de las acciones del usuario.
 
-import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS } from './state.js';
+import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault } from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate } from './utils.js';
 import { t } from './i18n.js';
+import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig } from './evaluation.js';
 
 function generateRubricItemId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -117,6 +118,26 @@ function cleanRubricEvaluations(rubric, removedItemIds = []) {
             }
         });
     });
+}
+
+function clearEvaluationFeedback(classId) {
+    if (!classId) {
+        return;
+    }
+    if (!state.evaluationSettingsFeedback || typeof state.evaluationSettingsFeedback !== 'object') {
+        state.evaluationSettingsFeedback = {};
+    }
+    delete state.evaluationSettingsFeedback[classId];
+}
+
+function setEvaluationFeedback(classId, payload) {
+    if (!classId) {
+        return;
+    }
+    if (!state.evaluationSettingsFeedback || typeof state.evaluationSettingsFeedback !== 'object') {
+        state.evaluationSettingsFeedback = {};
+    }
+    state.evaluationSettingsFeedback[classId] = payload;
 }
 
 function ensureRubricHasItemForCriterion(rubric, competencyId, criterionId) {
@@ -414,7 +435,183 @@ export const actionHandlers = {
         if (tabId) {
             state.settingsActiveTab = tabId;
             // No es necesario saveState() aquí, se guarda al renderizar
+            if (tabId === 'evaluation') {
+                const classes = state.activities
+                    .filter(activity => activity.type === 'class')
+                    .sort((a, b) => a.name.localeCompare(b.name));
+                if (classes.length === 0) {
+                    state.settingsEvaluationSelectedClassId = null;
+                    return;
+                }
+                const existing = classes.find(cls => cls.id === state.settingsEvaluationSelectedClassId);
+                const targetClass = existing || classes[0];
+                state.settingsEvaluationSelectedClassId = targetClass?.id || null;
+                if (targetClass?.id) {
+                    ensureEvaluationDraft(targetClass.id);
+                }
+            }
         }
+    },
+
+    'select-settings-evaluation-class': (id, element) => {
+        const classId = element?.value || element?.dataset?.classId;
+        if (!classId) {
+            return;
+        }
+        state.settingsEvaluationSelectedClassId = classId;
+        ensureEvaluationDraft(classId);
+        clearEvaluationFeedback(classId);
+    },
+
+    'change-evaluation-modality': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const modality = element?.value;
+        if (!classId || !modality || !Object.values(EVALUATION_MODALITIES).includes(modality)) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft) return;
+        draft.modality = modality;
+        clearEvaluationFeedback(classId);
+    },
+
+    'update-competency-level-value': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const levelId = element?.dataset?.levelId;
+        if (!classId || !levelId) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft) return;
+        const rawValue = element.value;
+        const level = draft.competency.levels.find(l => l.id === levelId);
+        if (!level) return;
+        level.numericValue = rawValue === '' ? '' : Number(rawValue);
+        if (Number.isNaN(level.numericValue)) {
+            level.numericValue = '';
+        }
+        clearEvaluationFeedback(classId);
+    },
+
+    'update-competency-minimum': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const target = element?.dataset?.minimumId;
+        if (!classId || !target) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft) return;
+        const rawValue = element.value;
+        draft.competency.minimums[target] = rawValue === '' ? '' : Number(rawValue);
+        if (Number.isNaN(draft.competency.minimums[target])) {
+            draft.competency.minimums[target] = '';
+        }
+        clearEvaluationFeedback(classId);
+    },
+
+    'update-competency-max-not-achieved': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const scope = element?.dataset?.scope;
+        if (!classId || !scope) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft) return;
+        const rawValue = element.value;
+        draft.competency.maxNotAchieved[scope] = rawValue === '' ? '' : Number(rawValue);
+        if (Number.isNaN(draft.competency.maxNotAchieved[scope])) {
+            draft.competency.maxNotAchieved[scope] = '';
+        }
+        clearEvaluationFeedback(classId);
+    },
+
+    'update-competency-aggregation': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const aggregation = element?.value;
+        if (!classId || !aggregation || !Object.values(COMPETENCY_AGGREGATIONS).includes(aggregation)) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft) return;
+        draft.competency.aggregation = aggregation;
+        clearEvaluationFeedback(classId);
+    },
+
+    'set-evaluation-no-evidence-behavior': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const behavior = element?.value;
+        if (!classId || !behavior || !Object.values(NO_EVIDENCE_BEHAVIOR).includes(behavior)) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft) return;
+        draft.competency.calculation.noEvidenceBehavior = behavior;
+        if (behavior === NO_EVIDENCE_BEHAVIOR.LOWEST_LEVEL) {
+            draft.competency.calculation.noEvidenceLevelId = 'NP';
+        }
+        clearEvaluationFeedback(classId);
+    },
+
+    'set-evaluation-no-evidence-level': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const levelId = element?.value;
+        if (!classId || !levelId) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft) return;
+        draft.competency.calculation.noEvidenceLevelId = levelId;
+        clearEvaluationFeedback(classId);
+    },
+
+    'set-evaluation-np-treatment': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const value = element?.value;
+        if (!classId || !value || !Object.values(NP_TREATMENTS).includes(value)) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft) return;
+        draft.competency.calculation.npTreatment = value;
+        clearEvaluationFeedback(classId);
+    },
+
+    'save-evaluation-config': (id, element) => {
+        const classId = element?.dataset?.classId;
+        if (!classId) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft) {
+            return;
+        }
+        const validation = validateCompetencyEvaluationConfig(draft);
+        if (!validation.isValid) {
+            setEvaluationFeedback(classId, {
+                type: 'error',
+                message: t('evaluation_save_error'),
+                details: validation,
+            });
+            return;
+        }
+        persistEvaluationDraft(classId);
+        setEvaluationFeedback(classId, {
+            type: 'success',
+            message: t('evaluation_save_success'),
+        });
+        saveState();
+    },
+
+    'reset-evaluation-config': (id, element) => {
+        const classId = element?.dataset?.classId;
+        if (!classId) {
+            return;
+        }
+        resetEvaluationDraftToDefault(classId);
+        setEvaluationFeedback(classId, {
+            type: 'info',
+            message: t('evaluation_reset_to_defaults'),
+        });
     },
 
     'set-evaluation-tab': (id, element) => {

@@ -1,8 +1,9 @@
 // views.js: Contiene todas las funciones que generan el HTML de las vistas.
 
-import { state, LEARNING_ACTIVITY_STATUS, RUBRIC_LEVELS, calculateLearningActivityStatus } from './state.js';
+import { state, LEARNING_ACTIVITY_STATUS, RUBRIC_LEVELS, calculateLearningActivityStatus, ensureEvaluationDraft } from './state.js';
 import { darkenColor, getWeekStartDate, getWeekDateRange, formatDate, isSameDate, findNextSession, findPreviousSession, DAY_KEYS, findNextClassSession, getCurrentTermDateRange, getWeeksForCourse, isHoliday, normalizeStudentAnnotation, STUDENT_ATTENDANCE_STATUS, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
+import { COMPETENCY_LEVEL_IDS, EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, validateCompetencyEvaluationConfig, normalizeEvaluationConfig } from './evaluation.js';
 
 const sortStudentsByName = (studentA, studentB) => studentA.name.localeCompare(studentB.name);
 
@@ -1730,6 +1731,7 @@ export function renderSettingsView() {
         { id: 'schedule', labelKey: 'settings_tab_schedule', icon: 'clock' },
         { id: 'activities', labelKey: 'settings_tab_activities', icon: 'users' },
         { id: 'competencies', labelKey: 'settings_tab_competencies', icon: 'target' },
+        { id: 'evaluation', labelKey: 'settings_tab_evaluation', icon: 'list-checks' },
         { id: 'data', labelKey: 'settings_tab_data', icon: 'database' }
     ];
 
@@ -2126,6 +2128,424 @@ export function renderSettingsView() {
             </div>
         `;
 
+    // --- Evaluation Tab Content ---
+    const evaluationClasses = state.activities
+        .filter(activity => activity.type === 'class')
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    let evaluationTabContent = '';
+    if (evaluationClasses.length === 0) {
+        evaluationTabContent = `
+            <div class="p-6 text-sm text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                ${t('evaluation_no_classes')}
+            </div>
+        `;
+    } else {
+        const availableIds = new Set(evaluationClasses.map(cls => cls.id));
+        if (!state.settingsEvaluationSelectedClassId || !availableIds.has(state.settingsEvaluationSelectedClassId)) {
+            state.settingsEvaluationSelectedClassId = evaluationClasses[0].id;
+        }
+
+        const selectedClassId = state.settingsEvaluationSelectedClassId;
+        const evaluationClassOptions = evaluationClasses.map(cls => `
+            <option value="${cls.id}" ${cls.id === selectedClassId ? 'selected' : ''}>${escapeHtml(cls.name)}</option>
+        `).join('');
+
+        const draft = ensureEvaluationDraft(selectedClassId);
+        const normalizedDraft = normalizeEvaluationConfig(draft || {});
+        const validation = validateCompetencyEvaluationConfig(draft || {});
+        const feedback = state.evaluationSettingsFeedback?.[selectedClassId] || null;
+        const saveDisabled = !validation.isValid;
+
+        const levelLabelMap = {
+            NP: t('evaluation_level_label_NP'),
+            NA: t('evaluation_level_label_NA'),
+            AS: t('evaluation_level_label_AS'),
+            AN: t('evaluation_level_label_AN'),
+            AE: t('evaluation_level_label_AE'),
+        };
+
+        const errorTranslationKey = {
+            missing: 'evaluation_error_missing',
+            negative: 'evaluation_error_negative',
+            order: 'evaluation_error_order',
+            min_scale: 'evaluation_error_min_scale',
+            out_of_order: 'evaluation_error_out_of_order',
+            invalid: 'evaluation_error_invalid',
+        };
+
+        const validationSummaryItems = [];
+        if (draft && draft.competency) {
+            COMPETENCY_LEVEL_IDS.forEach(levelId => {
+                const code = validation.errors.levels[levelId];
+                if (code) {
+                    validationSummaryItems.push(`${levelLabelMap[levelId]} — ${t(errorTranslationKey[code])}`);
+                }
+            });
+            ['AS', 'AN', 'AE'].forEach(minId => {
+                const code = validation.errors.minimums[minId];
+                if (code) {
+                    validationSummaryItems.push(`${t(`evaluation_minimum_label_${minId}`)} — ${t(errorTranslationKey[code])}`);
+                }
+            });
+            ['term', 'course'].forEach(scope => {
+                const code = validation.errors.maxNotAchieved[scope];
+                if (code) {
+                    const label = scope === 'term'
+                        ? t('evaluation_max_not_achieved_term')
+                        : t('evaluation_max_not_achieved_course');
+                    validationSummaryItems.push(`${label} — ${t(errorTranslationKey[code])}`);
+                }
+            });
+            if (validation.errors.calculation.noEvidenceLevelId) {
+                validationSummaryItems.push(`${t('evaluation_no_evidence_level_label')} — ${t(errorTranslationKey[validation.errors.calculation.noEvidenceLevelId])}`);
+            }
+        }
+
+        const validationSummaryHtml = validationSummaryItems.length > 0
+            ? `
+                <div class="rounded-md border border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-900/30 p-4">
+                    <h4 class="text-sm font-semibold text-red-700 dark:text-red-200">${t('evaluation_validation_summary')}</h4>
+                    <ul class="mt-2 space-y-1 list-disc list-inside text-sm text-red-600 dark:text-red-200">
+                        ${validationSummaryItems.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+                    </ul>
+                </div>
+            `
+            : '';
+
+        const feedbackClass = {
+            success: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200',
+            error: 'border-red-200 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-900/30 dark:text-red-200',
+            info: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-600 dark:bg-blue-900/30 dark:text-blue-200',
+        };
+
+        const feedbackHtml = feedback
+            ? `
+                <div class="rounded-md border px-4 py-3 text-sm ${feedbackClass[feedback.type] || feedbackClass.info}">
+                    ${escapeHtml(feedback.message)}
+                </div>
+            `
+            : '';
+
+        const modality = draft?.modality || EVALUATION_MODALITIES.COMPETENCY;
+
+        const levelRowsHtml = normalizedDraft.competency.levels.map(level => {
+            const rawLevel = draft?.competency?.levels?.find(l => l.id === level.id) || level;
+            const inputValue = rawLevel.numericValue === '' || typeof rawLevel.numericValue === 'undefined'
+                ? ''
+                : rawLevel.numericValue;
+            const errorCode = validation.errors.levels[level.id];
+            const hasError = Boolean(errorCode);
+            const errorMessage = hasError ? `${t(errorTranslationKey[errorCode])}` : '';
+            const inputClasses = `mt-1 w-32 p-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600 ${hasError ? 'border-red-400 focus:ring-red-300 dark:border-red-600 dark:focus:ring-red-600' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'}`;
+            return `
+                <tr>
+                    <th scope="row" class="px-4 py-3 text-sm font-semibold text-gray-700 dark:text-gray-200">${escapeHtml(levelLabelMap[level.id] || level.id)}</th>
+                    <td class="px-4 py-3">
+                        <input
+                            type="number"
+                            inputmode="decimal"
+                            min="0"
+                            step="0.1"
+                            value="${inputValue === '' ? '' : escapeAttribute(inputValue)}"
+                            data-action="update-competency-level-value"
+                            data-class-id="${selectedClassId}"
+                            data-level-id="${level.id}"
+                            class="${inputClasses}"
+                            aria-invalid="${hasError}"
+                            aria-describedby="level-error-${level.id}"
+                        />
+                        ${hasError ? `<p id="level-error-${level.id}" class="mt-1 text-xs text-red-600 dark:text-red-300">${escapeHtml(errorMessage)}</p>` : ''}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        const minimumFields = [
+            { id: 'AS', label: t('evaluation_minimum_label_AS') },
+            { id: 'AN', label: t('evaluation_minimum_label_AN') },
+            { id: 'AE', label: t('evaluation_minimum_label_AE') },
+        ];
+
+        const minimumInputsHtml = minimumFields.map(field => {
+            const rawValue = draft?.competency?.minimums?.[field.id];
+            const inputValue = rawValue === '' || typeof rawValue === 'undefined' ? '' : rawValue;
+            const errorCode = validation.errors.minimums[field.id];
+            const hasError = Boolean(errorCode);
+            const inputClasses = `mt-1 w-full p-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600 ${hasError ? 'border-red-400 focus:ring-red-300 dark:border-red-600 dark:focus:ring-red-600' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'}`;
+            return `
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="minimum-${field.id}">${escapeHtml(field.label)}</label>
+                    <input
+                        id="minimum-${field.id}"
+                        type="number"
+                        inputmode="decimal"
+                        min="0"
+                        step="0.1"
+                        value="${inputValue === '' ? '' : escapeAttribute(inputValue)}"
+                        data-action="update-competency-minimum"
+                        data-class-id="${selectedClassId}"
+                        data-minimum-id="${field.id}"
+                        class="${inputClasses}"
+                        aria-invalid="${hasError}"
+                    />
+                    ${hasError ? `<p class="mt-1 text-xs text-red-600 dark:text-red-300">${escapeHtml(t(errorTranslationKey[errorCode]))}</p>` : ''}
+                </div>
+            `;
+        }).join('');
+
+        const maxFields = [
+            { id: 'term', label: t('evaluation_max_not_achieved_term') },
+            { id: 'course', label: t('evaluation_max_not_achieved_course') },
+        ];
+
+        const maxInputsHtml = maxFields.map(field => {
+            const rawValue = draft?.competency?.maxNotAchieved?.[field.id];
+            const inputValue = rawValue === '' || typeof rawValue === 'undefined' ? '' : rawValue;
+            const errorCode = validation.errors.maxNotAchieved[field.id];
+            const hasError = Boolean(errorCode);
+            const inputClasses = `mt-1 w-full p-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600 ${hasError ? 'border-red-400 focus:ring-red-300 dark:border-red-600 dark:focus:ring-red-600' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'}`;
+            return `
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="max-${field.id}">${escapeHtml(field.label)}</label>
+                    <input
+                        id="max-${field.id}"
+                        type="number"
+                        inputmode="numeric"
+                        min="0"
+                        step="1"
+                        value="${inputValue === '' ? '' : escapeAttribute(inputValue)}"
+                        data-action="update-competency-max-not-achieved"
+                        data-class-id="${selectedClassId}"
+                        data-scope="${field.id}"
+                        class="${inputClasses}"
+                        aria-invalid="${hasError}"
+                    />
+                    ${hasError ? `<p class="mt-1 text-xs text-red-600 dark:text-red-300">${escapeHtml(t(errorTranslationKey[errorCode]))}</p>` : ''}
+                </div>
+            `;
+        }).join('');
+
+        const aggregationOptions = [
+            { value: COMPETENCY_AGGREGATIONS.WEIGHTED_AVERAGE, label: t('evaluation_aggregation_weighted') },
+            { value: COMPETENCY_AGGREGATIONS.MAJORITY, label: t('evaluation_aggregation_majority') },
+        ];
+
+        const aggregationHtml = aggregationOptions.map(option => {
+            const isChecked = normalizedDraft.competency.aggregation === option.value;
+            return `
+                <label class="flex items-start gap-3 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                        type="radio"
+                        name="evaluation-aggregation-${selectedClassId}"
+                        value="${option.value}"
+                        data-action="update-competency-aggregation"
+                        data-class-id="${selectedClassId}"
+                        ${isChecked ? 'checked' : ''}
+                        class="mt-1 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    />
+                    <span>${escapeHtml(option.label)}</span>
+                </label>
+            `;
+        }).join('');
+
+        const noEvidenceBehavior = normalizedDraft.competency.calculation.noEvidenceBehavior;
+        const noEvidenceSelectHtml = `
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="no-evidence-behavior">${t('evaluation_no_evidence_behavior_label')}</label>
+                <select
+                    id="no-evidence-behavior"
+                    data-action="set-evaluation-no-evidence-behavior"
+                    data-class-id="${selectedClassId}"
+                    class="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md text-sm"
+                >
+                    <option value="${NO_EVIDENCE_BEHAVIOR.LOWEST_LEVEL}" ${noEvidenceBehavior === NO_EVIDENCE_BEHAVIOR.LOWEST_LEVEL ? 'selected' : ''}>${t('evaluation_no_evidence_lowest')}</option>
+                    <option value="${NO_EVIDENCE_BEHAVIOR.SPECIFIC_LEVEL}" ${noEvidenceBehavior === NO_EVIDENCE_BEHAVIOR.SPECIFIC_LEVEL ? 'selected' : ''}>${t('evaluation_no_evidence_specific')}</option>
+                </select>
+            </div>
+        `;
+
+        const noEvidenceLevelSelect = noEvidenceBehavior === NO_EVIDENCE_BEHAVIOR.SPECIFIC_LEVEL
+            ? `
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="no-evidence-level">${t('evaluation_no_evidence_level_label')}</label>
+                    <select
+                        id="no-evidence-level"
+                        data-action="set-evaluation-no-evidence-level"
+                        data-class-id="${selectedClassId}"
+                        class="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md text-sm"
+                    >
+                        ${COMPETENCY_LEVEL_IDS.map(levelId => `
+                            <option value="${levelId}" ${normalizedDraft.competency.calculation.noEvidenceLevelId === levelId ? 'selected' : ''}>${escapeHtml(levelLabelMap[levelId] || levelId)}</option>
+                        `).join('')}
+                    </select>
+                    ${validation.errors.calculation.noEvidenceLevelId ? `<p class="mt-1 text-xs text-red-600 dark:text-red-300">${escapeHtml(t(errorTranslationKey[validation.errors.calculation.noEvidenceLevelId]))}</p>` : ''}
+                </div>
+            `
+            : '';
+
+        const npTreatmentOptions = [
+            { value: NP_TREATMENTS.INCLUDE_AS_ZERO, label: t('evaluation_np_treatment_include') },
+            { value: NP_TREATMENTS.EXCLUDE_FROM_AVERAGE, label: t('evaluation_np_treatment_exclude') },
+        ];
+
+        const npTreatmentSelectHtml = `
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="np-treatment">${t('evaluation_np_treatment_label')}</label>
+                <select
+                    id="np-treatment"
+                    data-action="set-evaluation-np-treatment"
+                    data-class-id="${selectedClassId}"
+                    class="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md text-sm"
+                >
+                    ${npTreatmentOptions.map(option => `
+                        <option value="${option.value}" ${normalizedDraft.competency.calculation.npTreatment === option.value ? 'selected' : ''}>${escapeHtml(option.label)}</option>
+                    `).join('')}
+                </select>
+            </div>
+        `;
+
+        const aeLevel = normalizedDraft.competency.levels.find(level => level.id === 'AE');
+        const aeValue = aeLevel?.numericValue ?? 1;
+        const weightedExample = calculateWeightedCompetencyResult([
+            { levelId: 'AS', activityWeight: 0.6, criterionWeight: 1 },
+            { levelId: 'AE', activityWeight: 0.4, criterionWeight: 1 },
+        ], normalizedDraft);
+        const weightedNumeric = Number.isFinite(weightedExample.numericScore) ? weightedExample.numericScore.toFixed(2) : '0.00';
+        const weightedText = `${t('evaluation_help_example_weighted_prefix')} 60% ${levelLabelMap.AS} + 40% ${levelLabelMap.AE} → ${weightedNumeric} / ${aeValue} (${levelLabelMap[weightedExample.levelId] || weightedExample.levelId})`;
+
+        const majorityExample = calculateMajorityCompetencyResult([
+            { levelId: 'AS' },
+            { levelId: 'AS' },
+            { levelId: 'AE' },
+        ], normalizedDraft);
+        const majorityText = `${t('evaluation_help_example_majority_prefix')} ${levelLabelMap.AS}, ${levelLabelMap.AS}, ${levelLabelMap.AE} → ${levelLabelMap[majorityExample.levelId] || majorityExample.levelId}`;
+
+        const competencyContentHtml = modality === EVALUATION_MODALITIES.COMPETENCY
+            ? `
+                <div class="mt-6 space-y-6">
+                    <div>
+                        <h4 class="text-base font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_levels_table_label')}</h4>
+                        <div class="mt-3 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                                <thead class="bg-gray-50 dark:bg-gray-900/40">
+                                    <tr>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">${t('evaluation_levels_column_label')}</th>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">${t('evaluation_levels_column_numeric_value')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                    ${levelRowsHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-base font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_minimums_title')}</h4>
+                        <div class="mt-3 grid gap-4 sm:grid-cols-3">
+                            ${minimumInputsHtml}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-base font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_max_not_achieved_title')}</h4>
+                        <div class="mt-3 grid gap-4 sm:grid-cols-2">
+                            ${maxInputsHtml}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-base font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_aggregation_label')}</h4>
+                        <div class="mt-3 space-y-3">
+                            ${aggregationHtml}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-base font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_additional_rules_title')}</h4>
+                        <div class="mt-3 grid gap-4 sm:grid-cols-2">
+                            ${noEvidenceSelectHtml}
+                            ${npTreatmentSelectHtml}
+                        </div>
+                        ${noEvidenceLevelSelect}
+                    </div>
+                </div>
+            `
+            : `
+                <div class="mt-6">
+                    <div class="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-6 text-sm text-gray-600 dark:text-gray-300">
+                        ${t('evaluation_numeric_placeholder')}
+                    </div>
+                </div>
+            `;
+
+        const helpHtml = `
+            <div class="rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 p-5 space-y-3">
+                <h4 class="text-base font-semibold text-blue-700 dark:text-blue-200 flex items-center gap-2"><i data-lucide="info" class="w-4 h-4"></i>${t('evaluation_help_title')}</h4>
+                <p class="text-sm text-blue-800 dark:text-blue-100">${t('evaluation_help_weighted_description')}</p>
+                <p class="text-sm font-medium text-blue-800 dark:text-blue-100">${t('evaluation_help_weighted_formula')}</p>
+                <p class="text-sm text-blue-800 dark:text-blue-100">${escapeHtml(weightedText)}</p>
+                <p class="text-sm text-blue-800 dark:text-blue-100">${t('evaluation_help_majority_text')}</p>
+                <p class="text-sm text-blue-800 dark:text-blue-100">${escapeHtml(majorityText)}</p>
+            </div>
+        `;
+
+        evaluationTabContent = `
+            <div class="space-y-6">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 space-y-6">
+                    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                        <div>
+                            <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-100">${t('evaluation_tab_title')}</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">${t('evaluation_tab_description')}</p>
+                        </div>
+                        <div class="w-full lg:w-72">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="evaluation-class-select">${t('evaluation_select_subject_label')}</label>
+                            <select
+                                id="evaluation-class-select"
+                                data-action="select-settings-evaluation-class"
+                                class="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md text-sm"
+                            >
+                                ${evaluationClassOptions}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                            <input type="radio" name="evaluation-modality-${selectedClassId}" value="${EVALUATION_MODALITIES.COMPETENCY}" data-action="change-evaluation-modality" data-class-id="${selectedClassId}" ${modality === EVALUATION_MODALITIES.COMPETENCY ? 'checked' : ''} class="text-blue-600 border-gray-300 focus:ring-blue-500"/>
+                            ${t('evaluation_modality_competency')}
+                        </label>
+                        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                            <input type="radio" name="evaluation-modality-${selectedClassId}" value="${EVALUATION_MODALITIES.NUMERIC}" data-action="change-evaluation-modality" data-class-id="${selectedClassId}" ${modality === EVALUATION_MODALITIES.NUMERIC ? 'checked' : ''} class="text-blue-600 border-gray-300 focus:ring-blue-500"/>
+                            ${t('evaluation_modality_numeric')}
+                        </label>
+                    </div>
+                    ${feedbackHtml}
+                    ${validationSummaryHtml}
+                    ${competencyContentHtml}
+                    <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+                        <button
+                            type="button"
+                            data-action="reset-evaluation-config"
+                            data-class-id="${selectedClassId}"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                            ${t('evaluation_reset_button')}
+                        </button>
+                        <button
+                            type="button"
+                            data-action="save-evaluation-config"
+                            data-class-id="${selectedClassId}"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-semibold text-white ${saveDisabled ? 'bg-blue-400 cursor-not-allowed opacity-70' : 'bg-blue-600 hover:bg-blue-700'}"
+                            ${saveDisabled ? 'disabled aria-disabled="true"' : ''}
+                        >
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                            ${t('evaluation_save_button')}
+                        </button>
+                    </div>
+                </div>
+                ${helpHtml}
+            </div>
+        `;
+    }
+
     // --- Data Tab Content ---
     const dataTabContent = `
         <div class="max-w-xl mx-auto">
@@ -2149,6 +2569,7 @@ export function renderSettingsView() {
         case 'schedule': activeTabContent = scheduleTabContent; break;
         case 'activities': activeTabContent = activitiesTabContent; break;
         case 'competencies': activeTabContent = competenciesTabContent; break;
+        case 'evaluation': activeTabContent = evaluationTabContent; break;
         case 'data': activeTabContent = dataTabContent; break;
         default: activeTabContent = calendarTabContent;
     }
