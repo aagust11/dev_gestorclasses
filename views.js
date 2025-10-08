@@ -3189,15 +3189,15 @@ export function renderActivityDetailView() {
 
         return `
             <div id="student-annotation-${student.id}" data-student-name="${escapeAttribute(student.name)}" class="p-3 border border-gray-200 dark:border-gray-700 rounded-md space-y-3 bg-gray-50/60 dark:bg-gray-900/40">
-                <div class="flex flex-wrap items-start gap-3">
+                <div class="flex items-start gap-3">
                     <button data-action="select-student" data-student-id="${student.id}" class="text-left font-medium text-blue-600 dark:text-blue-400 hover:underline">
                         ${student.name}
                     </button>
-                    <div class="flex flex-wrap items-center gap-2 ml-auto">
+                    <div class="flex items-center gap-2 ml-auto justify-end flex-nowrap">
                         ${attendanceButtons}
                     </div>
                 </div>
-                <div class="flex flex-wrap gap-2">
+                <div class="flex w-full gap-2 justify-end flex-nowrap">
                     <button type="button" data-action="add-positive-record" data-student-id="${student.id}" class="${positiveButtonClasses}" title="${t('add_positive_record')}" aria-label="${t('add_positive_record')}">
                         <i data-lucide="shield-plus" class="w-4 h-4"></i>
                         <span class="sr-only">${t('positive_record_label')}</span>
