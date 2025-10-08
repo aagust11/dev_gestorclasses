@@ -170,6 +170,7 @@
   "activities_no_competencies_help": "Aún no hay competencias ni criterios para esta asignatura. Ve a Configuración para añadirlos.",
   "activities_no_criteria_for_competency": "Esta competencia todavía no tiene criterios de evaluación.",
   "activities_save_button": "Guardar actividad",
+  "activities_delete_button": "Eliminar actividad",
   "activities_cancel_button": "Cancelar",
   "activities_title_required": "Debes indicar un título para la actividad.",
   "activities_identifier_required": "Debes indicar un identificador para la actividad.",

@@ -1189,6 +1189,18 @@ export function renderLearningActivityEditorView() {
             <span>${t('activities_rubric_button_label')}</span>
         </button>
     `;
+    const deleteButtonHtml = draft.isNew ? '' : `
+        <button
+            type="button"
+            data-action="delete-learning-activity"
+            data-learning-activity-id="${draft.id}"
+            class="px-4 py-2 rounded-md border border-red-200 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center justify-center"
+            aria-label="${t('activities_delete_button')}"
+            title="${t('activities_delete_button')}"
+        >
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+    `;
     const criteriaModalHtml = !isCriteriaModalOpen ? '' : `
         <div class="fixed inset-0 z-40 flex items-center justify-center px-4 py-6">
             <div class="absolute inset-0 bg-gray-900/50 dark:bg-gray-900/70" data-action="close-learning-activity-criteria"></div>
@@ -1229,6 +1241,7 @@ export function renderLearningActivityEditorView() {
                             <i data-lucide="arrow-left" class="w-4 h-4"></i>
                             ${t('activities_cancel_button')}
                         </button>
+                        ${deleteButtonHtml}
                         <button data-action="save-learning-activity-draft" class="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2">
                             <i data-lucide="save" class="w-4 h-4"></i>
                             ${t('activities_save_button')}
