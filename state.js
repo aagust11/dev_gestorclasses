@@ -54,7 +54,6 @@ export const state = {
     evaluationSettingsDraft: {},
     settingsEvaluationSelectedClassId: null,
     evaluationSettingsFeedback: {},
-    templateSyncStatus: {},
 };
 
 function ensureSavedEvaluationConfig(classId) {
@@ -300,7 +299,6 @@ export function saveState() {
         evaluationSelectedTermId: state.evaluationSelectedTermId,
         evaluationSettings: state.evaluationSettings,
         settingsEvaluationSelectedClassId: state.settingsEvaluationSelectedClassId,
-        templateSyncStatus: state.templateSyncStatus,
     };
     localStorage.setItem('teacherDashboardData', JSON.stringify(dataToSave));
     
@@ -322,49 +320,7 @@ export function loadState() {
     const savedData = localStorage.getItem('teacherDashboardData');
     if (savedData) {
         const parsedData = JSON.parse(savedData);
-        const rawActivities = Array.isArray(parsedData.activities) ? parsedData.activities : [];
-        state.activities = rawActivities.map(activity => {
-            const normalized = { ...activity };
-            normalized.isTemplate = Boolean(activity?.isTemplate);
-            normalized.linkedClassIds = Array.isArray(activity?.linkedClassIds)
-                ? activity.linkedClassIds.filter(id => typeof id === 'string' && id)
-                : [];
-            const templateId = typeof activity?.templateId === 'string' && activity.templateId
-                ? activity.templateId
-                : null;
-            normalized.templateId = normalized.isTemplate ? null : templateId;
-            return normalized;
-        });
-
-        const activityMap = new Map(state.activities.map(act => [act.id, act]));
-        const templateIds = new Set(state.activities.filter(act => act.isTemplate).map(act => act.id));
-
-        state.activities.forEach(activity => {
-            if (activity.isTemplate) {
-                if (!Array.isArray(activity.linkedClassIds)) {
-                    activity.linkedClassIds = [];
-                }
-                activity.templateId = null;
-                activity.linkedClassIds = activity.linkedClassIds.filter(classId => {
-                    const linkedClass = activityMap.get(classId);
-                    return linkedClass && linkedClass.templateId === activity.id;
-                });
-            } else if (activity.templateId) {
-                if (!templateIds.has(activity.templateId)) {
-                    activity.templateId = null;
-                } else {
-                    const template = activityMap.get(activity.templateId);
-                    if (template) {
-                        if (!Array.isArray(template.linkedClassIds)) {
-                            template.linkedClassIds = [];
-                        }
-                        if (!template.linkedClassIds.includes(activity.id)) {
-                            template.linkedClassIds.push(activity.id);
-                        }
-                    }
-                }
-            }
-        });
+        state.activities = parsedData.activities || [];
         state.learningActivities = (parsedData.learningActivities || []).map(activity => {
             const normalized = {
                 ...activity,
@@ -378,9 +334,6 @@ export function loadState() {
                     : 1,
                 statusIsManual: Boolean(activity?.statusIsManual),
                 shortCode: typeof activity?.shortCode === 'string' ? activity.shortCode : '',
-                templateSourceId: typeof activity?.templateSourceId === 'string' && activity.templateSourceId
-                    ? activity.templateSourceId
-                    : null,
             };
             normalized.rubric = normalizeRubricStructure(activity?.rubric);
             normalized.status = calculateLearningActivityStatus(normalized);
@@ -410,15 +363,6 @@ export function loadState() {
         state.evaluationSettingsDraft = {};
         Object.entries(state.evaluationSettings).forEach(([classId, config]) => {
             state.evaluationSettingsDraft[classId] = cloneEvaluationConfig(config);
-        });
-        state.templateSyncStatus = parsedData.templateSyncStatus && typeof parsedData.templateSyncStatus === 'object'
-            ? { ...parsedData.templateSyncStatus }
-            : {};
-        const validTemplateIds = new Set(state.activities.filter(act => act.isTemplate).map(act => act.id));
-        Object.keys(state.templateSyncStatus).forEach(templateId => {
-            if (!validTemplateIds.has(templateId)) {
-                delete state.templateSyncStatus[templateId];
-            }
         });
         state.settingsEvaluationSelectedClassId = parsedData.settingsEvaluationSelectedClassId || null;
         state.evaluationSettingsFeedback = {};
