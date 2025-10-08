@@ -2035,6 +2035,10 @@ export function renderSettingsView() {
             : [];
         const templateControlsHtml = act.type === 'class' ? `
             <div class="mt-4 p-4 border border-gray-200 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800/50 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-200">${t('class_template_section_title')}</h4>
+                    ${isTemplateClass ? `<span class="inline-flex items-center gap-1 px-2 py-[2px] rounded-full text-[11px] bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 border border-purple-200 dark:border-purple-700">${t('class_template_badge')}</span>` : ''}
+                </div>
                 <label class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
                     <input type="checkbox" data-action="toggle-class-template" data-activity-id="${act.id}" class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500" ${isTemplateClass ? 'checked' : ''}>
                     <span>${t('class_template_label')}</span>
@@ -2110,6 +2114,9 @@ export function renderSettingsView() {
         <div class="grid lg:grid-cols-2 gap-8 items-start">
             <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                 <h3 class="text-lg font-semibold mb-3">${t('activities_management_title')}</h3>
+                <div class="mb-4 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-100">
+                    ${t('class_template_edit_hint')}
+                </div>
                 <div class="flex gap-2 mb-2">
                     <input type="text" id="new-activity-name" placeholder="${t('activity_name_placeholder')}" class="flex-grow p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md"/>
                     <button data-action="add-activity" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center gap-2"><i data-lucide="plus-circle" class="w-5 h-5"></i>${t('add')}</button>
