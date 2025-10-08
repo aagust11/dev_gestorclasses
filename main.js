@@ -130,7 +130,11 @@ function handleAction(action, element, event) {
         'open-learning-activity-rubric', 'close-learning-activity-rubric', 'set-learning-activity-rubric-tab',
         'add-rubric-item', 'remove-rubric-item', 'move-rubric-item', 'set-rubric-score',
         'filter-learning-activity-rubric-students', 'set-evaluation-tab', 'select-evaluation-class',
-        'go-to-evaluation-for-learning-activity'
+        'go-to-evaluation-for-learning-activity', 'select-settings-evaluation-class',
+        'change-evaluation-modality', 'update-competency-level-value', 'update-competency-minimum',
+        'update-competency-max-not-achieved', 'update-competency-aggregation',
+        'set-evaluation-no-evidence-behavior', 'set-evaluation-no-evidence-level',
+        'set-evaluation-np-treatment', 'save-evaluation-config', 'reset-evaluation-config'
     ];
     const forceRenderActions = ['toggle-rubric-not-presented', 'toggle-rubric-delivered-late'];
     const shouldForceRender = forceRenderActions.includes(action);
