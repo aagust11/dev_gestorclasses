@@ -20,7 +20,8 @@ const studentAnnotationActions = new Set([
     'add-incident-record',
     'edit-positive-record',
     'edit-comment-record',
-    'edit-incident-record'
+    'edit-incident-record',
+    'toggle-attendance-status'
 ]);
 
 function captureStudentListState(triggerElement) {
