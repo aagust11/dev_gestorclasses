@@ -1497,8 +1497,42 @@ export const actionHandlers = {
         }
     },
     'delete-activity': (id) => {
+        const learningActivitiesToRemove = state.learningActivities
+            .filter(activity => activity.classId === id)
+            .map(activity => activity.id);
+
         showModal(t('delete_activity_confirm_title'), t('delete_activity_confirm_text'), () => {
             state.activities = state.activities.filter(a => a.id !== id);
+            state.learningActivities = state.learningActivities.filter(activity => activity.classId !== id);
+
+            Object.entries(state.schedule).forEach(([key, value]) => {
+                if (value === id) {
+                    delete state.schedule[key];
+                }
+            });
+
+            state.scheduleOverrides = state.scheduleOverrides.filter(override => override.activityId !== id);
+
+            Object.keys(state.classEntries).forEach(entryId => {
+                if (entryId.startsWith(`${id}_`)) {
+                    delete state.classEntries[entryId];
+                }
+            });
+
+            state.selectedEvaluationClassId = state.selectedEvaluationClassId === id ? null : state.selectedEvaluationClassId;
+            state.selectedActivity = state.selectedActivity?.id === id ? null : state.selectedActivity;
+            state.editingActivityId = state.editingActivityId === id ? null : state.editingActivityId;
+            state.pendingCompetencyHighlightId = state.pendingCompetencyHighlightId === id ? null : state.pendingCompetencyHighlightId;
+            state.expandedLearningActivityClassIds = state.expandedLearningActivityClassIds.filter(classId => classId !== id);
+            state.expandedCompetencyClassIds = state.expandedCompetencyClassIds.filter(classId => classId !== id);
+            if (state.learningActivityDraft?.classId === id) {
+                state.learningActivityDraft = null;
+            }
+
+            if (learningActivitiesToRemove.includes(state.pendingEvaluationHighlightActivityId)) {
+                state.pendingEvaluationHighlightActivityId = null;
+            }
+
             saveState();
             document.dispatchEvent(new CustomEvent('render'));
         });
