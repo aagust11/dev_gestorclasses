@@ -260,7 +260,7 @@
   "class": "Klasea",
   "general": "Orokorra",
   "delete_activity_confirm_title": "Berretsi ezabatzea",
-  "delete_activity_confirm_text": "Ziur zaude irakaskuntza-ekintza hau ezabatu nahi duzula? Ekintza honek lotutako ikasleen notak ere ezabatuko ditu.",
+  "delete_activity_confirm_text": "Ziur zaude irakaskuntza-ekintza hau ezabatu nahi duzula?",
   "import_students_alert": "Hautatu klase bat eta itsatsi ikasleen zerrenda.",
   "generate_schedule_alert": "Mesedez, bete hasiera-ordua, amaiera-ordua eta klasearen iraupena.",
   "add_override_alert": "Mesedez, bete ordezkapenaren eremu guztiak.",

@@ -260,7 +260,7 @@
   "class": "Clase",
   "general": "Xeral",
   "delete_activity_confirm_title": "Confirmar Eliminación",
-  "delete_activity_confirm_text": "Seguro que queres eliminar esta acción docente? Esta acción tamén eliminará todas as notas do alumnado asociadas.",
+  "delete_activity_confirm_text": "Seguro que queres eliminar esta acción docente?",
   "import_students_alert": "Selecciona unha clase e pega a lista do alumnado.",
   "generate_schedule_alert": "Por favor, enche a hora de inicio, fin e a duración da clase.",
   "add_override_alert": "Por favor, completa todos os campos da substitución.",

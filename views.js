@@ -1981,7 +1981,6 @@ export function renderSettingsView() {
                     <div class="flex items-center gap-2">
                         <button data-action="save-activity" data-id="${act.id}" class="text-green-600 hover:text-green-800"><i data-lucide="check" class="w-5 h-5"></i></button>
                         <button data-action="cancel-edit-activity" class="text-red-600 hover:text-red-800"><i data-lucide="x" class="w-5 h-5"></i></button>
-                        <button data-action="delete-activity" data-id="${act.id}" class="text-red-500 hover:text-red-700" title="${t('modal_delete')}" aria-label="${t('modal_delete')}"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
                     </div>
                 </div>
                 <div class="mt-4 grid grid-cols-2 gap-4 text-sm">
