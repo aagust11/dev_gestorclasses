@@ -14,6 +14,68 @@ const sidebarOverlay = document.getElementById('sidebar-overlay');
 const mobileHeaderTitle = document.getElementById('mobile-header-title');
 const themeSwitcherBtns = document.querySelectorAll('.theme-switcher');
 
+const studentAnnotationActions = new Set([
+    'add-positive-record',
+    'add-comment-record',
+    'add-incident-record',
+    'edit-positive-record',
+    'edit-comment-record',
+    'edit-incident-record'
+]);
+
+function captureStudentListState(triggerElement) {
+    const list = document.querySelector('[data-student-annotations-list]');
+    if (!list) return null;
+
+    const scrollTop = list.scrollTop;
+    let studentId = triggerElement?.dataset?.studentId || null;
+
+    if (!studentId && triggerElement) {
+        const card = triggerElement.closest('[id^="student-annotation-"]');
+        if (card?.id?.startsWith('student-annotation-')) {
+            studentId = card.id.replace('student-annotation-', '');
+        }
+    }
+
+    let relativeOffset = null;
+    if (studentId) {
+        const cardElement = document.getElementById(`student-annotation-${studentId}`);
+        if (cardElement && list.contains(cardElement)) {
+            relativeOffset = cardElement.offsetTop - scrollTop;
+        }
+    }
+
+    return { scrollTop, studentId, relativeOffset };
+}
+
+function restoreStudentListState(state) {
+    if (!state) return;
+
+    const list = document.querySelector('[data-student-annotations-list]');
+    if (!list) return;
+
+    const clampScroll = (value) => {
+        const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+        if (Number.isNaN(value)) return list.scrollTop;
+        return Math.min(Math.max(value, 0), maxScroll);
+    };
+
+    if (state.studentId) {
+        const cardElement = document.getElementById(`student-annotation-${state.studentId}`);
+        if (cardElement && list.contains(cardElement)) {
+            const desiredScroll = typeof state.relativeOffset === 'number'
+                ? cardElement.offsetTop - state.relativeOffset
+                : cardElement.offsetTop;
+            list.scrollTop = clampScroll(desiredScroll);
+            return;
+        }
+    }
+
+    if (typeof state.scrollTop === 'number') {
+        list.scrollTop = clampScroll(state.scrollTop);
+    }
+}
+
 function render() {
     mainContent.innerHTML = '';
     let viewContent = '';
@@ -121,7 +183,8 @@ function handleAction(action, element, event) {
         'add-holiday', 'delete-holiday', 'select-settings-tab',
         'add-competency', 'delete-competency', 'add-criterion', 'delete-criterion',
         'select-competency', 'back-to-competencies', 'toggle-attendance-status',
-        'add-positive-record', 'add-incident-record', 'set-student-timeline-filter',
+        'add-positive-record', 'add-comment-record', 'add-incident-record', 'set-student-timeline-filter',
+        'edit-positive-record', 'edit-comment-record', 'edit-incident-record',
         'open-learning-activity-editor', 'open-learning-activity-quick', 'back-to-activities',
         'save-learning-activity-draft', 'toggle-learning-activity-list', 'toggle-competency-guide',
         'toggle-competency-list',
@@ -154,7 +217,13 @@ function handleAction(action, element, event) {
             })();
 
             const rerender = () => {
+                const studentListState = studentAnnotationActions.has(action)
+                    ? captureStudentListState(element)
+                    : null;
                 render();
+                if (studentListState) {
+                    restoreStudentListState(studentListState);
+                }
                 if (action === 'edit-activity') {
                     const targetElement = document.getElementById(`edit-activity-form-${id}`);
                     if (targetElement) {
