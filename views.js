@@ -3176,32 +3176,30 @@ export function renderActivityDetailView() {
 
         return `
             <div id="student-annotation-${student.id}" data-student-name="${escapeAttribute(student.name)}" class="p-3 border border-gray-200 dark:border-gray-700 rounded-md space-y-3 bg-gray-50/60 dark:bg-gray-900/40">
-                <div class="flex items-center gap-3">
+                <div class="flex flex-wrap items-start gap-3">
                     <button data-action="select-student" data-student-id="${student.id}" class="text-left font-medium text-blue-600 dark:text-blue-400 hover:underline">
                         ${student.name}
                     </button>
-                    <div class="flex items-center gap-2 ml-auto">
-                        <div class="flex items-center gap-2">
-                            ${attendanceButtons}
-                        </div>
-                        <div class="flex items-center gap-2 ml-2">
-                            <button type="button" data-action="add-positive-record" data-student-id="${student.id}" class="${positiveButtonClasses}" title="${t('add_positive_record')}" aria-label="${t('add_positive_record')}">
-                                <i data-lucide="shield-plus" class="w-4 h-4"></i>
-                                <span class="sr-only">${t('positive_record_label')}</span>
-                                ${positivesCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-green-900/60 text-xs font-semibold">${positivesCount}</span>` : ''}
-                            </button>
-                            <button type="button" data-action="add-comment-record" data-student-id="${student.id}" class="${commentButtonClasses}" title="${t('add_comment_record')}" aria-label="${t('add_comment_record')}">
-                                <i data-lucide="message-square-more" class="w-4 h-4"></i>
-                                <span class="sr-only">${t('comment_record_label')}</span>
-                                ${commentsCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-blue-900/60 text-xs font-semibold">${commentsCount}</span>` : ''}
-                            </button>
-                            <button type="button" data-action="add-incident-record" data-student-id="${student.id}" class="${incidentButtonClasses}" title="${t('add_incident_record')}" aria-label="${t('add_incident_record')}">
-                                <i data-lucide="shield-alert" class="w-4 h-4"></i>
-                                <span class="sr-only">${t('incident_record_label')}</span>
-                                ${incidentsCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-red-900/60 text-xs font-semibold">${incidentsCount}</span>` : ''}
-                            </button>
-                        </div>
+                    <div class="flex flex-wrap items-center gap-2 ml-auto">
+                        ${attendanceButtons}
                     </div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" data-action="add-positive-record" data-student-id="${student.id}" class="${positiveButtonClasses}" title="${t('add_positive_record')}" aria-label="${t('add_positive_record')}">
+                        <i data-lucide="shield-plus" class="w-4 h-4"></i>
+                        <span class="sr-only">${t('positive_record_label')}</span>
+                        ${positivesCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-green-900/60 text-xs font-semibold">${positivesCount}</span>` : ''}
+                    </button>
+                    <button type="button" data-action="add-comment-record" data-student-id="${student.id}" class="${commentButtonClasses}" title="${t('add_comment_record')}" aria-label="${t('add_comment_record')}">
+                        <i data-lucide="message-square-more" class="w-4 h-4"></i>
+                        <span class="sr-only">${t('comment_record_label')}</span>
+                        ${commentsCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-blue-900/60 text-xs font-semibold">${commentsCount}</span>` : ''}
+                    </button>
+                    <button type="button" data-action="add-incident-record" data-student-id="${student.id}" class="${incidentButtonClasses}" title="${t('add_incident_record')}" aria-label="${t('add_incident_record')}">
+                        <i data-lucide="shield-alert" class="w-4 h-4"></i>
+                        <span class="sr-only">${t('incident_record_label')}</span>
+                        ${incidentsCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-red-900/60 text-xs font-semibold">${incidentsCount}</span>` : ''}
+                    </button>
                 </div>
                 ${extraInfo ? `<div class="space-y-2">${extraInfo}</div>` : ''}
             </div>
