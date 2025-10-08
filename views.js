@@ -1572,7 +1572,7 @@ export function renderStudentDetailView() {
                     const incidentsSection = item.incidents.length > 0 ? `
                         <div class="space-y-1">
                             <p class="text-xs font-semibold text-red-700 dark:text-red-300 flex items-center gap-1">
-                                <i data-lucide="clock-alert" class="w-3 h-3"></i>
+                                <i data-lucide="shield-alert" class="w-3 h-3"></i>
                                 ${t('incident_record_label')}
                             </p>
                             <ul class="space-y-1">
@@ -3088,7 +3088,7 @@ export function renderActivityDetailView() {
     const entryAnnotations = entry.annotations || {};
     const locale = document.documentElement.lang || 'es';
 
-    const annotationsHtml = studentsInClass.length > 0 ? studentsInClass.map(student => {
+    const studentAnnotationsCardsHtml = studentsInClass.length > 0 ? studentsInClass.map(student => {
         const annotationData = normalizeStudentAnnotation(entryAnnotations[student.id], entryId);
         const attendanceButtons = attendanceOptions.map(option => {
             const isActive = annotationData.attendance === option.status;
@@ -3156,7 +3156,7 @@ export function renderActivityDetailView() {
         const incidentsInfo = incidentsCount > 0 ? `
             <div class="space-y-1">
                 <p class="text-xs font-semibold text-red-700 dark:text-red-300 flex items-center gap-1">
-                    <i data-lucide="clock-alert" class="w-3 h-3"></i>
+                    <i data-lucide="shield-alert" class="w-3 h-3"></i>
                     ${t('incident_record_label')}
                 </p>
                 <ul class="space-y-1">
@@ -3175,7 +3175,7 @@ export function renderActivityDetailView() {
         const extraInfo = [positivesInfo, commentsInfo, incidentsInfo].filter(Boolean).join('');
 
         return `
-            <div id="student-annotation-${student.id}" class="p-3 border border-gray-200 dark:border-gray-700 rounded-md space-y-3 bg-gray-50/60 dark:bg-gray-900/40">
+            <div id="student-annotation-${student.id}" data-student-name="${escapeAttribute(student.name)}" class="p-3 border border-gray-200 dark:border-gray-700 rounded-md space-y-3 bg-gray-50/60 dark:bg-gray-900/40">
                 <div class="flex items-center gap-3">
                     <button data-action="select-student" data-student-id="${student.id}" class="text-left font-medium text-blue-600 dark:text-blue-400 hover:underline">
                         ${student.name}
@@ -3196,7 +3196,7 @@ export function renderActivityDetailView() {
                                 ${commentsCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-blue-900/60 text-xs font-semibold">${commentsCount}</span>` : ''}
                             </button>
                             <button type="button" data-action="add-incident-record" data-student-id="${student.id}" class="${incidentButtonClasses}" title="${t('add_incident_record')}" aria-label="${t('add_incident_record')}">
-                                <i data-lucide="clock-alert" class="w-4 h-4"></i>
+                                <i data-lucide="shield-alert" class="w-4 h-4"></i>
                                 <span class="sr-only">${t('incident_record_label')}</span>
                                 ${incidentsCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-red-900/60 text-xs font-semibold">${incidentsCount}</span>` : ''}
                             </button>
@@ -3206,7 +3206,27 @@ export function renderActivityDetailView() {
                 ${extraInfo ? `<div class="space-y-2">${extraInfo}</div>` : ''}
             </div>
         `;
-    }).join('') : `<p class="text-gray-500 dark:text-gray-400">${t('no_students_assigned')}</p>`;
+    }).join('') : '';
+
+    const studentAnnotationsSection = studentsInClass.length > 0
+        ? `
+            <div class="mb-4">
+                <label for="student-quick-filter" class="sr-only">${t('student_filter_label')}</label>
+                <div class="relative">
+                    <i data-lucide="search" class="w-4 h-4 text-gray-400 dark:text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                    <input type="text"
+                           id="student-quick-filter"
+                           data-action="filter-student-annotations"
+                           placeholder="${t('student_filter_placeholder')}"
+                           class="w-full p-2 pl-9 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md" />
+                </div>
+            </div>
+            <div data-student-annotations-list class="space-y-4 flex-1 overflow-y-auto pr-2">
+                ${studentAnnotationsCardsHtml}
+                <p data-student-filter-empty class="text-sm text-gray-500 dark:text-gray-400 hidden">${t('student_filter_no_results')}</p>
+            </div>
+        `
+        : `<p class="text-gray-500 dark:text-gray-400">${t('no_students_assigned')}</p>`;
     
     const prevSession = findPreviousSession(activityId, new Date(date));
     const nextSession = findNextSession(activityId, new Date(date));
@@ -3240,14 +3260,7 @@ export function renderActivityDetailView() {
                 </div>
                 <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md flex flex-col md:h-[calc(100vh-260px)]">
                     <h3 class="text-lg font-semibold mb-3">${t('student_annotations_title')}</h3>
-                    <div class="mb-4">
-                        <label for="student-quick-nav" class="sr-only">${t('select_student')}</label>
-                        <select id="student-quick-nav" data-action="go-to-student" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md">
-                            <option value="">-- ${t('select_student')} --</option>
-                            ${studentsInClass.map(student => `<option value="${student.id}">${student.name}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="space-y-4 flex-1 overflow-y-auto pr-2">${annotationsHtml}</div>
+                    ${studentAnnotationsSection}
                 </div>
             </div>
         </div>
