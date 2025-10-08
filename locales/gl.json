@@ -167,6 +167,7 @@
   "activities_no_competencies_help": "Aínda non hai competencias nin criterios para esta materia. Vai a Configuración para engadilos.",
   "activities_no_criteria_for_competency": "Esta competencia aínda non ten criterios de avaliación.",
   "activities_save_button": "Gardar actividade",
+  "activities_delete_button": "Eliminar actividade",
   "activities_cancel_button": "Cancelar",
   "activities_title_required": "Debes indicar un título para a actividade.",
   "activities_identifier_required": "Debes indicar un identificador para a actividade.",
