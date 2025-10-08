@@ -13,6 +13,14 @@ function generateRubricItemId() {
     return `rubric-item-${Date.now()}-${random}`;
 }
 
+function generateGeneralId(prefix = 'id') {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    const random = Math.random().toString(16).slice(2, 10);
+    return `${prefix}-${Date.now()}-${random}`;
+}
+
 function ensureLearningActivityRubric(activity) {
     if (!activity) return null;
     if (!activity.rubric) {
@@ -179,6 +187,213 @@ function removeRubricItemsForCriterion(rubric, competencyId, criterionId) {
 
     cleanRubricEvaluations(rubric, removedIds);
     return removedIds;
+}
+
+function getClassById(classId) {
+    if (!classId) return null;
+    return state.activities.find(activity => activity.id === classId) || null;
+}
+
+function ensureTemplateSyncStatus(templateId) {
+    if (!templateId) return null;
+    if (!state.templateSyncStatus || typeof state.templateSyncStatus !== 'object') {
+        state.templateSyncStatus = {};
+    }
+    if (!state.templateSyncStatus[templateId] || typeof state.templateSyncStatus[templateId] !== 'object') {
+        state.templateSyncStatus[templateId] = { competencies: false, learningActivities: false };
+    } else {
+        const entry = state.templateSyncStatus[templateId];
+        if (typeof entry.competencies !== 'boolean') {
+            entry.competencies = Boolean(entry.competencies);
+        }
+        if (typeof entry.learningActivities !== 'boolean') {
+            entry.learningActivities = Boolean(entry.learningActivities);
+        }
+    }
+    return state.templateSyncStatus[templateId];
+}
+
+function markTemplateSectionDirty(templateId, section) {
+    if (!templateId || !section) return;
+    const template = getClassById(templateId);
+    if (!template || !template.isTemplate || !Array.isArray(template.linkedClassIds) || template.linkedClassIds.length === 0) {
+        return;
+    }
+    const status = ensureTemplateSyncStatus(templateId);
+    if (status && section in status) {
+        status[section] = true;
+    }
+}
+
+function clearTemplateSectionDirty(templateId, section) {
+    if (!templateId || !section || !state.templateSyncStatus) return;
+    const status = state.templateSyncStatus[templateId];
+    if (status && section in status) {
+        status[section] = false;
+    }
+}
+
+function cloneCompetenciesStructure(competencies) {
+    return JSON.parse(JSON.stringify(Array.isArray(competencies) ? competencies : []));
+}
+
+function cloneCriteriaRefs(refs) {
+    return Array.isArray(refs)
+        ? refs.map(ref => ({ competencyId: ref.competencyId || '', criterionId: ref.criterionId || '' }))
+        : [];
+}
+
+function cloneRubricStructureForSync(templateRubric, existingEvaluations = {}) {
+    const normalized = normalizeRubric(templateRubric || createEmptyRubric());
+    const items = Array.isArray(normalized.items)
+        ? normalized.items.map(item => ({
+            id: item.id,
+            competencyId: item.competencyId,
+            criterionId: item.criterionId,
+            weight: item.weight,
+            generalComment: item.generalComment || '',
+            levelComments: { ...(item.levelComments || {}) },
+        }))
+        : [];
+    return {
+        items,
+        evaluations: existingEvaluations && typeof existingEvaluations === 'object' ? existingEvaluations : {},
+    };
+}
+
+function removeTemplateReferencesFromClass(classId) {
+    if (!classId) return;
+    state.learningActivities.forEach(activity => {
+        if (activity.classId === classId) {
+            activity.templateSourceId = null;
+        }
+    });
+}
+
+function unlinkClassFromTemplate(classId, templateId) {
+    if (!classId || !templateId) return;
+    const template = getClassById(templateId);
+    if (!template || !Array.isArray(template.linkedClassIds)) return;
+    template.linkedClassIds = template.linkedClassIds.filter(id => id !== classId);
+}
+
+function copyTemplateCompetenciesToClass(template, target) {
+    if (!template || !target) return false;
+    target.competencies = cloneCompetenciesStructure(template.competencies);
+    return true;
+}
+
+function copyTemplateLearningActivitiesToClass(template, targetClassId) {
+    if (!template || !targetClassId) return false;
+    const templateActivities = state.learningActivities.filter(activity => activity.classId === template.id);
+    const templateActivityIds = new Set(templateActivities.map(activity => activity.id));
+    const targetActivities = state.learningActivities.filter(activity => activity.classId === targetClassId);
+    const activitiesByTemplateSource = new Map();
+    targetActivities.forEach(activity => {
+        if (activity.templateSourceId) {
+            activitiesByTemplateSource.set(activity.templateSourceId, activity);
+        }
+    });
+
+    let modified = false;
+    const now = new Date().toISOString();
+
+    templateActivities.forEach(templateActivity => {
+        const existing = activitiesByTemplateSource.get(templateActivity.id);
+        if (!existing) {
+            const statusIsManual = Boolean(templateActivity.statusIsManual);
+            const allowedStatuses = Object.values(LEARNING_ACTIVITY_STATUS);
+            const status = statusIsManual && allowedStatuses.includes(templateActivity.status)
+                ? templateActivity.status
+                : calculateLearningActivityStatus({ startDate: '', endDate: '', status: templateActivity.status });
+            state.learningActivities.push({
+                id: generateGeneralId('learning-activity'),
+                classId: targetClassId,
+                title: templateActivity.title,
+                shortCode: templateActivity.shortCode,
+                description: templateActivity.description,
+                criteriaRefs: cloneCriteriaRefs(templateActivity.criteriaRefs),
+                createdAt: now,
+                updatedAt: now,
+                startDate: '',
+                endDate: '',
+                rubric: cloneRubricStructureForSync(templateActivity.rubric, {}),
+                status,
+                statusIsManual,
+                weight: templateActivity.weight,
+                templateSourceId: templateActivity.id,
+            });
+            modified = true;
+        } else {
+            existing.title = templateActivity.title;
+            existing.shortCode = templateActivity.shortCode;
+            existing.description = templateActivity.description;
+            existing.criteriaRefs = cloneCriteriaRefs(templateActivity.criteriaRefs);
+            const existingEvaluations = existing.rubric && typeof existing.rubric === 'object'
+                ? existing.rubric.evaluations
+                : {};
+            existing.rubric = cloneRubricStructureForSync(templateActivity.rubric, existingEvaluations);
+            existing.weight = templateActivity.weight;
+            existing.templateSourceId = templateActivity.id;
+            existing.updatedAt = now;
+            if (!existing.statusIsManual) {
+                existing.status = calculateLearningActivityStatus(existing);
+            }
+            modified = true;
+        }
+    });
+
+    const toRemoveIds = new Set();
+    targetActivities.forEach(activity => {
+        if (activity.templateSourceId && !templateActivityIds.has(activity.templateSourceId)) {
+            toRemoveIds.add(activity.id);
+        }
+    });
+
+    if (toRemoveIds.size > 0) {
+        state.learningActivities = state.learningActivities.filter(activity => !toRemoveIds.has(activity.id));
+        modified = true;
+    }
+
+    return modified;
+}
+
+function syncTemplateCompetencies(templateId, targetIds = null) {
+    const template = getClassById(templateId);
+    if (!template || !template.isTemplate) {
+        return [];
+    }
+    const targets = Array.isArray(targetIds) ? targetIds : template.linkedClassIds || [];
+    const updated = [];
+    targets.forEach(targetId => {
+        if (!targetId || targetId === templateId) return;
+        const target = getClassById(targetId);
+        if (!target) return;
+        copyTemplateCompetenciesToClass(template, target);
+        updated.push(targetId);
+    });
+    clearTemplateSectionDirty(templateId, 'competencies');
+    return updated;
+}
+
+function syncTemplateLearningActivities(templateId, targetIds = null) {
+    const template = getClassById(templateId);
+    if (!template || !template.isTemplate) {
+        return [];
+    }
+    const targets = Array.isArray(targetIds) ? targetIds : template.linkedClassIds || [];
+    const updated = [];
+    targets.forEach(targetId => {
+        if (!targetId || targetId === templateId) return;
+        const target = getClassById(targetId);
+        if (!target) return;
+        const modified = copyTemplateLearningActivitiesToClass(template, targetId);
+        if (modified) {
+            updated.push(targetId);
+        }
+    });
+    clearTemplateSectionDirty(templateId, 'learningActivities');
+    return updated;
 }
 
 function syncRubricWithActivityCriteria(activity) {
@@ -1022,6 +1237,11 @@ export const actionHandlers = {
             }
         }
 
+        const owningClass = getClassById(draft.classId);
+        if (owningClass?.isTemplate) {
+            markTemplateSectionDirty(owningClass.id, 'learningActivities');
+        }
+
         state.learningActivityDraft = null;
         state.learningActivityGuideVisible = false;
         state.activeView = 'activities';
@@ -1170,6 +1390,10 @@ export const actionHandlers = {
         });
         ensureActivityHasCriterionRef(activity, competencyId, criterionId);
         select.value = '';
+        const templateClass = getClassById(activity.classId);
+        if (templateClass?.isTemplate) {
+            markTemplateSectionDirty(templateClass.id, 'learningActivities');
+        }
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
     },
@@ -1192,6 +1416,10 @@ export const actionHandlers = {
                     removeCriterionRefFromActivity(activity, removed.competencyId, removed.criterionId);
                 }
             }
+            const templateClass = getClassById(activity.classId);
+            if (templateClass?.isTemplate) {
+                markTemplateSectionDirty(templateClass.id, 'learningActivities');
+            }
             saveState();
             document.dispatchEvent(new CustomEvent('render'));
         }
@@ -1209,6 +1437,10 @@ export const actionHandlers = {
         const targetIndex = direction === 'up' ? index - 1 : index + 1;
         if (targetIndex < 0 || targetIndex >= rubric.items.length) return;
         [rubric.items[index], rubric.items[targetIndex]] = [rubric.items[targetIndex], rubric.items[index]];
+        const templateClass = getClassById(activity.classId);
+        if (templateClass?.isTemplate) {
+            markTemplateSectionDirty(templateClass.id, 'learningActivities');
+        }
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
     },
@@ -1223,6 +1455,10 @@ export const actionHandlers = {
         if (!item) return;
         const value = parseFloat(element.value);
         item.weight = Number.isFinite(value) ? value : 1;
+        const templateClass = getClassById(activity.classId);
+        if (templateClass?.isTemplate) {
+            markTemplateSectionDirty(templateClass.id, 'learningActivities');
+        }
         saveState();
     },
     'update-rubric-item-general-comment': (id, element) => {
@@ -1235,6 +1471,10 @@ export const actionHandlers = {
         const item = rubric.items.find(entry => entry.id === itemId);
         if (!item) return;
         item.generalComment = element.value;
+        const templateClass = getClassById(activity.classId);
+        if (templateClass?.isTemplate) {
+            markTemplateSectionDirty(templateClass.id, 'learningActivities');
+        }
         saveState();
     },
     'update-rubric-item-comment': (id, element) => {
@@ -1248,6 +1488,10 @@ export const actionHandlers = {
         const item = rubric.items.find(entry => entry.id === itemId);
         if (!item) return;
         item.levelComments[level] = element.value;
+        const templateClass = getClassById(activity.classId);
+        if (templateClass?.isTemplate) {
+            markTemplateSectionDirty(templateClass.id, 'learningActivities');
+        }
         saveState();
     },
     'set-rubric-score': (id, element) => {
@@ -1491,6 +1735,10 @@ export const actionHandlers = {
         }
         state.expandedCompetencyClassIds = expanded;
 
+        if (activity.isTemplate) {
+            markTemplateSectionDirty(activityId, 'competencies');
+        }
+
         saveState();
     },
     'select-competency': (id, element) => {
@@ -1523,6 +1771,9 @@ export const actionHandlers = {
             }
             competency.code = value;
         }
+        if (activity.isTemplate) {
+            markTemplateSectionDirty(activityId, 'competencies');
+        }
         saveState();
     },
     'update-competency-description': (id, element) => {
@@ -1534,6 +1785,9 @@ export const actionHandlers = {
         if (!competency) return;
 
         competency.description = element.value;
+        if (activity.isTemplate) {
+            markTemplateSectionDirty(activityId, 'competencies');
+        }
         saveState();
     },
     'delete-competency': (id, element) => {
@@ -1549,6 +1803,10 @@ export const actionHandlers = {
             state.selectedCompetency = null;
             state.activeView = 'settings';
             state.settingsActiveTab = 'competencies';
+        }
+
+        if (activity.isTemplate) {
+            markTemplateSectionDirty(activityId, 'competencies');
         }
 
         saveState();
@@ -1570,6 +1828,10 @@ export const actionHandlers = {
             code: getNextCriterionCode(competency),
             description: ''
         });
+
+        if (activity.isTemplate) {
+            markTemplateSectionDirty(activityId, 'competencies');
+        }
 
         saveState();
     },
@@ -1593,6 +1855,9 @@ export const actionHandlers = {
             }
             criterion.code = value;
         }
+        if (activity.isTemplate) {
+            markTemplateSectionDirty(activityId, 'competencies');
+        }
         saveState();
     },
     'update-criterion-description': (id, element) => {
@@ -1607,6 +1872,9 @@ export const actionHandlers = {
         if (!criterion) return;
 
         criterion.description = element.value;
+        if (activity.isTemplate) {
+            markTemplateSectionDirty(activityId, 'competencies');
+        }
         saveState();
     },
     'delete-criterion': (id, element) => {
@@ -1618,6 +1886,9 @@ export const actionHandlers = {
         if (!competency) return;
 
         competency.criteria = competency.criteria?.filter(cr => cr.id !== criterionId) || [];
+        if (activity.isTemplate) {
+            markTemplateSectionDirty(activityId, 'competencies');
+        }
         saveState();
     },
     'export-student-docx': () => {
@@ -1718,7 +1989,10 @@ export const actionHandlers = {
                 color: getRandomPastelColor(),
                 startDate: state.courseStartDate,
                 endDate: state.courseEndDate,
-                competencies: []
+                competencies: [],
+                isTemplate: false,
+                linkedClassIds: [],
+                templateId: null,
             });
             nameInput.value = '';
             saveState();
@@ -1726,7 +2000,27 @@ export const actionHandlers = {
     },
     'delete-activity': (id) => {
         showModal(t('delete_activity_confirm_title'), t('delete_activity_confirm_text'), () => {
+            const activity = getClassById(id);
+            if (activity) {
+                if (activity.isTemplate) {
+                    const linked = Array.isArray(activity.linkedClassIds) ? [...activity.linkedClassIds] : [];
+                    linked.forEach(classId => {
+                        const target = getClassById(classId);
+                        if (target && target.templateId === activity.id) {
+                            target.templateId = null;
+                        }
+                        removeTemplateReferencesFromClass(classId);
+                    });
+                    if (state.templateSyncStatus && state.templateSyncStatus[id]) {
+                        delete state.templateSyncStatus[id];
+                    }
+                } else if (activity.templateId) {
+                    unlinkClassFromTemplate(activity.id, activity.templateId);
+                }
+                removeTemplateReferencesFromClass(id);
+            }
             state.activities = state.activities.filter(a => a.id !== id);
+            state.learningActivities = state.learningActivities.filter(activity => activity.classId !== id);
             saveState();
             document.dispatchEvent(new CustomEvent('render'));
         });
@@ -1753,6 +2047,103 @@ export const actionHandlers = {
             saveState();
         }
         state.editingActivityId = null;
+    },
+    'toggle-class-template': (id, element) => {
+        const activityId = element?.dataset?.activityId;
+        if (!activityId) return;
+        const activity = getClassById(activityId);
+        if (!activity || activity.type !== 'class') return;
+        const makeTemplate = element.checked;
+
+        if (makeTemplate) {
+            if (activity.templateId) {
+                unlinkClassFromTemplate(activityId, activity.templateId);
+                removeTemplateReferencesFromClass(activityId);
+                activity.templateId = null;
+            }
+            activity.isTemplate = true;
+            if (!Array.isArray(activity.linkedClassIds)) {
+                activity.linkedClassIds = [];
+            }
+            ensureTemplateSyncStatus(activityId);
+        } else {
+            activity.isTemplate = false;
+            if (Array.isArray(activity.linkedClassIds)) {
+                activity.linkedClassIds.forEach(classId => {
+                    const target = getClassById(classId);
+                    if (target && target.templateId === activityId) {
+                        target.templateId = null;
+                        removeTemplateReferencesFromClass(classId);
+                    }
+                });
+            }
+            activity.linkedClassIds = [];
+            if (state.templateSyncStatus && state.templateSyncStatus[activityId]) {
+                delete state.templateSyncStatus[activityId];
+            }
+        }
+
+        saveState();
+        document.dispatchEvent(new CustomEvent('render'));
+    },
+    'set-class-template-parent': (id, element) => {
+        const activityId = element?.dataset?.activityId;
+        if (!activityId) return;
+        const activity = getClassById(activityId);
+        if (!activity || activity.type !== 'class') return;
+        const selectedTemplateId = element.value || '';
+        const previousTemplateId = activity.templateId || null;
+
+        if (previousTemplateId && previousTemplateId !== selectedTemplateId) {
+            unlinkClassFromTemplate(activityId, previousTemplateId);
+            removeTemplateReferencesFromClass(activityId);
+            activity.templateId = null;
+        }
+
+        if (!selectedTemplateId) {
+            activity.templateId = null;
+            saveState();
+            document.dispatchEvent(new CustomEvent('render'));
+            return;
+        }
+
+        const template = getClassById(selectedTemplateId);
+        if (!template || !template.isTemplate) {
+            element.value = '';
+            activity.templateId = null;
+            saveState();
+            document.dispatchEvent(new CustomEvent('render'));
+            return;
+        }
+
+        activity.templateId = selectedTemplateId;
+        if (!Array.isArray(template.linkedClassIds)) {
+            template.linkedClassIds = [];
+        }
+        if (!template.linkedClassIds.includes(activityId)) {
+            template.linkedClassIds.push(activityId);
+        }
+
+        ensureTemplateSyncStatus(selectedTemplateId);
+        copyTemplateCompetenciesToClass(template, activity);
+        copyTemplateLearningActivitiesToClass(template, activityId);
+
+        saveState();
+        document.dispatchEvent(new CustomEvent('render'));
+    },
+    'sync-template-section': (id, element) => {
+        const templateId = element?.dataset?.templateId;
+        const section = element?.dataset?.section;
+        if (!templateId || !section) return;
+
+        if (section === 'competencies') {
+            syncTemplateCompetencies(templateId);
+        } else if (section === 'learningActivities') {
+            syncTemplateLearningActivities(templateId);
+        }
+
+        saveState();
+        document.dispatchEvent(new CustomEvent('render'));
     },
     'change-activity-color': (id, element) => {
          const activity = state.activities.find(a => a.id === id);

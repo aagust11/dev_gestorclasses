@@ -26,16 +26,21 @@ function renderMobileHeaderActions(actions) {
     }
     
     const buttonsHtml = actions.map(action => {
+        const extraAttributes = action.extraAttributes && typeof action.extraAttributes === 'object'
+            ? Object.entries(action.extraAttributes)
+                .map(([key, value]) => ` ${key}="${escapeAttribute(value)}"`)
+                .join('')
+            : '';
         if(action.action === 'import-data-mobile') {
             return `
-                <label for="import-file-input-mobile" data-action="import-data-mobile" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 cursor-pointer">
+                <label for="import-file-input-mobile" data-action="import-data-mobile" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 cursor-pointer"${extraAttributes}>
                     <i data-lucide="${action.icon}" class="w-4 h-4"></i>
                     <span>${action.label}</span>
                 </label>
                 <input type="file" id="import-file-input-mobile" accept=".json" class="hidden"/>
             `;
         }
-        return `<button data-action="${action.action}" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+        return `<button data-action="${action.action}" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"${extraAttributes}>
             <i data-lucide="${action.icon}" class="w-4 h-4"></i>
             <span>${action.label}</span>
         </button>`
@@ -1033,11 +1038,19 @@ export function renderLearningActivityEditorView() {
         `;
     }
 
+    const templateStatus = state.templateSyncStatus?.[targetClass.id] || {};
+    const hasLinkedClasses = Array.isArray(targetClass.linkedClassIds) && targetClass.linkedClassIds.length > 0;
+    const showTemplateSyncButton = Boolean(targetClass.isTemplate && hasLinkedClasses && templateStatus.learningActivities);
+    const syncButtonConfig = showTemplateSyncButton
+        ? { action: 'sync-template-section', label: t('class_template_sync_button'), icon: 'wifi', extraAttributes: { 'data-template-id': targetClass.id, 'data-section': 'learningActivities' } }
+        : null;
+
     const mobileActions = [
         ...(draft.isNew ? [] : [
             { action: 'go-to-evaluation-for-learning-activity', label: t('activities_go_to_evaluation'), icon: 'check-circle-2' },
             { action: 'open-learning-activity-rubric', label: t('activities_rubric_button_label'), icon: 'table-properties' }
         ]),
+        ...(syncButtonConfig ? [{ action: syncButtonConfig.action, label: syncButtonConfig.label, icon: syncButtonConfig.icon, extraAttributes: syncButtonConfig.extraAttributes }] : []),
         { action: 'save-learning-activity-draft', label: t('activities_save_button'), icon: 'save' },
         { action: 'back-to-activities', label: t('back_to_activities'), icon: 'arrow-left' }
     ];
@@ -1168,7 +1181,37 @@ export function renderLearningActivityEditorView() {
 
     const selectedCount = selectedCriteria.length;
     const isCriteriaModalOpen = state.learningActivityCriteriaModalOpen;
-    const shortcutButtonsHtml = draft.isNew ? '' : `
+    const syncButtonHtml = showTemplateSyncButton
+        ? `<button
+                type="button"
+                data-action="sync-template-section"
+                data-template-id="${targetClass.id}"
+                data-section="learningActivities"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-emerald-200 dark:border-emerald-700 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-200 hover:bg-emerald-200 dark:hover:bg-emerald-900/60"
+            >
+                <i data-lucide="wifi" class="w-4 h-4"></i>
+                <span>${t('class_template_sync_button')}</span>
+            </button>`
+        : '';
+
+    const templateBadgesHtml = (() => {
+        const badges = [];
+        if (targetClass.isTemplate) {
+            badges.push(`<span class="inline-flex items-center gap-1 px-2 py-[2px] rounded-full text-[11px] bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 border border-purple-200 dark:border-purple-700">${t('class_template_badge')}</span>`);
+        } else if (targetClass.templateId) {
+            const source = state.activities.find(a => a.id === targetClass.templateId);
+            if (source) {
+                badges.push(`<span class="inline-flex items-center gap-1 px-2 py-[2px] rounded-full text-[11px] bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 border border-blue-200 dark:border-blue-700">${t('class_template_based_on')} ${escapeHtml(source.name)}</span>`);
+            }
+        }
+        if (showTemplateSyncButton) {
+            badges.push(`<span class="inline-flex items-center gap-1 px-2 py-[2px] rounded-full text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200 border border-amber-200 dark:border-amber-700">${t('class_template_sync_pending')}</span>`);
+        }
+        return badges.length > 0 ? `<div class="flex flex-wrap gap-2 mt-2">${badges.join('')}</div>` : '';
+    })();
+
+    const shortcutButtonsHtml = [
+        draft.isNew ? '' : `
         <button
             type="button"
             data-action="go-to-evaluation-for-learning-activity"
@@ -1200,6 +1243,9 @@ export function renderLearningActivityEditorView() {
             ${t('activities_delete_button')}
         </button>
     `;
+        </button>`,
+        syncButtonHtml
+    ].filter(Boolean).join('');
     const criteriaModalHtml = !isCriteriaModalOpen ? '' : `
         <div class="fixed inset-0 z-40 flex items-center justify-center px-4 py-6">
             <div class="absolute inset-0 bg-gray-900/50 dark:bg-gray-900/70" data-action="close-learning-activity-criteria"></div>
@@ -1233,6 +1279,7 @@ export function renderLearningActivityEditorView() {
                     <div>
                         <p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_editor_class_prefix')} <span class="font-semibold text-gray-800 dark:text-gray-100">${targetClass.name}</span></p>
                         <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">${draft.isNew ? t('activities_editor_title_new') : t('activities_editor_title_edit')}</h2>
+                        ${templateBadgesHtml}
                     </div>
                     <div class="flex flex-wrap gap-2 justify-end">
                         ${shortcutButtonsHtml}
@@ -1986,6 +2033,49 @@ export function renderSettingsView() {
             `;
         }
 
+        const isTemplateClass = Boolean(act.isTemplate);
+        const templateSource = act.templateId ? state.activities.find(a => a.id === act.templateId) : null;
+        const availableTemplates = state.activities
+            .filter(other => other.type === 'class' && other.isTemplate && other.id !== act.id)
+            .sort((a, b) => a.name.localeCompare(b.name));
+        const templateSelectOptions = availableTemplates
+            .map(template => `<option value="${template.id}" ${act.templateId === template.id ? 'selected' : ''}>${escapeHtml(template.name)}</option>`)
+            .join('');
+        const linkedClassBadges = Array.isArray(act.linkedClassIds)
+            ? act.linkedClassIds
+                .map(classId => state.activities.find(a => a.id === classId))
+                .filter(Boolean)
+                .map(linked => `<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 border border-blue-200 dark:border-blue-700">${escapeHtml(linked.name)}</span>`)
+            : [];
+        const templateControlsHtml = act.type === 'class' ? `
+            <div class="mt-4 p-4 border border-gray-200 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800/50 space-y-3">
+                <label class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+                    <input type="checkbox" data-action="toggle-class-template" data-activity-id="${act.id}" class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500" ${isTemplateClass ? 'checked' : ''}>
+                    <span>${t('class_template_label')}</span>
+                </label>
+                <p class="text-xs text-gray-500 dark:text-gray-400">${t('class_template_hint')}</p>
+                ${isTemplateClass
+                    ? `
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-200">${t('class_template_linked_classes')}</h4>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                ${linkedClassBadges.length > 0 ? linkedClassBadges.join('') : `<span class=\"text-xs text-gray-500 dark:text-gray-400\">${t('class_template_no_linked')}</span>`}
+                            </div>
+                        </div>
+                    `
+                    : `
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">${t('class_template_assign_label')}</label>
+                            <select data-action="set-class-template-parent" data-activity-id="${act.id}" class="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm">
+                                <option value="">${t('class_template_assign_none')}</option>
+                                ${templateSelectOptions}
+                            </select>
+                            ${templateSource ? `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${t('class_template_based_on')} ${escapeHtml(templateSource.name)}</p>` : ''}
+                        </div>
+                    `}
+            </div>
+        ` : '';
+
         if (state.editingActivityId === act.id) {
             return `
             <div id="edit-activity-form-${act.id}" class="p-4 border rounded-md bg-white dark:bg-gray-700 border-blue-500">
@@ -2007,6 +2097,7 @@ export function renderSettingsView() {
                         <input type="date" id="edit-activity-end-${act.id}" value="${act.endDate || ''}" class="w-full p-1 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md">
                     </div>
                 </div>
+                ${templateControlsHtml}
                 ${studentsInClassHtml}
             </div>`;
         }
@@ -2015,7 +2106,13 @@ export function renderSettingsView() {
             <div class="flex justify-between items-center">
                 <div class="flex items-center gap-2 flex-grow">
                    <input type="color" data-action="change-activity-color" data-id="${act.id}" value="${act.color}" class="p-0 border-none rounded-full cursor-pointer w-7 h-7">
-                   <span class="font-semibold cursor-pointer" data-action="edit-activity" data-id="${act.id}">${act.name} <span class="text-xs text-gray-500 dark:text-gray-400 font-normal">(${act.type === 'class' ? t('class') : t('general')})</span></span>
+                   <span class="font-semibold cursor-pointer flex flex-col" data-action="edit-activity" data-id="${act.id}">
+                        <span>${act.name} <span class="text-xs text-gray-500 dark:text-gray-400 font-normal">(${act.type === 'class' ? t('class') : t('general')})</span></span>
+                        <span class="mt-1 flex flex-wrap gap-1">
+                            ${isTemplateClass ? `<span class=\"inline-flex items-center gap-1 px-2 py-[2px] rounded-full text-[11px] bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 border border-purple-200 dark:border-purple-700\">${t('class_template_badge')}</span>` : ''}
+                            ${!isTemplateClass && templateSource ? `<span class=\"inline-flex items-center gap-1 px-2 py-[2px] rounded-full text-[11px] bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 border border-blue-200 dark:border-blue-700\">${t('class_template_based_on')} ${escapeHtml(templateSource.name)}</span>` : ''}
+                        </span>
+                   </span>
                 </div>
                 <button data-action="delete-activity" data-id="${act.id}" class="text-red-500 hover:text-red-700 ml-2"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
             </div>
@@ -2056,6 +2153,32 @@ export function renderSettingsView() {
     const competencyCardsHtml = classesWithStudents.map(c => {
         const competencies = c.competencies || [];
         const competencyCount = competencies.length;
+        const templateSource = c.templateId ? state.activities.find(a => a.id === c.templateId) : null;
+        const templateStatus = state.templateSyncStatus?.[c.id] || {};
+        const hasLinkedClasses = Array.isArray(c.linkedClassIds) && c.linkedClassIds.length > 0;
+        const pendingCompetencySync = Boolean(templateStatus.competencies && c.isTemplate && hasLinkedClasses);
+        const syncButtonHtml = pendingCompetencySync
+            ? `<button data-action="sync-template-section" data-template-id="${c.id}" data-section="competencies" class="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-700 hover:bg-emerald-200 dark:hover:bg-emerald-900/60"><i data-lucide="wifi" class="w-4 h-4"></i><span>${t('class_template_sync_button')}</span></button>`
+            : '';
+        const pendingBadgeHtml = pendingCompetencySync
+            ? `<span class="inline-flex items-center gap-1 px-2 py-[2px] rounded-full text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200 border border-amber-200 dark:border-amber-700">${t('class_template_sync_pending')}</span>`
+            : '';
+        const templateBadges = [];
+        if (c.isTemplate) {
+            templateBadges.push(`<span class="inline-flex items-center gap-1 px-2 py-[2px] rounded-full text-[11px] bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 border border-purple-200 dark:border-purple-700">${t('class_template_badge')}</span>`);
+        }
+        if (!c.isTemplate && templateSource) {
+            templateBadges.push(`<span class="inline-flex items-center gap-1 px-2 py-[2px] rounded-full text-[11px] bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 border border-blue-200 dark:border-blue-700">${t('class_template_based_on')} ${escapeHtml(templateSource.name)}</span>`);
+        }
+        if (pendingBadgeHtml) {
+            templateBadges.push(pendingBadgeHtml);
+        }
+        const linkedBadges = c.isTemplate && hasLinkedClasses
+            ? c.linkedClassIds
+                .map(classId => state.activities.find(a => a.id === classId))
+                .filter(Boolean)
+                .map(linked => `<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 border border-blue-200 dark:border-blue-700">${escapeHtml(linked.name)}</span>`)
+            : [];
 
         const competenciesHtml = competencies.map(comp => `
             <button
@@ -2088,6 +2211,8 @@ export function renderSettingsView() {
             <div id="competency-card-${c.id}" class="bg-white dark:bg-gray-800 rounded-lg shadow-md flex flex-col">
                 <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-t-lg flex flex-col gap-3">
                     <h3 class="text-xl font-bold" style="color: ${darkenColor(c.color, 40)}">${c.name}</h3>
+                    ${templateBadges.length > 0 ? `<div class="flex flex-wrap gap-2">${templateBadges.join('')}</div>` : ''}
+                    ${linkedBadges.length > 0 ? `<div class="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">${t('class_template_linked_classes')}: ${linkedBadges.join('')}</div>` : ''}
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                         <div class="flex items-end gap-3 flex-wrap">
                             <button data-action="add-competency" data-activity-id="${c.id}" class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800">
@@ -2098,6 +2223,7 @@ export function renderSettingsView() {
                                 <i data-lucide="target" class="w-4 h-4"></i>
                                 <span>${competencyCount} ${t('competencies_short_label')}</span>
                             </div>
+                            ${syncButtonHtml}
                         </div>
                         <button
                             data-action="toggle-competency-list"
