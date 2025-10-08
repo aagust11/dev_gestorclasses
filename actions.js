@@ -1424,6 +1424,29 @@ export const actionHandlers = {
         state.studentTimelineFilter = nextFilter;
         saveState();
     },
+    'filter-student-annotations': (id, element) => {
+        const query = element.value.trim().toLowerCase();
+        const container = document.querySelector('[data-student-annotations-list]');
+        if (!container) return;
+
+        const cards = container.querySelectorAll('[data-student-name]');
+        let visibleCount = 0;
+
+        cards.forEach(card => {
+            const name = (card.dataset.studentName || '').toLowerCase();
+            const matches = name.includes(query);
+            const shouldHide = query.length > 0 && !matches;
+            card.classList.toggle('hidden', shouldHide);
+            if (!shouldHide) {
+                visibleCount += 1;
+            }
+        });
+
+        const emptyMessage = container.querySelector('[data-student-filter-empty]');
+        if (emptyMessage) {
+            emptyMessage.classList.toggle('hidden', visibleCount > 0);
+        }
+    },
     'go-to-student': (id, element) => {
         const studentId = element.value;
         if (studentId) {
