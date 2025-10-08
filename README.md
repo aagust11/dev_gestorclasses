@@ -36,4 +36,4 @@ Los archivos de traducción para el contenido de demostración se encuentran en 
 
 ## Contribuciones
 
-Este proyecto es mantenido por Juan José de Haro. Las contribuciones son bienvenidas.
+Este proyecto es mantenido por Àngel AC (aagust11@xtec.cat). Las contribuciones son bienvenidas.
