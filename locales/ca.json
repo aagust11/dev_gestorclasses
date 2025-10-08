@@ -177,6 +177,7 @@
   "activities_no_competencies_help": "Encara no hi ha competències ni criteris per a aquesta assignatura. Ves a Configuració per afegir-ne.",
   "activities_no_criteria_for_competency": "Aquesta competència encara no té criteris d'avaluació.",
   "activities_save_button": "Desa activitat",
+  "activities_delete_button": "Elimina activitat",
   "activities_cancel_button": "Cancel·la",
   "activities_title_required": "Cal indicar un títol per a l'activitat.",
   "activities_identifier_required": "Cal indicar un identificador per a l'activitat.",
