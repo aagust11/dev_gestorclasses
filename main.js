@@ -20,7 +20,8 @@ const studentAnnotationActions = new Set([
     'add-incident-record',
     'edit-positive-record',
     'edit-comment-record',
-    'edit-incident-record'
+    'edit-incident-record',
+    'toggle-attendance-status'
 ]);
 
 function captureStudentListState(triggerElement) {
@@ -172,6 +173,10 @@ function handleDeferredExampleLoad() {
 
 function handleAction(action, element, event) {
     const id = element.dataset.id;
+    const shouldCaptureStudentList = studentAnnotationActions.has(action);
+    let preservedStudentListState = shouldCaptureStudentList
+        ? captureStudentListState(element)
+        : null;
     const reRenderActions = [
         'add-activity', 'delete-activity', 'add-student-to-class', 'remove-student-from-class',
         'add-timeslot', 'delete-timeslot', 'reorder-timeslot', 'import-students',
@@ -217,12 +222,12 @@ function handleAction(action, element, event) {
             })();
 
             const rerender = () => {
-                const studentListState = studentAnnotationActions.has(action)
-                    ? captureStudentListState(element)
-                    : null;
+                const studentListState = preservedStudentListState
+                    ?? (shouldCaptureStudentList ? captureStudentListState(element) : null);
+                preservedStudentListState = studentListState;
                 render();
                 if (studentListState) {
-                    restoreStudentListState(studentListState);
+                    requestAnimationFrame(() => restoreStudentListState(studentListState));
                 }
                 if (action === 'edit-activity') {
                     const targetElement = document.getElementById(`edit-activity-form-${id}`);
