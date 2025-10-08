@@ -1981,16 +1981,6 @@ export function renderSettingsView() {
                     <div class="flex items-center gap-2">
                         <button data-action="save-activity" data-id="${act.id}" class="text-green-600 hover:text-green-800"><i data-lucide="check" class="w-5 h-5"></i></button>
                         <button data-action="cancel-edit-activity" class="text-red-600 hover:text-red-800"><i data-lucide="x" class="w-5 h-5"></i></button>
-                        <button
-                            data-action="delete-activity"
-                            data-id="${act.id}"
-                            class="p-1 text-red-600 hover:text-red-800 rounded-full hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-white dark:hover:bg-red-900/20 dark:focus:ring-offset-gray-800"
-                            title="${t('delete_activity_button_label')}"
-                            aria-label="${t('delete_activity_button_label')}"
-                        >
-                            <i data-lucide="trash-2" class="w-5 h-5"></i>
-                            <span class="sr-only">${t('delete_activity_button_label')}</span>
-                        </button>
                     </div>
                 </div>
                 <div class="mt-4 grid grid-cols-2 gap-4 text-sm">
@@ -2013,16 +2003,7 @@ export function renderSettingsView() {
                    <input type="color" data-action="change-activity-color" data-id="${act.id}" value="${act.color}" class="p-0 border-none rounded-full cursor-pointer w-7 h-7">
                    <span class="font-semibold cursor-pointer" data-action="edit-activity" data-id="${act.id}">${act.name} <span class="text-xs text-gray-500 dark:text-gray-400 font-normal">(${act.type === 'class' ? t('class') : t('general')})</span></span>
                 </div>
-                <button
-                    data-action="delete-activity"
-                    data-id="${act.id}"
-                    class="p-1 text-red-600 hover:text-red-800 rounded-full hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-white dark:hover:bg-red-900/20 dark:focus:ring-offset-gray-800 ml-2"
-                    title="${t('delete_activity_button_label')}"
-                    aria-label="${t('delete_activity_button_label')}"
-                >
-                    <i data-lucide="trash-2" class="w-5 h-5"></i>
-                    <span class="sr-only">${t('delete_activity_button_label')}</span>
-                </button>
+                <button data-action="delete-activity" data-id="${act.id}" class="text-red-500 hover:text-red-700 ml-2"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
             </div>
             ${studentsInClassHtml}
         </div>`;
