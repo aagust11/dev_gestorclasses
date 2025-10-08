@@ -1247,37 +1247,6 @@ export const actionHandlers = {
         state.activeView = 'activities';
         saveState();
     },
-    'delete-learning-activity': (id, element) => {
-        const activityId = element?.dataset?.learningActivityId || state.learningActivityDraft?.id;
-        if (!activityId) return;
-
-        const activity = state.learningActivities.find(act => act.id === activityId);
-        if (!activity) return;
-
-        showModal(t('delete_activity_confirm_title'), t('delete_activity_confirm_text'), () => {
-            state.learningActivities = state.learningActivities.filter(act => act.id !== activityId);
-
-            if (state.learningActivityDraft?.id === activityId) {
-                state.learningActivityDraft = null;
-            }
-
-            if (state.activeLearningActivityRubricId === activityId) {
-                state.activeLearningActivityRubricId = null;
-                state.learningActivityRubricReturnView = null;
-            }
-
-            if (state.pendingEvaluationHighlightActivityId === activityId) {
-                state.pendingEvaluationHighlightActivityId = null;
-            }
-
-            state.learningActivityCriteriaModalOpen = false;
-            state.learningActivityGuideVisible = false;
-
-            saveState();
-            state.activeView = 'activities';
-            document.dispatchEvent(new CustomEvent('render'));
-        });
-    },
     'toggle-learning-activity-list': (id, element) => {
         const classId = element.dataset.classId;
         if (!classId) return;

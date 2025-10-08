@@ -177,7 +177,6 @@
   "activities_no_competencies_help": "There are no competencies or criteria for this subject yet. Go to Settings to add them.",
   "activities_no_criteria_for_competency": "This competency does not have assessment criteria yet.",
   "activities_save_button": "Save activity",
-  "activities_delete_button": "Delete activity",
   "activities_cancel_button": "Cancel",
   "activities_title_required": "Please provide a title for the activity.",
   "activities_identifier_required": "Please provide an identifier for the activity.",
