@@ -48,6 +48,7 @@ export const state = {
     evaluationActiveTab: 'activities',
     selectedEvaluationClassId: null,
     evaluationSelectedTermId: 'all',
+    termGradeCalculationMode: 'dates',
     learningActivityRubricReturnView: null,
     pendingEvaluationHighlightActivityId: null,
     evaluationSettings: {},
@@ -298,6 +299,7 @@ export function saveState() {
         evaluationActiveTab: state.evaluationActiveTab,
         selectedEvaluationClassId: state.selectedEvaluationClassId,
         evaluationSelectedTermId: state.evaluationSelectedTermId,
+        termGradeCalculationMode: state.termGradeCalculationMode,
         evaluationSettings: state.evaluationSettings,
         settingsEvaluationSelectedClassId: state.settingsEvaluationSelectedClassId,
         termGradeRecords: state.termGradeRecords,
@@ -356,6 +358,9 @@ export function loadState() {
         state.evaluationActiveTab = parsedData.evaluationActiveTab || 'activities';
         state.selectedEvaluationClassId = parsedData.selectedEvaluationClassId || null;
         state.evaluationSelectedTermId = parsedData.evaluationSelectedTermId || 'all';
+        state.termGradeCalculationMode = parsedData.termGradeCalculationMode === 'accumulated'
+            ? 'accumulated'
+            : 'dates';
         const rawEvaluationSettings = parsedData.evaluationSettings || {};
         state.evaluationSettings = {};
         Object.entries(rawEvaluationSettings).forEach(([classId, config]) => {

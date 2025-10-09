@@ -198,7 +198,7 @@ function handleAction(action, element, event) {
         'update-competency-max-not-achieved', 'update-competency-aggregation',
         'set-evaluation-no-evidence-behavior', 'set-evaluation-no-evidence-level',
         'set-evaluation-np-treatment', 'save-evaluation-config', 'reset-evaluation-config',
-        'calculate-term-grades', 'update-term-grade-numeric', 'update-term-grade-level'
+        'set-term-grade-calculation-mode', 'calculate-term-grades', 'update-term-grade-numeric', 'update-term-grade-level'
     ];
     const forceRenderActions = ['toggle-rubric-not-presented', 'toggle-rubric-delivered-late'];
     const shouldForceRender = forceRenderActions.includes(action);
