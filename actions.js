@@ -209,25 +209,40 @@ function computeMajorityData(evidences = [], normalizedConfig) {
     return { winners, fallbackLevel };
 }
 
-function isActivityWithinTerm(activity, termRange) {
+function getActivityEffectiveEndDate(activity) {
+    if (!activity) {
+        return null;
+    }
+    if (activity?.endDate) {
+        const parsed = new Date(`${activity.endDate}T23:59:59`);
+        if (!Number.isNaN(parsed.getTime())) {
+            return parsed;
+        }
+    }
+    if (activity?.startDate) {
+        const parsed = new Date(`${activity.startDate}T23:59:59`);
+        if (!Number.isNaN(parsed.getTime())) {
+            return parsed;
+        }
+    }
+    return null;
+}
+
+function isActivityWithinTerm(activity, termRange, mode = 'dates') {
     if (!termRange) {
         return true;
     }
-    const start = activity?.startDate ? new Date(`${activity.startDate}T00:00:00`) : null;
-    const end = activity?.endDate ? new Date(`${activity.endDate}T23:59:59`) : null;
-    if (start && end) {
-        return end >= termRange.start && start <= termRange.end;
+    const effectiveEnd = getActivityEffectiveEndDate(activity);
+    if (!effectiveEnd) {
+        return true;
     }
-    if (start) {
-        return start >= termRange.start && start <= termRange.end;
+    if (mode === 'accumulated') {
+        return effectiveEnd <= termRange.end;
     }
-    if (end) {
-        return end >= termRange.start && end <= termRange.end;
-    }
-    return true;
+    return effectiveEnd >= termRange.start && effectiveEnd <= termRange.end;
 }
 
-function calculateTermGradesForClassTerm(classId, termId) {
+function calculateTermGradesForClassTerm(classId, termId, mode = 'dates') {
     const targetClass = state.activities.find(activity => activity && activity.type === 'class' && activity.id === classId);
     if (!targetClass) {
         return { students: {} };
@@ -262,9 +277,10 @@ function calculateTermGradesForClassTerm(classId, termId) {
     });
 
     const termRange = getTermDateRangeById(termId);
+    const calculationMode = mode === 'accumulated' ? 'accumulated' : 'dates';
     const relevantActivities = state.learningActivities
         .filter(activity => activity && activity.classId === classId)
-        .filter(activity => isActivityWithinTerm(activity, termRange));
+        .filter(activity => isActivityWithinTerm(activity, termRange, calculationMode));
 
     relevantActivities.forEach(activity => {
         const rubric = activity?.rubric;
@@ -1017,7 +1033,7 @@ export const actionHandlers = {
             return;
         }
         const termId = element?.dataset?.termId || 'all';
-        const calculated = calculateTermGradesForClassTerm(classId, termId);
+        const calculated = calculateTermGradesForClassTerm(classId, termId, state.termGradeCalculationMode);
         const existingRecord = ensureTermGradeRecordStructure(classId, termId);
         const mergedRecord = { students: {} };
 
@@ -1077,6 +1093,15 @@ export const actionHandlers = {
         entry.levelId = element.value || '';
         entry.isManual = true;
         entry.noteSymbols = [];
+        if (element) {
+            element.dataset.selectedLevel = element.value || 'none';
+        }
+        saveState();
+    },
+
+    'set-term-grade-calculation-mode': (id, element) => {
+        const value = element?.value === 'accumulated' ? 'accumulated' : 'dates';
+        state.termGradeCalculationMode = value;
         saveState();
     },
 

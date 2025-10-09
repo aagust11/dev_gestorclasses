@@ -1041,6 +1041,38 @@ function renderEvaluationTermGradesTab(classes) {
         ? normalizedConfig.competency.levels
         : [];
 
+    const calculationMode = state.termGradeCalculationMode || 'dates';
+    const calculationModeSelector = `
+        <fieldset class="term-grade-mode flex flex-col gap-1">
+            <legend class="text-sm font-medium text-gray-700 dark:text-gray-200">${t('evaluation_term_grades_mode_label')}</legend>
+            <div class="flex items-center gap-4">
+                <label class="inline-flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300">
+                    <input type="radio" name="term-grade-mode" value="dates" data-action="set-term-grade-calculation-mode" data-event="change" class="rounded text-blue-600 focus:ring-blue-500" ${calculationMode === 'dates' ? 'checked' : ''}>
+                    <span>${t('evaluation_term_grades_mode_dates')}</span>
+                </label>
+                <label class="inline-flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300">
+                    <input type="radio" name="term-grade-mode" value="accumulated" data-action="set-term-grade-calculation-mode" data-event="change" class="rounded text-blue-600 focus:ring-blue-500" ${calculationMode === 'accumulated' ? 'checked' : ''}>
+                    <span>${t('evaluation_term_grades_mode_accumulated')}</span>
+                </label>
+            </div>
+        </fieldset>
+    `;
+
+    const calculateButtonHtml = `
+        <button data-action="calculate-term-grades" data-class-id="${selectedClass.id}" data-term-id="${selectedTermId}" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+            <i data-lucide="calculator" class="w-4 h-4"></i>
+            ${t('evaluation_term_grades_calculate_button')}
+        </button>
+    `;
+
+    const calculationControlsHtml = `
+        <div class="flex flex-wrap items-end gap-4">
+            ${termFilterHtml}
+            ${calculationModeSelector}
+            ${calculateButtonHtml}
+        </div>
+    `;
+
     const studentIds = Array.isArray(selectedClass.studentIds) ? selectedClass.studentIds : [];
     const students = state.students
         .filter(student => studentIds.includes(student.id))
@@ -1051,13 +1083,7 @@ function renderEvaluationTermGradesTab(classes) {
         return `
             <div class="space-y-4">
                 <div class="flex flex-wrap gap-2">${classButtonsHtml}</div>
-                <div class="flex flex-wrap items-end gap-3">
-                    ${termFilterHtml}
-                    <button data-action="calculate-term-grades" data-class-id="${selectedClass.id}" data-term-id="${selectedTermId}" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                        <i data-lucide="calculator" class="w-4 h-4"></i>
-                        ${t('evaluation_term_grades_calculate_button')}
-                    </button>
-                </div>
+                ${calculationControlsHtml}
                 <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
                     ${calculationHint}
                 </div>
@@ -1073,17 +1099,17 @@ function renderEvaluationTermGradesTab(classes) {
         const criteriaCount = Array.isArray(comp.criteria) ? comp.criteria.length : 0;
         const colSpan = Math.max(criteriaCount + 1, 1);
         const label = comp.code?.trim() || t('competency_without_code');
-        return `<th scope="col" colspan="${colSpan}" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${escapeHtml(label)}</th>`;
+        return `<th scope="col" colspan="${colSpan}" class="term-grade-header term-grade-header--group term-grade-separator px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${escapeHtml(label)}</th>`;
     }).join('');
 
     const headerRow2 = competencies.map(comp => {
         const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
         const criteriaCells = criteria.map(criterion => {
             const criterionLabel = criterion.code?.trim() || t('criterion_without_code');
-            return `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${escapeHtml(criterionLabel)}</th>`;
+            return `<th scope="col" class="term-grade-header term-grade-header--criterion px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${escapeHtml(criterionLabel)}</th>`;
         }).join('');
         const competencyLabel = comp.code?.trim() || t('competency_without_code');
-        return `${criteriaCells}<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${escapeHtml(competencyLabel)}</th>`;
+        return `${criteriaCells}<th scope="col" class="term-grade-header term-grade-header--competency term-grade-separator px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${escapeHtml(competencyLabel)}</th>`;
     }).join('');
 
     const rowsHtml = students.map(student => {
@@ -1105,6 +1131,7 @@ function renderEvaluationTermGradesTab(classes) {
                     label,
                     studentName,
                     levelOptions,
+                    cellClasses: 'term-grade-cell--criterion',
                 }));
             });
 
@@ -1120,6 +1147,7 @@ function renderEvaluationTermGradesTab(classes) {
                 label: compLabel,
                 studentName,
                 levelOptions,
+                cellClasses: 'term-grade-cell--competency term-grade-separator',
             }));
         });
 
@@ -1134,25 +1162,26 @@ function renderEvaluationTermGradesTab(classes) {
             label: t('evaluation_term_grades_final_label'),
             studentName,
             levelOptions,
+            cellClasses: 'term-grade-cell--final term-grade-separator',
         });
 
         const studentCellsHtml = studentCells.join('');
-        return `<tr class="border-b border-gray-100 dark:border-gray-800"><th scope="row" class="px-3 py-2 text-sm font-medium text-left text-gray-800 dark:text-gray-100 min-w-[12rem]">${escapeHtml(studentName)}</th>${studentCellsHtml}${finalCell}</tr>`;
+        return `<tr class="term-grade-row border-b border-gray-100 dark:border-gray-800"><th scope="row" class="term-grade-student-cell px-3 py-2 text-sm font-medium text-left text-gray-800 dark:text-gray-100 min-w-[12rem]">${escapeHtml(studentName)}</th>${studentCellsHtml}${finalCell}</tr>`;
     }).join('');
 
-    const tableBodyHtml = rowsHtml || `<tr><td colspan="${competencies.reduce((sum, comp) => sum + (Array.isArray(comp.criteria) ? comp.criteria.length : 0) + 1, 1) + 1}" class="px-3 py-4 text-sm text-center text-gray-600 dark:text-gray-300">${t('evaluation_grades_no_students')}</td></tr>`;
+    const tableBodyHtml = rowsHtml || `<tr class="term-grade-row"><td colspan="${competencies.reduce((sum, comp) => sum + (Array.isArray(comp.criteria) ? comp.criteria.length : 0) + 1, 1) + 1}" class="px-3 py-4 text-sm text-center text-gray-600 dark:text-gray-300">${t('evaluation_grades_no_students')}</td></tr>`;
 
     const tableHtml = `
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-left">
-            <thead class="bg-white dark:bg-gray-800">
+        <table class="term-grades-table min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-left">
+            <thead class="term-grade-header-group bg-white dark:bg-gray-800">
                 <tr>
-                    <th scope="col" rowspan="2" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[12rem]">${t('evaluation_grades_student_column')}</th>
+                    <th scope="col" rowspan="2" class="term-grade-student-header term-grade-header px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[12rem]">${t('evaluation_grades_student_column')}</th>
                     ${headerRow1}
-                    <th scope="col" rowspan="2" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${t('evaluation_term_grades_final_label')}</th>
+                    <th scope="col" rowspan="2" class="term-grade-header term-grade-header--final term-grade-separator px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${t('evaluation_term_grades_final_label')}</th>
                 </tr>
                 ${competencies.length > 0 ? `<tr>${headerRow2}</tr>` : ''}
             </thead>
-            <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+            <tbody class="term-grade-tbody bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
                 ${tableBodyHtml}
             </tbody>
         </table>
@@ -1179,13 +1208,7 @@ function renderEvaluationTermGradesTab(classes) {
     return `
         <div class="space-y-4">
             <div class="flex flex-wrap gap-2">${classButtonsHtml}</div>
-            <div class="flex flex-wrap items-end gap-3">
-                ${termFilterHtml}
-                <button data-action="calculate-term-grades" data-class-id="${selectedClass.id}" data-term-id="${selectedTermId}" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                    <i data-lucide="calculator" class="w-4 h-4"></i>
-                    ${t('evaluation_term_grades_calculate_button')}
-                </button>
-            </div>
+            ${calculationControlsHtml}
             <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6 shadow-sm space-y-4">
                 ${calculationHint}
                 <div class="overflow-x-auto">${tableHtml}</div>
@@ -1228,7 +1251,7 @@ function renderTermGradeCell(entry, meta) {
     const levelValue = entry?.levelId || '';
     const noteSymbols = Array.isArray(entry?.noteSymbols) ? entry.noteSymbols.filter(Boolean) : [];
     const footnoteHtml = noteSymbols.length > 0
-        ? `<span class="ml-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(noteSymbols.join(''))}</span>`
+        ? `<span class="term-grade-footnote text-xs text-gray-500 dark:text-gray-400">${escapeHtml(noteSymbols.join(''))}</span>`
         : '';
     const dataTargetId = scope === 'final' ? 'final' : (targetId || '');
     const ariaLabel = `${studentName} · ${label}`;
@@ -1237,9 +1260,23 @@ function renderTermGradeCell(entry, meta) {
         ...levelOptions.map(level => `<option value="${level.id}" ${level.id === levelValue ? 'selected' : ''}>${escapeHtml(level.label || level.id)}</option>`),
     ].join('');
 
+    const extraCellClasses = typeof meta?.cellClasses === 'string' ? meta.cellClasses.trim() : '';
+    const cellClassNames = [
+        'px-3',
+        'py-2',
+        'text-sm',
+        'text-center',
+        'align-middle',
+        'term-grade-cell',
+    ];
+    if (extraCellClasses) {
+        cellClassNames.push(extraCellClasses);
+    }
+    const selectedLevelAttr = escapeAttribute(levelValue || 'none');
+
     return `
-        <td class="px-3 py-2 text-sm text-center align-middle">
-            <div class="flex items-center justify-center gap-1">
+        <td class="${cellClassNames.join(' ')}">
+            <div class="term-grade-cell-content">
                 <input
                     type="number"
                     step="0.01"
@@ -1251,10 +1288,9 @@ function renderTermGradeCell(entry, meta) {
                     data-scope="${scope}"
                     data-target-id="${dataTargetId}"
                     value="${escapeAttribute(numericValue || '')}"
-                    class="w-20 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-100 text-right"
+                    class="term-grade-score-input border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-xs text-gray-800 dark:text-gray-100 text-right"
                     aria-label="${escapeAttribute(ariaLabel)}"
                 >
-                <span class="text-xs text-gray-500 dark:text-gray-400">(</span>
                 <select
                     data-action="update-term-grade-level"
                     data-event="change"
@@ -1263,12 +1299,12 @@ function renderTermGradeCell(entry, meta) {
                     data-student-id="${studentId}"
                     data-scope="${scope}"
                     data-target-id="${dataTargetId}"
-                    class="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-200"
+                    class="term-grade-level-select border border-gray-300 dark:border-gray-600 rounded-md text-xs text-gray-700 dark:text-gray-200"
                     aria-label="${escapeAttribute(ariaLabel)}"
+                    data-selected-level="${selectedLevelAttr}"
                 >
                     ${levelOptionsHtml}
                 </select>
-                <span class="text-xs text-gray-500 dark:text-gray-400">)</span>
                 ${footnoteHtml}
             </div>
         </td>
