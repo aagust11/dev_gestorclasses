@@ -1062,6 +1062,24 @@ export const actionHandlers = {
         saveState();
     },
 
+    'clear-term-grades': (id, element) => {
+        const classId = element?.dataset?.classId;
+        if (!classId) {
+            return;
+        }
+        const termId = element?.dataset?.termId || 'all';
+        const classRecords = state.termGradeRecords?.[classId];
+        if (!classRecords || !classRecords[termId]) {
+            return;
+        }
+
+        delete classRecords[termId];
+        if (Object.keys(classRecords).length === 0) {
+            delete state.termGradeRecords[classId];
+        }
+        saveState();
+    },
+
     'update-term-grade-numeric': (id, element) => {
         const classId = element?.dataset?.classId;
         const studentId = element?.dataset?.studentId;
