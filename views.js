@@ -498,14 +498,15 @@ export function renderEvaluationView() {
 
     const tabs = [
         { id: 'activities', label: t('evaluation_tab_activities'), icon: 'clipboard-list' },
-        { id: 'grades', label: t('evaluation_tab_grades'), icon: 'graduation-cap' }
+        { id: 'grades', label: t('evaluation_tab_grades'), icon: 'graduation-cap' },
+        { id: 'term-grades', label: t('evaluation_tab_term_grades'), icon: 'table' }
     ];
     const allowedTabs = tabs.map(tab => tab.id);
     if (!allowedTabs.includes(state.evaluationActiveTab)) {
         state.evaluationActiveTab = 'activities';
     }
 
-    if (state.evaluationActiveTab === 'grades') {
+    if (state.evaluationActiveTab === 'grades' || state.evaluationActiveTab === 'term-grades') {
         const hasSelection = classes.some(cls => cls.id === state.selectedEvaluationClassId);
         if (!hasSelection) {
             state.selectedEvaluationClassId = classes[0]?.id || null;
@@ -524,7 +525,9 @@ export function renderEvaluationView() {
 
     const tabContent = state.evaluationActiveTab === 'grades'
         ? renderEvaluationGradesTab(classes)
-        : renderEvaluationActivitiesTab(classes);
+        : state.evaluationActiveTab === 'term-grades'
+            ? renderEvaluationTermGradesTab(classes)
+            : renderEvaluationActivitiesTab(classes);
 
     return `
         <div class="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900/50 min-h-full space-y-6">
@@ -723,24 +726,7 @@ function renderEvaluationActivitiesTab(classes) {
     return `<div class="space-y-6">${classCards}</div>`;
 }
 
-function renderEvaluationGradesTab(classes) {
-    if (classes.length === 0) {
-        return `
-            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
-                <p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_no_classes')}</p>
-            </div>
-        `;
-    }
-
-    const locale = document.documentElement.lang || 'ca';
-    const formatDateForDisplay = (value) => {
-        if (!value) return '';
-        const normalized = value.includes('T') ? value : `${value}T00:00:00`;
-        const date = new Date(normalized);
-        if (Number.isNaN(date.getTime())) return '';
-        return date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
-    };
-
+function buildEvaluationClassSelection(classes) {
     let selectedClass = classes.find(cls => cls.id === state.selectedEvaluationClassId) || null;
     if (!selectedClass) {
         selectedClass = classes[0] || null;
@@ -757,7 +743,19 @@ function renderEvaluationGradesTab(classes) {
         return `<button data-action="select-evaluation-class" data-class-id="${cls.id}" class="${baseClasses} ${isActive ? activeClasses : inactiveClasses}">${escapeHtml(cls.name)}</button>`;
     }).join('');
 
-    const selectedTermId = state.evaluationSelectedTermId || 'all';
+    return { selectedClass, classButtonsHtml };
+}
+
+function buildEvaluationTermFilter(selectedTermId) {
+    const locale = document.documentElement.lang || 'ca';
+    const formatDateForDisplay = (value) => {
+        if (!value) return '';
+        const normalized = value.includes('T') ? value : `${value}T00:00:00`;
+        const date = new Date(normalized);
+        if (Number.isNaN(date.getTime())) return '';
+        return date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
     const termRange = getTermDateRangeById(selectedTermId);
     const hasTerms = Array.isArray(state.terms) && state.terms.length > 0;
     const termOptionsHtml = hasTerms
@@ -769,6 +767,7 @@ function renderEvaluationGradesTab(classes) {
             return `<option value="${term.id}" ${isSelected ? 'selected' : ''}>${escapeHtml(`${term.name}${range}`)}</option>`;
         }).join('')
         : '';
+
     const termFilterHtml = hasTerms
         ? `
             <div class="w-full sm:w-auto">
@@ -780,6 +779,22 @@ function renderEvaluationGradesTab(classes) {
             </div>
         `
         : '';
+
+    return { termFilterHtml, termRange };
+}
+
+function renderEvaluationGradesTab(classes) {
+    if (classes.length === 0) {
+        return `
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
+                <p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_no_classes')}</p>
+            </div>
+        `;
+    }
+
+    const { selectedClass, classButtonsHtml } = buildEvaluationClassSelection(classes);
+    const selectedTermId = state.evaluationSelectedTermId || 'all';
+    const { termFilterHtml, termRange } = buildEvaluationTermFilter(selectedTermId);
 
     const filterBySelectedTerm = (activity) => {
         if (!termRange) {
@@ -993,6 +1008,270 @@ function renderEvaluationGradesTab(classes) {
                 ${contentHtml}
             </div>
         </div>
+    `;
+}
+
+function renderEvaluationTermGradesTab(classes) {
+    if (classes.length === 0) {
+        return `
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
+                <p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_no_classes')}</p>
+            </div>
+        `;
+    }
+
+    const { selectedClass, classButtonsHtml } = buildEvaluationClassSelection(classes);
+    const selectedTermId = state.evaluationSelectedTermId || 'all';
+    const { termFilterHtml } = buildEvaluationTermFilter(selectedTermId);
+
+    if (!selectedClass) {
+        return `
+            <div class="space-y-4">
+                <div class="flex flex-wrap gap-2">${classButtonsHtml}</div>
+                ${termFilterHtml}
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
+                    <p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_grades_select_class')}</p>
+                </div>
+            </div>
+        `;
+    }
+
+    const normalizedConfig = normalizeEvaluationConfig(state.evaluationSettings[selectedClass.id]);
+    const levelOptions = Array.isArray(normalizedConfig.competency.levels)
+        ? normalizedConfig.competency.levels
+        : [];
+
+    const studentIds = Array.isArray(selectedClass.studentIds) ? selectedClass.studentIds : [];
+    const students = state.students
+        .filter(student => studentIds.includes(student.id))
+        .sort(sortStudentsByName);
+
+    if (students.length === 0) {
+        const calculationHint = `<p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_grades_no_students')}</p>`;
+        return `
+            <div class="space-y-4">
+                <div class="flex flex-wrap gap-2">${classButtonsHtml}</div>
+                <div class="flex flex-wrap items-end gap-3">
+                    ${termFilterHtml}
+                    <button data-action="calculate-term-grades" data-class-id="${selectedClass.id}" data-term-id="${selectedTermId}" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        <i data-lucide="calculator" class="w-4 h-4"></i>
+                        ${t('evaluation_term_grades_calculate_button')}
+                    </button>
+                </div>
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm">
+                    ${calculationHint}
+                </div>
+            </div>
+        `;
+    }
+
+    const competencies = Array.isArray(selectedClass.competencies) ? selectedClass.competencies : [];
+    const record = state.termGradeRecords?.[selectedClass.id]?.[selectedTermId] || null;
+    const usedFootnoteSymbols = new Set();
+
+    const headerRow1 = competencies.map(comp => {
+        const criteriaCount = Array.isArray(comp.criteria) ? comp.criteria.length : 0;
+        const colSpan = Math.max(criteriaCount + 1, 1);
+        const label = comp.code?.trim() || t('competency_without_code');
+        return `<th scope="col" colspan="${colSpan}" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${escapeHtml(label)}</th>`;
+    }).join('');
+
+    const headerRow2 = competencies.map(comp => {
+        const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
+        const criteriaCells = criteria.map(criterion => {
+            const criterionLabel = criterion.code?.trim() || t('criterion_without_code');
+            return `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${escapeHtml(criterionLabel)}</th>`;
+        }).join('');
+        const competencyLabel = comp.code?.trim() || t('competency_without_code');
+        return `${criteriaCells}<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${escapeHtml(competencyLabel)}</th>`;
+    }).join('');
+
+    const rowsHtml = students.map(student => {
+        const studentCells = [];
+        const studentName = student.name || '';
+
+        competencies.forEach(comp => {
+            const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
+            criteria.forEach(criterion => {
+                const entry = getTermGradeEntry(record, student.id, 'criteria', criterion.id);
+                (entry.noteSymbols || []).forEach(symbol => symbol && usedFootnoteSymbols.add(symbol));
+                const label = `${comp.code?.trim() || t('competency_without_code')} · ${criterion.code?.trim() || t('criterion_without_code')}`;
+                studentCells.push(renderTermGradeCell(entry, {
+                    classId: selectedClass.id,
+                    termId: selectedTermId,
+                    studentId: student.id,
+                    scope: 'criteria',
+                    targetId: criterion.id,
+                    label,
+                    studentName,
+                    levelOptions,
+                }));
+            });
+
+            const compEntry = getTermGradeEntry(record, student.id, 'competencies', comp.id);
+            (compEntry.noteSymbols || []).forEach(symbol => symbol && usedFootnoteSymbols.add(symbol));
+            const compLabel = comp.code?.trim() || t('competency_without_code');
+            studentCells.push(renderTermGradeCell(compEntry, {
+                classId: selectedClass.id,
+                termId: selectedTermId,
+                studentId: student.id,
+                scope: 'competencies',
+                targetId: comp.id,
+                label: compLabel,
+                studentName,
+                levelOptions,
+            }));
+        });
+
+        const finalEntry = getTermGradeEntry(record, student.id, 'final', 'final');
+        (finalEntry.noteSymbols || []).forEach(symbol => symbol && usedFootnoteSymbols.add(symbol));
+        const finalCell = renderTermGradeCell(finalEntry, {
+            classId: selectedClass.id,
+            termId: selectedTermId,
+            studentId: student.id,
+            scope: 'final',
+            targetId: 'final',
+            label: t('evaluation_term_grades_final_label'),
+            studentName,
+            levelOptions,
+        });
+
+        const studentCellsHtml = studentCells.join('');
+        return `<tr class="border-b border-gray-100 dark:border-gray-800"><th scope="row" class="px-3 py-2 text-sm font-medium text-left text-gray-800 dark:text-gray-100 min-w-[12rem]">${escapeHtml(studentName)}</th>${studentCellsHtml}${finalCell}</tr>`;
+    }).join('');
+
+    const tableBodyHtml = rowsHtml || `<tr><td colspan="${competencies.reduce((sum, comp) => sum + (Array.isArray(comp.criteria) ? comp.criteria.length : 0) + 1, 1) + 1}" class="px-3 py-4 text-sm text-center text-gray-600 dark:text-gray-300">${t('evaluation_grades_no_students')}</td></tr>`;
+
+    const tableHtml = `
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-left">
+            <thead class="bg-white dark:bg-gray-800">
+                <tr>
+                    <th scope="col" rowspan="2" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[12rem]">${t('evaluation_grades_student_column')}</th>
+                    ${headerRow1}
+                    <th scope="col" rowspan="2" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${t('evaluation_term_grades_final_label')}</th>
+                </tr>
+                ${competencies.length > 0 ? `<tr>${headerRow2}</tr>` : ''}
+            </thead>
+            <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+                ${tableBodyHtml}
+            </tbody>
+        </table>
+    `;
+
+    const hasCalculatedData = record && Object.keys(record.students || {}).length > 0;
+    const calculationHint = hasCalculatedData
+        ? ''
+        : `<p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_term_grades_empty_state')}</p>`;
+
+    const footnoteMessages = {
+        '*': t('evaluation_term_grades_footnote_weighted'),
+        '**': t('evaluation_term_grades_footnote_ca'),
+    };
+    const footnotesHtml = Array.from(usedFootnoteSymbols)
+        .filter(symbol => footnoteMessages[symbol])
+        .sort((a, b) => a.length - b.length)
+        .map(symbol => `<li class="text-xs text-gray-600 dark:text-gray-300"><span class="font-semibold mr-1">${escapeHtml(symbol)}</span>${escapeHtml(footnoteMessages[symbol])}</li>`)
+        .join('');
+    const footnotesSection = footnotesHtml
+        ? `<div class="pt-3 border-t border-gray-100 dark:border-gray-800"><ul class="space-y-1">${footnotesHtml}</ul></div>`
+        : '';
+
+    return `
+        <div class="space-y-4">
+            <div class="flex flex-wrap gap-2">${classButtonsHtml}</div>
+            <div class="flex flex-wrap items-end gap-3">
+                ${termFilterHtml}
+                <button data-action="calculate-term-grades" data-class-id="${selectedClass.id}" data-term-id="${selectedTermId}" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    <i data-lucide="calculator" class="w-4 h-4"></i>
+                    ${t('evaluation_term_grades_calculate_button')}
+                </button>
+            </div>
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6 shadow-sm space-y-4">
+                ${calculationHint}
+                <div class="overflow-x-auto">${tableHtml}</div>
+                ${footnotesSection}
+            </div>
+        </div>
+    `;
+}
+
+function getTermGradeEntry(record, studentId, scope, targetId) {
+    if (!record || !record.students || !record.students[studentId]) {
+        return { numericScore: '', levelId: '', noteSymbols: [] };
+    }
+    const studentRecord = record.students[studentId];
+    if (scope === 'final') {
+        return studentRecord.final || { numericScore: '', levelId: '', noteSymbols: [] };
+    }
+    const container = scope === 'competencies' ? studentRecord.competencies : studentRecord.criteria;
+    if (!container || typeof container !== 'object') {
+        return { numericScore: '', levelId: '', noteSymbols: [] };
+    }
+    return container[targetId] || { numericScore: '', levelId: '', noteSymbols: [] };
+}
+
+function renderTermGradeCell(entry, meta) {
+    const {
+        classId,
+        termId,
+        studentId,
+        scope,
+        targetId,
+        label,
+        studentName,
+        levelOptions,
+    } = meta;
+
+    const numericValue = typeof entry?.numericScore === 'string'
+        ? entry.numericScore
+        : (Number.isFinite(entry?.numericScore) ? String(entry.numericScore) : '');
+    const levelValue = entry?.levelId || '';
+    const noteSymbols = Array.isArray(entry?.noteSymbols) ? entry.noteSymbols.filter(Boolean) : [];
+    const footnoteHtml = noteSymbols.length > 0
+        ? `<span class="ml-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(noteSymbols.join(''))}</span>`
+        : '';
+    const dataTargetId = scope === 'final' ? 'final' : (targetId || '');
+    const ariaLabel = `${studentName} · ${label}`;
+    const levelOptionsHtml = [
+        '<option value="">—</option>',
+        ...levelOptions.map(level => `<option value="${level.id}" ${level.id === levelValue ? 'selected' : ''}>${escapeHtml(level.label || level.id)}</option>`),
+    ].join('');
+
+    return `
+        <td class="px-3 py-2 text-sm text-center align-middle">
+            <div class="flex items-center justify-center gap-1">
+                <input
+                    type="number"
+                    step="0.01"
+                    data-action="update-term-grade-numeric"
+                    data-event="change"
+                    data-class-id="${classId}"
+                    data-term-id="${termId}"
+                    data-student-id="${studentId}"
+                    data-scope="${scope}"
+                    data-target-id="${dataTargetId}"
+                    value="${escapeAttribute(numericValue || '')}"
+                    class="w-20 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-100 text-right"
+                    aria-label="${escapeAttribute(ariaLabel)}"
+                >
+                <span class="text-xs text-gray-500 dark:text-gray-400">(</span>
+                <select
+                    data-action="update-term-grade-level"
+                    data-event="change"
+                    data-class-id="${classId}"
+                    data-term-id="${termId}"
+                    data-student-id="${studentId}"
+                    data-scope="${scope}"
+                    data-target-id="${dataTargetId}"
+                    class="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm text-gray-700 dark:text-gray-200"
+                    aria-label="${escapeAttribute(ariaLabel)}"
+                >
+                    ${levelOptionsHtml}
+                </select>
+                <span class="text-xs text-gray-500 dark:text-gray-400">)</span>
+                ${footnoteHtml}
+            </div>
+        </td>
     `;
 }
 
