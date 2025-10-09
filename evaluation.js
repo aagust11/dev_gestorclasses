@@ -271,6 +271,7 @@ export function calculateWeightedCompetencyResult(evidences = [], config) {
 export function calculateMajorityCompetencyResult(evidences = [], config) {
     const { normalized, map } = getLevelMetadata(config);
     const counts = new Map();
+    const considered = [];
 
     evidences.forEach(evidence => {
         if (!evidence || typeof evidence !== 'object') {
@@ -283,6 +284,13 @@ export function calculateMajorityCompetencyResult(evidences = [], config) {
         if (normalized.competency.calculation.npTreatment === NP_TREATMENTS.EXCLUDE_FROM_AVERAGE && levelId === 'NP') {
             return;
         }
+        const activityWeight = Number.isFinite(Number(evidence.activityWeight))
+            ? Number(evidence.activityWeight)
+            : 1;
+        const criterionWeight = Number.isFinite(Number(evidence.criterionWeight))
+            ? Number(evidence.criterionWeight)
+            : 1;
+        considered.push({ levelId, activityWeight, criterionWeight });
         counts.set(levelId, (counts.get(levelId) || 0) + 1);
     });
 
@@ -297,34 +305,50 @@ export function calculateMajorityCompetencyResult(evidences = [], config) {
             numericScore,
             normalizedScore: aeValue > 0 ? numericScore / aeValue : 0,
             levelId,
+            winners: [],
+            tieBreak: null,
         };
     }
 
-    let winningLevel = 'NP';
-    let winningCount = -1;
+    let winners = [];
+    let winningCount = 0;
     counts.forEach((count, levelId) => {
         if (count > winningCount) {
-            winningLevel = levelId;
+            winners = [levelId];
             winningCount = count;
             return;
         }
         if (count === winningCount) {
-            const currentIndex = COMPETENCY_LEVEL_IDS.indexOf(levelId);
-            const winningIndex = COMPETENCY_LEVEL_IDS.indexOf(winningLevel);
-            if (currentIndex > winningIndex) {
-                winningLevel = levelId;
-            }
+            winners.push(levelId);
         }
     });
 
-    const numericScore = qualitativeToNumeric(winningLevel, normalized);
     const aeValue = map.get('AE')?.numericValue ?? 0;
-    const normalizedScore = aeValue > 0 ? numericScore / aeValue : 0;
+
+    if (winners.length === 1) {
+        const levelId = winners[0];
+        const numericScore = qualitativeToNumeric(levelId, normalized);
+        return {
+            numericScore,
+            normalizedScore: aeValue > 0 ? numericScore / aeValue : 0,
+            levelId,
+            winners,
+            tieBreak: null,
+        };
+    }
+
+    const weighted = calculateWeightedCompetencyResult(considered, normalized);
+    const resolved = winners.includes(weighted.levelId);
 
     return {
-        numericScore,
-        normalizedScore,
-        levelId: winningLevel,
+        numericScore: weighted.numericScore,
+        normalizedScore: weighted.normalizedScore,
+        levelId: weighted.levelId,
+        winners,
+        tieBreak: {
+            method: 'weighted-average',
+            resolved,
+        },
     };
 }
 

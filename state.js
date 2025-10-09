@@ -54,6 +54,7 @@ export const state = {
     evaluationSettingsDraft: {},
     settingsEvaluationSelectedClassId: null,
     evaluationSettingsFeedback: {},
+    termGradeRecords: {},
 };
 
 function ensureSavedEvaluationConfig(classId) {
@@ -299,6 +300,7 @@ export function saveState() {
         evaluationSelectedTermId: state.evaluationSelectedTermId,
         evaluationSettings: state.evaluationSettings,
         settingsEvaluationSelectedClassId: state.settingsEvaluationSelectedClassId,
+        termGradeRecords: state.termGradeRecords,
     };
     localStorage.setItem('teacherDashboardData', JSON.stringify(dataToSave));
     
@@ -365,6 +367,9 @@ export function loadState() {
             state.evaluationSettingsDraft[classId] = cloneEvaluationConfig(config);
         });
         state.settingsEvaluationSelectedClassId = parsedData.settingsEvaluationSelectedClassId || null;
+        state.termGradeRecords = parsedData.termGradeRecords && typeof parsedData.termGradeRecords === 'object'
+            ? parsedData.termGradeRecords
+            : {};
         state.evaluationSettingsFeedback = {};
     }
 

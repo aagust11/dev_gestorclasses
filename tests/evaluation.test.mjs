@@ -81,7 +81,9 @@ function cloneConfig(config) {
     { levelId: 'AN' },
   ];
   const result = calculateMajorityCompetencyResult(evidences, config);
-  assert.strictEqual(result.levelId, 'AN');
+  assert.strictEqual(result.levelId, 'AS');
+  assert.ok(result.tieBreak);
+  assert.strictEqual(result.tieBreak.method, 'weighted-average');
 }
 
 // Test: majority calculation skips NP when configured to exclude

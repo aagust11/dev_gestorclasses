@@ -197,7 +197,8 @@ function handleAction(action, element, event) {
         'change-evaluation-modality', 'update-competency-level-value', 'update-competency-minimum',
         'update-competency-max-not-achieved', 'update-competency-aggregation',
         'set-evaluation-no-evidence-behavior', 'set-evaluation-no-evidence-level',
-        'set-evaluation-np-treatment', 'save-evaluation-config', 'reset-evaluation-config'
+        'set-evaluation-np-treatment', 'save-evaluation-config', 'reset-evaluation-config',
+        'calculate-term-grades', 'update-term-grade-numeric', 'update-term-grade-level'
     ];
     const forceRenderActions = ['toggle-rubric-not-presented', 'toggle-rubric-delivered-late'];
     const shouldForceRender = forceRenderActions.includes(action);
@@ -261,8 +262,10 @@ function attachEventListeners() {
     const elements = document.querySelectorAll('[data-action]');
     elements.forEach(el => {
         const action = el.dataset.action;
-        const eventType = ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) ? 'input' : 'click';
-        
+        const customEvent = el.dataset.event;
+        const defaultEvent = ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) ? 'input' : 'click';
+        const eventType = customEvent || defaultEvent;
+
         if (el.dataset.listenerAttached === 'true') return;
         
         if (action === 'import-data-mobile') return;

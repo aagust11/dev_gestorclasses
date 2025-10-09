@@ -1,9 +1,9 @@
 // actions.js: Define toda la lógica de las acciones del usuario.
 
 import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault } from './state.js';
-import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate } from './utils.js';
+import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
-import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig } from './evaluation.js';
+import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig } from './evaluation.js';
 
 function generateRubricItemId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -77,6 +77,373 @@ function ensureActivityHasCriterionRef(activity, competencyId, criterionId) {
     }
 
     return false;
+}
+
+function createEmptyTermGradeEntry() {
+    return { numericScore: '', levelId: '', isManual: false, noteSymbols: [] };
+}
+
+function ensureTermGradeRecordStructure(classId, termId) {
+    if (!state.termGradeRecords || typeof state.termGradeRecords !== 'object') {
+        state.termGradeRecords = {};
+    }
+    if (!state.termGradeRecords[classId] || typeof state.termGradeRecords[classId] !== 'object') {
+        state.termGradeRecords[classId] = {};
+    }
+    if (!state.termGradeRecords[classId][termId] || typeof state.termGradeRecords[classId][termId] !== 'object') {
+        state.termGradeRecords[classId][termId] = { students: {} };
+    }
+    const record = state.termGradeRecords[classId][termId];
+    if (!record.students || typeof record.students !== 'object') {
+        record.students = {};
+    }
+    return record;
+}
+
+function ensureTermGradeStudent(record, studentId) {
+    if (!record.students[studentId] || typeof record.students[studentId] !== 'object') {
+        record.students[studentId] = {
+            criteria: {},
+            competencies: {},
+            final: createEmptyTermGradeEntry(),
+        };
+    }
+    const studentRecord = record.students[studentId];
+    if (!studentRecord.final || typeof studentRecord.final !== 'object') {
+        studentRecord.final = createEmptyTermGradeEntry();
+    }
+    if (!studentRecord.criteria || typeof studentRecord.criteria !== 'object') {
+        studentRecord.criteria = {};
+    }
+    if (!studentRecord.competencies || typeof studentRecord.competencies !== 'object') {
+        studentRecord.competencies = {};
+    }
+    return studentRecord;
+}
+
+function ensureTermGradeEntry(record, studentId, scope, targetId) {
+    const studentRecord = ensureTermGradeStudent(record, studentId);
+    if (scope === 'final') {
+        return studentRecord.final;
+    }
+    const container = scope === 'competencies' ? studentRecord.competencies : studentRecord.criteria;
+    if (!container[targetId] || typeof container[targetId] !== 'object') {
+        container[targetId] = createEmptyTermGradeEntry();
+    }
+    return container[targetId];
+}
+
+function formatNumericScore(score) {
+    if (typeof score === 'string') {
+        const trimmed = score.trim();
+        if (!trimmed) {
+            return '';
+        }
+        const parsed = Number(trimmed.replace(',', '.'));
+        if (Number.isFinite(parsed)) {
+            return parsed.toFixed(2);
+        }
+        return trimmed;
+    }
+    if (Number.isFinite(score)) {
+        return Number(score).toFixed(2);
+    }
+    return '';
+}
+
+function sumEvidenceWeights(evidences = []) {
+    return evidences.reduce((sum, evidence) => {
+        if (!evidence || typeof evidence !== 'object') {
+            return sum;
+        }
+        const activityWeight = Number.isFinite(Number(evidence.activityWeight))
+            ? Number(evidence.activityWeight)
+            : 1;
+        const criterionWeight = Number.isFinite(Number(evidence.criterionWeight))
+            ? Number(evidence.criterionWeight)
+            : 1;
+        return sum + Math.max(0, activityWeight) * Math.max(0, criterionWeight);
+    }, 0);
+}
+
+function computeMajorityData(evidences = [], normalizedConfig) {
+    const levelMap = new Map();
+    normalizedConfig.competency.levels.forEach(level => {
+        levelMap.set(level.id, level);
+    });
+
+    const winners = [];
+    const counts = new Map();
+
+    evidences.forEach(evidence => {
+        if (!evidence || typeof evidence !== 'object') {
+            return;
+        }
+        const levelId = evidence.levelId;
+        if (!levelMap.has(levelId)) {
+            return;
+        }
+        if (normalizedConfig.competency.calculation.npTreatment === NP_TREATMENTS.EXCLUDE_FROM_AVERAGE && levelId === 'NP') {
+            return;
+        }
+        counts.set(levelId, (counts.get(levelId) || 0) + 1);
+    });
+
+    let maxCount = 0;
+    counts.forEach((count, levelId) => {
+        if (count > maxCount) {
+            winners.length = 0;
+            winners.push(levelId);
+            maxCount = count;
+        } else if (count === maxCount && count > 0) {
+            winners.push(levelId);
+        }
+    });
+
+    const fallbackLevel = normalizedConfig.competency.calculation.noEvidenceBehavior === NO_EVIDENCE_BEHAVIOR.SPECIFIC_LEVEL
+        ? (levelMap.has(normalizedConfig.competency.calculation.noEvidenceLevelId)
+            ? normalizedConfig.competency.calculation.noEvidenceLevelId
+            : 'NP')
+        : 'NP';
+
+    return { winners, fallbackLevel };
+}
+
+function isActivityWithinTerm(activity, termRange) {
+    if (!termRange) {
+        return true;
+    }
+    const start = activity?.startDate ? new Date(`${activity.startDate}T00:00:00`) : null;
+    const end = activity?.endDate ? new Date(`${activity.endDate}T23:59:59`) : null;
+    if (start && end) {
+        return end >= termRange.start && start <= termRange.end;
+    }
+    if (start) {
+        return start >= termRange.start && start <= termRange.end;
+    }
+    if (end) {
+        return end >= termRange.start && end <= termRange.end;
+    }
+    return true;
+}
+
+function calculateTermGradesForClassTerm(classId, termId) {
+    const targetClass = state.activities.find(activity => activity && activity.type === 'class' && activity.id === classId);
+    if (!targetClass) {
+        return { students: {} };
+    }
+
+    const normalizedConfig = normalizeEvaluationConfig(state.evaluationSettings[classId]);
+    const competencies = Array.isArray(targetClass.competencies) ? targetClass.competencies : [];
+    const competencyIds = competencies.map(comp => comp.id).filter(Boolean);
+    const competencySet = new Set(competencyIds);
+    const criterionOrderByCompetency = new Map();
+    const criterionSet = new Set();
+
+    competencies.forEach(comp => {
+        const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
+        const criterionIds = criteria.map(criterion => {
+            if (criterion?.id) {
+                criterionSet.add(criterion.id);
+            }
+            return criterion?.id;
+        }).filter(Boolean);
+        criterionOrderByCompetency.set(comp.id, criterionIds);
+    });
+
+    const studentIds = Array.isArray(targetClass.studentIds) ? targetClass.studentIds : [];
+    const studentSet = new Set(studentIds);
+    const studentData = new Map();
+    studentIds.forEach(studentId => {
+        studentData.set(studentId, {
+            criteria: new Map(),
+            competencies: new Map(),
+        });
+    });
+
+    const termRange = getTermDateRangeById(termId);
+    const relevantActivities = state.learningActivities
+        .filter(activity => activity && activity.classId === classId)
+        .filter(activity => isActivityWithinTerm(activity, termRange));
+
+    relevantActivities.forEach(activity => {
+        const rubric = activity?.rubric;
+        const rubricItems = Array.isArray(rubric?.items) ? rubric.items : [];
+        if (rubricItems.length === 0) {
+            return;
+        }
+        const evaluations = rubric?.evaluations && typeof rubric.evaluations === 'object'
+            ? rubric.evaluations
+            : {};
+        const activityWeight = Number.isFinite(Number(activity?.weight))
+            ? Number(activity.weight)
+            : 1;
+
+        rubricItems.forEach(item => {
+            const competencyId = item?.competencyId;
+            const criterionId = item?.criterionId;
+            if (!competencySet.has(competencyId) || !criterionSet.has(criterionId)) {
+                return;
+            }
+            const criterionWeight = Number.isFinite(Number(item?.weight))
+                ? Number(item.weight)
+                : 1;
+
+            Object.entries(evaluations).forEach(([studentId, evaluation]) => {
+                if (!studentSet.has(studentId)) {
+                    return;
+                }
+                const studentRecord = studentData.get(studentId);
+                if (!studentRecord) {
+                    return;
+                }
+                const flags = evaluation?.flags && typeof evaluation.flags === 'object' ? evaluation.flags : {};
+                const scores = evaluation?.scores && typeof evaluation.scores === 'object' ? evaluation.scores : {};
+                const isNotPresented = Boolean(flags.notPresented);
+                let levelId = scores[item.id];
+                if (isNotPresented) {
+                    levelId = 'NP';
+                }
+                if (!levelId) {
+                    return;
+                }
+
+                if (!studentRecord.criteria.has(criterionId)) {
+                    studentRecord.criteria.set(criterionId, []);
+                }
+                if (!studentRecord.competencies.has(competencyId)) {
+                    studentRecord.competencies.set(competencyId, []);
+                }
+
+                const evidence = { levelId, activityWeight, criterionWeight };
+                studentRecord.criteria.get(criterionId).push(evidence);
+                studentRecord.competencies.get(competencyId).push(evidence);
+            });
+        });
+    });
+
+    const aggregation = normalizedConfig.competency.aggregation;
+    const failLevels = new Set(['NP', 'NA']);
+    const maxNotAchieved = normalizedConfig.competency.maxNotAchieved || {};
+    const limitValue = termId === 'all'
+        ? maxNotAchieved.course
+        : maxNotAchieved.term;
+    const failLimit = Number.isFinite(limitValue) ? limitValue : 0;
+
+    const result = { students: {} };
+
+    studentIds.forEach(studentId => {
+        const studentRecord = studentData.get(studentId) || { criteria: new Map(), competencies: new Map() };
+        const computedStudent = {
+            criteria: {},
+            competencies: {},
+            final: createEmptyTermGradeEntry(),
+        };
+
+        let caFails = 0;
+        let ceFails = 0;
+        const ceEvidencesForFinal = [];
+        const caEvidencesForTie = [];
+
+        competencies.forEach(comp => {
+            const compId = comp.id;
+            const competencyEvidences = studentRecord.competencies.get(compId) || [];
+            const compResult = aggregation === COMPETENCY_AGGREGATIONS.MAJORITY
+                ? calculateMajorityCompetencyResult(competencyEvidences, normalizedConfig)
+                : calculateWeightedCompetencyResult(competencyEvidences, normalizedConfig);
+            const compNotes = [];
+            if (aggregation === COMPETENCY_AGGREGATIONS.MAJORITY && compResult.tieBreak && !compResult.tieBreak.resolved) {
+                compNotes.push('*');
+            }
+            const compLevelId = compResult.levelId || '';
+            computedStudent.competencies[compId] = {
+                numericScore: formatNumericScore(compResult.numericScore),
+                levelId: compLevelId,
+                isManual: false,
+                noteSymbols: compNotes,
+            };
+            if (compLevelId && failLevels.has(compLevelId)) {
+                ceFails += 1;
+            }
+            if (compLevelId) {
+                ceEvidencesForFinal.push({
+                    levelId: compLevelId,
+                    activityWeight: sumEvidenceWeights(competencyEvidences),
+                    criterionWeight: 1,
+                });
+            }
+
+            const criterionIds = criterionOrderByCompetency.get(compId) || [];
+            criterionIds.forEach(criterionId => {
+                const criterionEvidences = studentRecord.criteria.get(criterionId) || [];
+                const criterionResult = aggregation === COMPETENCY_AGGREGATIONS.MAJORITY
+                    ? calculateMajorityCompetencyResult(criterionEvidences, normalizedConfig)
+                    : calculateWeightedCompetencyResult(criterionEvidences, normalizedConfig);
+                const criterionNotes = [];
+                if (aggregation === COMPETENCY_AGGREGATIONS.MAJORITY && criterionResult.tieBreak && !criterionResult.tieBreak.resolved) {
+                    criterionNotes.push('*');
+                }
+                const criterionLevelId = criterionResult.levelId || '';
+                computedStudent.criteria[criterionId] = {
+                    numericScore: formatNumericScore(criterionResult.numericScore),
+                    levelId: criterionLevelId,
+                    isManual: false,
+                    noteSymbols: criterionNotes,
+                };
+                if (criterionLevelId) {
+                    if (failLevels.has(criterionLevelId)) {
+                        caFails += 1;
+                    }
+                    caEvidencesForTie.push({ levelId: criterionLevelId });
+                }
+            });
+        });
+
+        const finalNotes = [];
+        let finalLevel = '';
+        let finalNumeric = '';
+
+        if (caFails > failLimit || ceFails > failLimit) {
+            finalLevel = 'NA';
+            finalNumeric = formatNumericScore(qualitativeToNumeric('NA', normalizedConfig));
+        } else if (aggregation === COMPETENCY_AGGREGATIONS.WEIGHTED_AVERAGE) {
+            const weightedFinal = calculateWeightedCompetencyResult(ceEvidencesForFinal, normalizedConfig);
+            finalLevel = weightedFinal.levelId || '';
+            finalNumeric = formatNumericScore(weightedFinal.numericScore);
+        } else {
+            const majorityFinal = computeMajorityData(ceEvidencesForFinal, normalizedConfig);
+            if (majorityFinal.winners.length === 0) {
+                finalLevel = majorityFinal.fallbackLevel;
+                finalNumeric = formatNumericScore(qualitativeToNumeric(finalLevel, normalizedConfig));
+            } else if (majorityFinal.winners.length === 1) {
+                finalLevel = majorityFinal.winners[0];
+                finalNumeric = formatNumericScore(qualitativeToNumeric(finalLevel, normalizedConfig));
+            } else {
+                const caMajority = computeMajorityData(caEvidencesForTie, normalizedConfig);
+                if (caMajority.winners.length === 1) {
+                    finalLevel = caMajority.winners[0];
+                    finalNumeric = formatNumericScore(qualitativeToNumeric(finalLevel, normalizedConfig));
+                    finalNotes.push('**');
+                } else {
+                    const weightedFinal = calculateWeightedCompetencyResult(ceEvidencesForFinal, normalizedConfig);
+                    finalLevel = weightedFinal.levelId || '';
+                    finalNumeric = formatNumericScore(weightedFinal.numericScore);
+                    finalNotes.push('*');
+                }
+            }
+        }
+
+        computedStudent.final = {
+            numericScore: finalNumeric,
+            levelId: finalLevel,
+            isManual: false,
+            noteSymbols: finalNotes,
+        };
+
+        result.students[studentId] = computedStudent;
+    });
+
+    return result;
 }
 
 function removeCriterionRefFromActivity(activity, competencyId, criterionId) {
@@ -616,11 +983,11 @@ export const actionHandlers = {
 
     'set-evaluation-tab': (id, element) => {
         const tab = element?.dataset?.tab;
-        const allowedTabs = ['activities', 'grades'];
+        const allowedTabs = ['activities', 'grades', 'term-grades'];
         if (!tab || !allowedTabs.includes(tab)) return;
         state.evaluationActiveTab = tab;
 
-        if (tab === 'grades') {
+        if (tab === 'grades' || tab === 'term-grades') {
             const classes = state.activities
                 .filter(activity => activity.type === 'class')
                 .sort((a, b) => a.name.localeCompare(b.name));
@@ -642,6 +1009,75 @@ export const actionHandlers = {
         const value = element.value || 'all';
         const validIds = new Set((state.terms || []).map(term => term.id));
         state.evaluationSelectedTermId = value !== 'all' && !validIds.has(value) ? 'all' : value;
+    },
+
+    'calculate-term-grades': (id, element) => {
+        const classId = element?.dataset?.classId;
+        if (!classId) {
+            return;
+        }
+        const termId = element?.dataset?.termId || 'all';
+        const calculated = calculateTermGradesForClassTerm(classId, termId);
+        const existingRecord = ensureTermGradeRecordStructure(classId, termId);
+        const mergedRecord = { students: {} };
+
+        Object.entries(calculated.students).forEach(([studentId, computedStudent]) => {
+            const previousStudent = existingRecord.students?.[studentId];
+            const mergedStudent = {
+                criteria: {},
+                competencies: {},
+                final: previousStudent?.final?.isManual ? previousStudent.final : computedStudent.final,
+            };
+
+            Object.entries(computedStudent.criteria || {}).forEach(([criterionId, computedEntry]) => {
+                const previousEntry = previousStudent?.criteria?.[criterionId];
+                mergedStudent.criteria[criterionId] = previousEntry?.isManual ? previousEntry : computedEntry;
+            });
+
+            Object.entries(computedStudent.competencies || {}).forEach(([competencyId, computedEntry]) => {
+                const previousEntry = previousStudent?.competencies?.[competencyId];
+                mergedStudent.competencies[competencyId] = previousEntry?.isManual ? previousEntry : computedEntry;
+            });
+
+            mergedRecord.students[studentId] = mergedStudent;
+        });
+
+        state.termGradeRecords[classId][termId] = mergedRecord;
+        saveState();
+    },
+
+    'update-term-grade-numeric': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const studentId = element?.dataset?.studentId;
+        const scope = element?.dataset?.scope;
+        const targetId = element?.dataset?.targetId;
+        if (!classId || !studentId || !scope) {
+            return;
+        }
+        const termId = element?.dataset?.termId || 'all';
+        const record = ensureTermGradeRecordStructure(classId, termId);
+        const entry = ensureTermGradeEntry(record, studentId, scope, scope === 'final' ? 'final' : targetId);
+        entry.numericScore = element.value;
+        entry.isManual = true;
+        entry.noteSymbols = [];
+        saveState();
+    },
+
+    'update-term-grade-level': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const studentId = element?.dataset?.studentId;
+        const scope = element?.dataset?.scope;
+        const targetId = element?.dataset?.targetId;
+        if (!classId || !studentId || !scope) {
+            return;
+        }
+        const termId = element?.dataset?.termId || 'all';
+        const record = ensureTermGradeRecordStructure(classId, termId);
+        const entry = ensureTermGradeEntry(record, studentId, scope, scope === 'final' ? 'final' : targetId);
+        entry.levelId = element.value || '';
+        entry.isManual = true;
+        entry.noteSymbols = [];
+        saveState();
     },
 
     // --- Load Example Action ---
@@ -685,6 +1121,7 @@ export const actionHandlers = {
                 state.courseStartDate = data.courseStartDate || '';
                 state.courseEndDate = data.courseEndDate || '';
                 state.terms = data.terms || [];
+                state.termGradeRecords = {};
                 state.activities.forEach(activity => {
                     if (!activity.competencies) {
                         activity.competencies = [];
@@ -2103,6 +2540,7 @@ export const actionHandlers = {
             evaluationActiveTab: state.evaluationActiveTab,
             selectedEvaluationClassId: state.selectedEvaluationClassId,
             evaluationSelectedTermId: state.evaluationSelectedTermId,
+            termGradeRecords: state.termGradeRecords,
         }, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -2142,6 +2580,9 @@ export const actionHandlers = {
                     state.evaluationActiveTab = data.evaluationActiveTab || 'activities';
                     state.selectedEvaluationClassId = data.selectedEvaluationClassId || null;
                     state.evaluationSelectedTermId = data.evaluationSelectedTermId || 'all';
+                    state.termGradeRecords = data.termGradeRecords && typeof data.termGradeRecords === 'object'
+                        ? data.termGradeRecords
+                        : {};
                     state.activities.forEach(activity => {
                         if (!activity.competencies) {
                             activity.competencies = [];
