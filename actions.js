@@ -1,6 +1,6 @@
 // actions.js: Define toda la lógica de las acciones del usuario.
 
-import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault } from './state.js';
+import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault, pickExistingDataFile, createDataFileWithCurrentState, reloadDataFromConfiguredFile, clearConfiguredDataFile, resetStateToDefaults } from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
 import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig } from './evaluation.js';
@@ -2700,7 +2700,7 @@ export const actionHandlers = {
         if (!file) return;
         showModal(t('import_data_confirm_title'), t('import_data_confirm_text'), () => {
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 try {
                     const data = JSON.parse(e.target.result);
                     state.activities = data.activities || [];
@@ -2738,7 +2738,7 @@ export const actionHandlers = {
                             }
                         });
                     });
-                    saveState();
+                    await saveState();
                     showImportSummary(data);
                 } catch (error) {
                     alert(t('import_error_alert'));
@@ -2752,7 +2752,7 @@ export const actionHandlers = {
         if (!file) return;
         showModal(t('import_schedule_confirm_title'), t('import_schedule_confirm_text'), () => {
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 try {
                     const data = JSON.parse(e.target.result);
                     state.activities = data.activities || [];
@@ -2776,7 +2776,7 @@ export const actionHandlers = {
                     state.students = [];
                     state.classEntries = {};
                     
-                    saveState();
+                    await saveState();
                     alert(t('import_success_alert'));
                     window.location.reload();
                 } catch (error) {
@@ -2786,11 +2786,43 @@ export const actionHandlers = {
             reader.readAsText(file);
         });
     },
+    'choose-data-file': async () => {
+        const success = await pickExistingDataFile();
+        if (!success && state.dataPersistenceStatus === 'permission-denied') {
+            alert(t('data_file_permission_denied_alert'));
+        } else if (!success && state.dataPersistenceStatus === 'error' && state.dataPersistenceError) {
+            alert(`${t('data_file_error_alert')}: ${state.dataPersistenceError}`);
+        }
+    },
+    'create-data-file': async () => {
+        const success = await createDataFileWithCurrentState();
+        if (success) {
+            alert(t('data_file_created_success'));
+        } else if (state.dataPersistenceStatus === 'permission-denied') {
+            alert(t('data_file_permission_denied_alert'));
+        } else if (state.dataPersistenceStatus === 'error' && state.dataPersistenceError) {
+            alert(`${t('data_file_error_alert')}: ${state.dataPersistenceError}`);
+        }
+    },
+    'reload-data-file': async () => {
+        const success = await reloadDataFromConfiguredFile();
+        if (!success && state.dataPersistenceStatus === 'error' && state.dataPersistenceError) {
+            alert(`${t('data_file_error_alert')}: ${state.dataPersistenceError}`);
+        }
+    },
+    'clear-data-file-selection': async () => {
+        await clearConfiguredDataFile();
+        alert(t('data_file_cleared_alert'));
+    },
     'delete-all-data': () => {
         showModal(t('delete_all_data_confirm_title'), t('delete_all_data_confirm_text'), () => {
-            localStorage.removeItem('teacherDashboardData');
-            alert(t('delete_all_data_success_alert'));
-            window.location.reload();
+            resetStateToDefaults();
+            saveState().then(() => {
+                alert(t('delete_all_data_success_alert'));
+                window.location.reload();
+            }).catch(() => {
+                alert(t('data_file_error_alert'));
+            });
         });
     },
     'show-privacy-policy': () => {

@@ -2959,8 +2959,101 @@ export function renderSettingsView() {
     }
 
     // --- Data Tab Content ---
+    const dataPersistenceStatusKey = `data_file_status_${state.dataPersistenceStatus || 'unconfigured'}`;
+    const statusText = t(dataPersistenceStatusKey);
+    const statusClassesMap = {
+        saved: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+        ready: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+        unconfigured: 'bg-gray-200 text-gray-700 dark:bg-gray-800/60 dark:text-gray-200',
+        'permission-denied': 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+        error: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
+        unsupported: 'bg-gray-200 text-gray-700 dark:bg-gray-800/60 dark:text-gray-200'
+    };
+    const statusClass = statusClassesMap[state.dataPersistenceStatus] || statusClassesMap.unconfigured;
+    const canUsePersistence = state.dataPersistenceSupported;
+    const hasConfiguredFile = Boolean(state.dataFileHandle || state.dataFileName);
+    const canClearConfig = hasConfiguredFile || state.dataPersistenceStatus === 'permission-denied';
+    const chooseDisabled = canUsePersistence ? '' : 'disabled aria-disabled="true"';
+    const chooseClasses = canUsePersistence
+        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+        : 'bg-blue-400 text-white cursor-not-allowed opacity-70';
+    const createDisabled = canUsePersistence ? '' : 'disabled aria-disabled="true"';
+    const createClasses = canUsePersistence
+        ? 'bg-green-600 hover:bg-green-700 text-white'
+        : 'bg-green-400 text-white cursor-not-allowed opacity-70';
+    const reloadEnabled = Boolean(state.dataFileHandle) && state.dataPersistenceStatus !== 'permission-denied';
+    const reloadDisabled = reloadEnabled ? '' : 'disabled aria-disabled="true"';
+    const reloadClasses = reloadEnabled
+        ? 'bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200'
+        : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-70 dark:bg-gray-800 dark:text-gray-500';
+    const clearDisabled = canClearConfig ? '' : 'disabled aria-disabled="true"';
+    const clearClasses = canClearConfig
+        ? 'bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200'
+        : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-70 dark:bg-gray-800 dark:text-gray-500';
+
+    const dataFileInfo = hasConfiguredFile
+        ? `<p class="text-sm text-gray-600 dark:text-gray-300"><strong>${t('data_file_current_label')}</strong> ${escapeHtml(state.dataFileName)}</p>`
+        : `<p class="text-sm text-gray-600 dark:text-gray-300">${t('data_file_not_configured')}</p>`;
+
+    const errorInfo = state.dataPersistenceStatus === 'error' && state.dataPersistenceError
+        ? `<div class="mt-3 text-sm text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 border border-red-200 dark:border-red-700 rounded-md p-3">
+                <strong class="block">${t('data_file_error_label')}</strong>
+                <span class="break-all">${escapeHtml(state.dataPersistenceError)}</span>
+            </div>`
+        : '';
+
+    const permissionInfo = state.dataPersistenceStatus === 'permission-denied'
+        ? `<div class="mt-3 text-sm text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-700 rounded-md p-3">
+                ${t('data_file_permission_help')}
+            </div>`
+        : '';
+
+    const supportInfo = !canUsePersistence
+        ? `<div class="mt-3 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-3">
+                ${t('data_persistence_not_supported')}
+            </div>`
+        : '';
+
     const dataTabContent = `
-        <div class="max-w-xl mx-auto">
+        <div class="max-w-3xl mx-auto space-y-6">
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                            <i data-lucide="database" class="w-5 h-5"></i>
+                            ${t('data_file_section_title')}
+                        </h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">${t('data_file_section_description')}</p>
+                    </div>
+                    <span class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${statusClass}">
+                        ${statusText}
+                    </span>
+                </div>
+                <div class="mt-4 space-y-3">
+                    ${dataFileInfo}
+                    ${errorInfo}
+                    ${permissionInfo}
+                    ${supportInfo}
+                    <div class="grid sm:grid-cols-2 gap-3">
+                        <button data-action="choose-data-file" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${chooseClasses}" ${chooseDisabled}>
+                            <i data-lucide="folder-open" class="w-5 h-5"></i>
+                            <span>${t('data_file_choose_button')}</span>
+                        </button>
+                        <button data-action="create-data-file" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${createClasses}" ${createDisabled}>
+                            <i data-lucide="file-plus" class="w-5 h-5"></i>
+                            <span>${t('data_file_create_button')}</span>
+                        </button>
+                        <button data-action="reload-data-file" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${reloadClasses}" ${reloadDisabled}>
+                            <i data-lucide="rotate-cw" class="w-5 h-5"></i>
+                            <span>${t('data_file_reload_button')}</span>
+                        </button>
+                        <button data-action="clear-data-file-selection" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${clearClasses}" ${clearDisabled}>
+                            <i data-lucide="unlink" class="w-5 h-5"></i>
+                            <span>${t('data_file_clear_button')}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
             <div class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 p-4 rounded-r-lg">
                 <h3 class="text-lg font-semibold text-red-800 dark:text-red-300 flex items-center gap-2"><i data-lucide="alert-triangle" class="w-5 h-5"></i> ${t('danger_zone_title')}</h3>
                 <div class="mt-4 space-y-2">
