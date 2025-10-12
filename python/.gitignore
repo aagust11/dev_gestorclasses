@@ -1,0 +1,14 @@
+# Virtual environments
+.venv/
+__pycache__/
+
+# PyInstaller artefacts
+build/
+dist/
+*.spec
+
+# Generated static assets for packaging
+assets/
+
+# macOS metadata
+.DS_Store

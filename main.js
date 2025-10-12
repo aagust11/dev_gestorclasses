@@ -343,6 +343,51 @@ function updateThemeSwitcherUI(theme) {
 }
 
 
+async function waitForPywebview() {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    if (window.pywebview?.api) {
+        return;
+    }
+
+    await new Promise(resolve => {
+        let settled = false;
+
+        const markResolved = () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+        };
+
+        function onReady() {
+            window.removeEventListener('pywebviewready', onReady);
+            clearInterval(checkInterval);
+            markResolved();
+        }
+
+        const checkInterval = setInterval(() => {
+            if (window.pywebview?.api) {
+                window.removeEventListener('pywebviewready', onReady);
+                clearInterval(checkInterval);
+                markResolved();
+            }
+        }, 50);
+
+        if (window.addEventListener) {
+            window.addEventListener('pywebviewready', onReady, { once: true });
+        }
+
+        setTimeout(() => {
+            window.removeEventListener('pywebviewready', onReady);
+            clearInterval(checkInterval);
+            markResolved();
+        }, 3000);
+    });
+}
+
+
 async function init() {
     const savedTheme = localStorage.getItem('theme') || 'system';
     setTheme(savedTheme);
@@ -352,6 +397,7 @@ async function init() {
         updateNavButtons();
     });
 
+    await waitForPywebview();
     await loadState();
     render();
     updateNavButtons();
