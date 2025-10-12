@@ -25,6 +25,8 @@ import {
 
 const pastelColors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A0C4FF', '#BDB2FF', '#FFC6FF'];
 
+const initialFilePersistenceSupport = isFilePersistenceSupported();
+
 // El estado central de la aplicación.
 export const LEARNING_ACTIVITY_STATUS = {
     SCHEDULED: 'scheduled',
@@ -82,18 +84,19 @@ export const state = {
     dataFileName: '',
     dataPersistenceMode: 'file',
     databaseConfig: null,
-    filePersistenceSupported: isFilePersistenceSupported,
-    dataPersistenceSupported: isFilePersistenceSupported,
-    dataPersistenceStatus: isFilePersistenceSupported ? 'unconfigured' : 'unsupported',
+    filePersistenceSupported: initialFilePersistenceSupport,
+    dataPersistenceSupported: initialFilePersistenceSupport,
+    dataPersistenceStatus: initialFilePersistenceSupport ? 'unconfigured' : 'unsupported',
     dataPersistenceError: null,
 };
 
 function updatePersistenceSupportFlag() {
-    state.filePersistenceSupported = isFilePersistenceSupported;
+    const supported = isFilePersistenceSupported();
+    state.filePersistenceSupported = supported;
     if (state.dataPersistenceMode === 'database') {
         state.dataPersistenceSupported = true;
     } else {
-        state.dataPersistenceSupported = isFilePersistenceSupported;
+        state.dataPersistenceSupported = supported;
     }
 }
 
@@ -516,7 +519,7 @@ export async function saveState() {
             state.dataPersistenceStatus = 'error';
             state.dataPersistenceError = error.message || String(error);
         }
-    } else if (isFilePersistenceSupported) {
+    } else if (isFilePersistenceSupported()) {
         state.dataPersistenceStatus = 'unconfigured';
         state.dataPersistenceError = null;
     } else {
@@ -569,7 +572,7 @@ export async function loadState() {
         return;
     }
 
-    if (!isFilePersistenceSupported) {
+    if (!isFilePersistenceSupported()) {
         state.dataPersistenceSupported = false;
         state.dataFileHandle = null;
         state.dataFileName = '';
@@ -616,7 +619,7 @@ export async function pickExistingDataFile() {
     if (state.dataPersistenceMode !== 'file') {
         return false;
     }
-    if (!isFilePersistenceSupported) {
+    if (!isFilePersistenceSupported()) {
         return false;
     }
 
@@ -648,7 +651,7 @@ export async function createDataFileWithCurrentState() {
     if (state.dataPersistenceMode !== 'file') {
         return false;
     }
-    if (!isFilePersistenceSupported) {
+    if (!isFilePersistenceSupported()) {
         return false;
     }
 
@@ -701,7 +704,7 @@ export async function reloadDataFromConfiguredFile() {
 export async function clearConfiguredDataFile() {
     state.dataFileHandle = null;
     state.dataFileName = '';
-    if (isFilePersistenceSupported) {
+    if (isFilePersistenceSupported()) {
         try {
             await clearSavedFileHandle();
         } catch (error) {
@@ -709,7 +712,7 @@ export async function clearConfiguredDataFile() {
         }
     }
     if (state.dataPersistenceMode === 'file') {
-        state.dataPersistenceStatus = isFilePersistenceSupported ? 'unconfigured' : 'unsupported';
+        state.dataPersistenceStatus = isFilePersistenceSupported() ? 'unconfigured' : 'unsupported';
         state.dataPersistenceError = null;
     }
 }
@@ -799,7 +802,7 @@ export async function switchDataPersistenceMode(mode) {
         }
     }
 
-    if (!isFilePersistenceSupported) {
+    if (!isFilePersistenceSupported()) {
         state.dataFileHandle = null;
         state.dataFileName = '';
         state.dataPersistenceStatus = 'unsupported';
