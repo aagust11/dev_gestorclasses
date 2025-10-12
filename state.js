@@ -1,6 +1,17 @@
 // state.js: Gestiona el estado global y la persistencia de datos.
 
 import { createDefaultEvaluationConfig, normalizeEvaluationConfig, cloneEvaluationConfig } from './evaluation.js';
+import {
+    isFilePersistenceSupported,
+    getSavedFileHandle,
+    saveFileHandle,
+    clearSavedFileHandle,
+    requestExistingDataFile,
+    requestNewDataFile,
+    ensureFilePermission,
+    readDataFromFile,
+    writeDataToFile
+} from './filePersistence.js';
 
 const pastelColors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A0C4FF', '#BDB2FF', '#FFC6FF'];
 
@@ -57,6 +68,11 @@ export const state = {
     evaluationSettingsFeedback: {},
     termGradeRecords: {},
     termGradeExpandedCompetencies: {},
+    dataFileHandle: null,
+    dataFileName: '',
+    dataPersistenceSupported: isFilePersistenceSupported,
+    dataPersistenceStatus: isFilePersistenceSupported ? 'unconfigured' : 'unsupported',
+    dataPersistenceError: null,
 };
 
 function ensureSavedEvaluationConfig(classId) {
@@ -272,17 +288,8 @@ export function getRandomPastelColor() {
     return availableColors.length > 0 ? availableColors[0] : pastelColors[Math.floor(Math.random() * pastelColors.length)];
 }
 
-let saveTimeout;
-export function saveState() {
-    state.learningActivities.forEach(activity => {
-        if (!activity || activity.statusIsManual) {
-            return;
-        }
-        const computedStatus = calculateLearningActivityStatus(activity);
-        activity.status = computedStatus;
-    });
-
-    const dataToSave = {
+function buildPersistedDataPayload() {
+    return {
         activities: state.activities,
         learningActivities: state.learningActivities,
         students: state.students,
@@ -295,7 +302,7 @@ export function saveState() {
         terms: state.terms,
         selectedTermId: state.selectedTermId,
         holidays: state.holidays,
-        settingsActiveTab: state.settingsActiveTab, // Guardar la pestaña activa
+        settingsActiveTab: state.settingsActiveTab,
         studentTimelineFilter: state.studentTimelineFilter,
         evaluationActiveTab: state.evaluationActiveTab,
         selectedEvaluationClassId: state.selectedEvaluationClassId,
@@ -306,82 +313,65 @@ export function saveState() {
         termGradeRecords: state.termGradeRecords,
         termGradeExpandedCompetencies: state.termGradeExpandedCompetencies,
     };
-    localStorage.setItem('teacherDashboardData', JSON.stringify(dataToSave));
-    
-    const indicator = document.getElementById('save-indicator');
-    if (indicator) {
-        indicator.classList.add('show');
-        lucide.createIcons({
-            nodes: [indicator.querySelector('i')]
-        });
-
-        clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(() => {
-            indicator.classList.remove('show');
-        }, 1500);
-    }
 }
 
-export function loadState() {
-    const savedData = localStorage.getItem('teacherDashboardData');
-    if (savedData) {
-        const parsedData = JSON.parse(savedData);
-        state.activities = parsedData.activities || [];
-        state.learningActivities = (parsedData.learningActivities || []).map(activity => {
-            const normalized = {
-                ...activity,
-                criteriaRefs: Array.isArray(activity?.criteriaRefs) ? activity.criteriaRefs : [],
-                createdAt: activity?.createdAt || new Date().toISOString(),
-                updatedAt: activity?.updatedAt || activity?.createdAt || new Date().toISOString(),
-                startDate: activity?.startDate || '',
-                endDate: activity?.endDate || '',
-                weight: typeof activity?.weight === 'number' && !Number.isNaN(activity.weight)
-                    ? activity.weight
-                    : 1,
-                statusIsManual: Boolean(activity?.statusIsManual),
-                shortCode: typeof activity?.shortCode === 'string' ? activity.shortCode : '',
-            };
-            normalized.rubric = normalizeRubricStructure(activity?.rubric);
-            normalized.status = calculateLearningActivityStatus(normalized);
-            return normalized;
-        });
-        state.students = parsedData.students || [];
-        state.timeSlots = parsedData.timeSlots || [];
-        state.schedule = parsedData.schedule || {};
-        state.scheduleOverrides = parsedData.scheduleOverrides || [];
-        state.classEntries = parsedData.classEntries || {};
-        state.courseStartDate = parsedData.courseStartDate || '';
-        state.courseEndDate = parsedData.courseEndDate || '';
-        state.terms = parsedData.terms || [];
-        state.selectedTermId = parsedData.selectedTermId || 'all';
-        state.holidays = parsedData.holidays || [];
-        state.settingsActiveTab = parsedData.settingsActiveTab || 'calendar'; // Cargar la pestaña activa
-        state.studentTimelineFilter = parsedData.studentTimelineFilter || 'all';
-        state.evaluationActiveTab = parsedData.evaluationActiveTab || 'activities';
-        state.selectedEvaluationClassId = parsedData.selectedEvaluationClassId || null;
-        state.evaluationSelectedTermId = parsedData.evaluationSelectedTermId || 'all';
-        state.termGradeCalculationMode = parsedData.termGradeCalculationMode === 'accumulated'
-            ? 'accumulated'
-            : 'dates';
-        const rawEvaluationSettings = parsedData.evaluationSettings || {};
-        state.evaluationSettings = {};
-        Object.entries(rawEvaluationSettings).forEach(([classId, config]) => {
-            if (!classId) return;
-            state.evaluationSettings[classId] = normalizeEvaluationConfig(config);
-        });
-        state.evaluationSettingsDraft = {};
-        Object.entries(state.evaluationSettings).forEach(([classId, config]) => {
-            state.evaluationSettingsDraft[classId] = cloneEvaluationConfig(config);
-        });
-        state.settingsEvaluationSelectedClassId = parsedData.settingsEvaluationSelectedClassId || null;
-        state.termGradeRecords = parsedData.termGradeRecords && typeof parsedData.termGradeRecords === 'object'
-            ? parsedData.termGradeRecords
-            : {};
-        state.termGradeExpandedCompetencies = (parsedData.termGradeExpandedCompetencies && typeof parsedData.termGradeExpandedCompetencies === 'object')
-            ? parsedData.termGradeExpandedCompetencies
-            : {};
-        state.evaluationSettingsFeedback = {};
-    }
+function populateStateFromPersistedData(parsedData = {}) {
+    state.activities = parsedData.activities || [];
+    state.learningActivities = (parsedData.learningActivities || []).map(activity => {
+        const normalized = {
+            ...activity,
+            criteriaRefs: Array.isArray(activity?.criteriaRefs) ? activity.criteriaRefs : [],
+            createdAt: activity?.createdAt || new Date().toISOString(),
+            updatedAt: activity?.updatedAt || activity?.createdAt || new Date().toISOString(),
+            startDate: activity?.startDate || '',
+            endDate: activity?.endDate || '',
+            weight: typeof activity?.weight === 'number' && !Number.isNaN(activity.weight)
+                ? activity.weight
+                : 1,
+            statusIsManual: Boolean(activity?.statusIsManual),
+            shortCode: typeof activity?.shortCode === 'string' ? activity.shortCode : '',
+        };
+        normalized.rubric = normalizeRubricStructure(activity?.rubric);
+        normalized.status = calculateLearningActivityStatus(normalized);
+        return normalized;
+    });
+    state.students = parsedData.students || [];
+    state.timeSlots = parsedData.timeSlots || [];
+    state.schedule = parsedData.schedule || {};
+    state.scheduleOverrides = parsedData.scheduleOverrides || [];
+    state.classEntries = parsedData.classEntries || {};
+    state.courseStartDate = parsedData.courseStartDate || '';
+    state.courseEndDate = parsedData.courseEndDate || '';
+    state.terms = parsedData.terms || [];
+    state.selectedTermId = parsedData.selectedTermId || 'all';
+    state.holidays = parsedData.holidays || [];
+    state.settingsActiveTab = parsedData.settingsActiveTab || 'calendar';
+    state.studentTimelineFilter = parsedData.studentTimelineFilter || 'all';
+    state.evaluationActiveTab = parsedData.evaluationActiveTab || 'activities';
+    state.selectedEvaluationClassId = parsedData.selectedEvaluationClassId || null;
+    state.evaluationSelectedTermId = parsedData.evaluationSelectedTermId || 'all';
+    state.termGradeCalculationMode = parsedData.termGradeCalculationMode === 'accumulated'
+        ? 'accumulated'
+        : 'dates';
+
+    const rawEvaluationSettings = parsedData.evaluationSettings || {};
+    state.evaluationSettings = {};
+    Object.entries(rawEvaluationSettings).forEach(([classId, config]) => {
+        if (!classId) return;
+        state.evaluationSettings[classId] = normalizeEvaluationConfig(config);
+    });
+    state.evaluationSettingsDraft = {};
+    Object.entries(state.evaluationSettings).forEach(([classId, config]) => {
+        state.evaluationSettingsDraft[classId] = cloneEvaluationConfig(config);
+    });
+    state.settingsEvaluationSelectedClassId = parsedData.settingsEvaluationSelectedClassId || null;
+    state.termGradeRecords = parsedData.termGradeRecords && typeof parsedData.termGradeRecords === 'object'
+        ? parsedData.termGradeRecords
+        : {};
+    state.termGradeExpandedCompetencies = (parsedData.termGradeExpandedCompetencies && typeof parsedData.termGradeExpandedCompetencies === 'object')
+        ? parsedData.termGradeExpandedCompetencies
+        : {};
+    state.evaluationSettingsFeedback = {};
 
     state.activities.forEach(activity => {
         if (!activity.competencies) {
@@ -403,4 +393,205 @@ export function loadState() {
     state.pendingCompetencyHighlightId = null;
     state.activeLearningActivityRubricId = null;
     state.learningActivityRubricTab = 'configuration';
+    state.learningActivityRubricFilter = '';
+    state.learningActivityRubricReturnView = null;
+    state.pendingEvaluationHighlightActivityId = null;
+}
+
+async function persistDataToFile(handle) {
+    if (!handle) {
+        throw new Error('No file handle configured');
+    }
+    const payload = buildPersistedDataPayload();
+    const serialized = JSON.stringify(payload, null, 2);
+    await writeDataToFile(handle, serialized);
+}
+
+async function loadDataFromHandle(handle) {
+    if (!handle) {
+        throw new Error('No file handle configured');
+    }
+    const content = await readDataFromFile(handle);
+    if (!content || content.trim().length === 0) {
+        populateStateFromPersistedData({});
+        return;
+    }
+    try {
+        const parsedData = JSON.parse(content);
+        populateStateFromPersistedData(parsedData);
+        state.dataPersistenceStatus = 'ready';
+        state.dataPersistenceError = null;
+    } catch (error) {
+        console.error('Error parsing data file', error);
+        state.dataPersistenceStatus = 'error';
+        state.dataPersistenceError = error.message || String(error);
+    }
+}
+
+let saveTimeout;
+export async function saveState() {
+    state.learningActivities.forEach(activity => {
+        if (!activity || activity.statusIsManual) {
+            return;
+        }
+        const computedStatus = calculateLearningActivityStatus(activity);
+        activity.status = computedStatus;
+    });
+
+    if (state.dataFileHandle) {
+        try {
+            await persistDataToFile(state.dataFileHandle);
+            state.dataPersistenceStatus = 'saved';
+            state.dataPersistenceError = null;
+        } catch (error) {
+            console.error('Error saving data to file', error);
+            state.dataPersistenceStatus = 'error';
+            state.dataPersistenceError = error.message || String(error);
+        }
+    } else if (state.dataPersistenceSupported) {
+        state.dataPersistenceStatus = 'unconfigured';
+    }
+
+    const indicator = document.getElementById('save-indicator');
+    if (indicator) {
+        indicator.classList.add('show');
+        lucide.createIcons({
+            nodes: [indicator.querySelector('i')]
+        });
+
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            indicator.classList.remove('show');
+        }, 1500);
+    }
+}
+
+export async function loadState() {
+    if (!state.dataPersistenceSupported) {
+        populateStateFromPersistedData({});
+        return;
+    }
+
+    try {
+        const savedHandle = await getSavedFileHandle();
+        if (savedHandle) {
+            const hasPermission = await ensureFilePermission(savedHandle);
+            if (hasPermission) {
+                state.dataFileHandle = savedHandle;
+                state.dataFileName = savedHandle.name || '';
+                await loadDataFromHandle(savedHandle);
+            } else {
+                populateStateFromPersistedData({});
+                state.dataFileHandle = null;
+                state.dataFileName = savedHandle.name || '';
+                state.dataPersistenceStatus = 'permission-denied';
+                state.dataPersistenceError = null;
+            }
+        } else {
+            populateStateFromPersistedData({});
+            state.dataFileHandle = null;
+            state.dataFileName = '';
+            state.dataPersistenceStatus = 'unconfigured';
+            state.dataPersistenceError = null;
+        }
+    } catch (error) {
+        console.error('Error loading data from configured file', error);
+        state.dataPersistenceStatus = 'error';
+        state.dataPersistenceError = error.message || String(error);
+    }
+}
+
+export function resetStateToDefaults() {
+    populateStateFromPersistedData({});
+}
+
+export async function pickExistingDataFile() {
+    if (!state.dataPersistenceSupported) {
+        return false;
+    }
+
+    try {
+        const handle = await requestExistingDataFile();
+        if (!handle) {
+            return false;
+        }
+        const hasPermission = await ensureFilePermission(handle);
+        if (!hasPermission) {
+            state.dataPersistenceStatus = 'permission-denied';
+            state.dataPersistenceError = null;
+            return false;
+        }
+        state.dataFileHandle = handle;
+        state.dataFileName = handle.name || '';
+        await saveFileHandle(handle);
+        await loadDataFromHandle(handle);
+        return true;
+    } catch (error) {
+        console.error('Error selecting data file', error);
+        state.dataPersistenceStatus = 'error';
+        state.dataPersistenceError = error.message || String(error);
+        return false;
+    }
+}
+
+export async function createDataFileWithCurrentState() {
+    if (!state.dataPersistenceSupported) {
+        return false;
+    }
+
+    try {
+        const handle = await requestNewDataFile();
+        if (!handle) {
+            return false;
+        }
+        const hasPermission = await ensureFilePermission(handle);
+        if (!hasPermission) {
+            state.dataPersistenceStatus = 'permission-denied';
+            state.dataPersistenceError = null;
+            return false;
+        }
+        state.dataFileHandle = handle;
+        state.dataFileName = handle.name || '';
+        await saveFileHandle(handle);
+        await persistDataToFile(handle);
+        state.dataPersistenceStatus = 'saved';
+        state.dataPersistenceError = null;
+        return true;
+    } catch (error) {
+        console.error('Error creating data file', error);
+        state.dataPersistenceStatus = 'error';
+        state.dataPersistenceError = error.message || String(error);
+        return false;
+    }
+}
+
+export async function reloadDataFromConfiguredFile() {
+    if (!state.dataFileHandle) {
+        return false;
+    }
+    try {
+        await loadDataFromHandle(state.dataFileHandle);
+        state.dataPersistenceStatus = 'ready';
+        state.dataPersistenceError = null;
+        return true;
+    } catch (error) {
+        console.error('Error reloading data file', error);
+        state.dataPersistenceStatus = 'error';
+        state.dataPersistenceError = error.message || String(error);
+        return false;
+    }
+}
+
+export async function clearConfiguredDataFile() {
+    state.dataFileHandle = null;
+    state.dataFileName = '';
+    if (state.dataPersistenceSupported) {
+        try {
+            await clearSavedFileHandle();
+        } catch (error) {
+            console.error('Error clearing stored file handle', error);
+        }
+    }
+    state.dataPersistenceStatus = state.dataPersistenceSupported ? 'unconfigured' : 'unsupported';
+    state.dataPersistenceError = null;
 }
