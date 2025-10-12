@@ -49,7 +49,7 @@ Si prefieres evitar el uso de un servidor local, puedes ejecutar la aplicación 
    python app.py
    ```
 
-La interfaz se abrirá en una ventana nativa y los datos se guardarán automáticamente en el archivo `gestor-classes-data.jspn` ubicado junto al ejecutable o al script de Python.
+La interfaz se abrirá en una ventana nativa y los datos se guardarán automáticamente en el archivo `gestor-classes-data.json` ubicado junto al ejecutable o al script de Python.
 
 ### Crear un ejecutable independiente
 
@@ -64,7 +64,7 @@ pyinstaller --name gestor-classes --add-data "index.html:." --add-data "style.cs
   --add-data "locales:locales" --noconfirm app.py
 ```
 
-El ejecutable generado (en la carpeta `dist/gestor-classes`) seguirá guardando los datos en `gestor-classes-data.jspn` en la misma carpeta.
+El ejecutable generado (en la carpeta `dist/gestor-classes`) seguirá guardando los datos en `gestor-classes-data.json` en la misma carpeta.
 
 ## Contribuciones
 
