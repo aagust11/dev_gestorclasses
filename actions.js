@@ -100,6 +100,19 @@ function ensureTermGradeRecordStructure(classId, termId) {
     return record;
 }
 
+function ensureTermGradeExpansionState(classId, termId) {
+    if (!state.termGradeExpandedCompetencies || typeof state.termGradeExpandedCompetencies !== 'object') {
+        state.termGradeExpandedCompetencies = {};
+    }
+    if (!state.termGradeExpandedCompetencies[classId] || typeof state.termGradeExpandedCompetencies[classId] !== 'object') {
+        state.termGradeExpandedCompetencies[classId] = {};
+    }
+    if (!state.termGradeExpandedCompetencies[classId][termId] || typeof state.termGradeExpandedCompetencies[classId][termId] !== 'object') {
+        state.termGradeExpandedCompetencies[classId][termId] = {};
+    }
+    return state.termGradeExpandedCompetencies[classId][termId];
+}
+
 function ensureTermGradeStudent(record, studentId) {
     if (!record.students[studentId] || typeof record.students[studentId] !== 'object') {
         record.students[studentId] = {
@@ -1062,6 +1075,31 @@ export const actionHandlers = {
         saveState();
     },
 
+    'recalculate-term-final-grades': (id, element) => {
+        const classId = element?.dataset?.classId;
+        if (!classId) {
+            return;
+        }
+        const termId = element?.dataset?.termId || 'all';
+        const calculated = calculateTermGradesForClassTerm(classId, termId, state.termGradeCalculationMode);
+        const record = ensureTermGradeRecordStructure(classId, termId);
+
+        Object.entries(calculated.students).forEach(([studentId, computedStudent]) => {
+            const studentRecord = ensureTermGradeStudent(record, studentId);
+            const computedFinal = computedStudent?.final || createEmptyTermGradeEntry();
+            studentRecord.final = {
+                numericScore: computedFinal.numericScore || '',
+                levelId: computedFinal.levelId || '',
+                isManual: false,
+                noteSymbols: Array.isArray(computedFinal.noteSymbols)
+                    ? [...computedFinal.noteSymbols]
+                    : [],
+            };
+        });
+
+        saveState();
+    },
+
     'update-term-grade-numeric': (id, element) => {
         const classId = element?.dataset?.classId;
         const studentId = element?.dataset?.studentId;
@@ -1102,6 +1140,18 @@ export const actionHandlers = {
     'set-term-grade-calculation-mode': (id, element) => {
         const value = element?.value === 'accumulated' ? 'accumulated' : 'dates';
         state.termGradeCalculationMode = value;
+        saveState();
+    },
+
+    'toggle-term-grade-competency': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const competencyId = element?.dataset?.competencyId;
+        if (!classId || !competencyId) {
+            return;
+        }
+        const termId = element?.dataset?.termId || 'all';
+        const termState = ensureTermGradeExpansionState(classId, termId);
+        termState[competencyId] = !termState[competencyId];
         saveState();
     },
 

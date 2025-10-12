@@ -142,6 +142,7 @@
   "evaluation_grades_no_criteria": "No criteria",
   "evaluation_grades_student_column": "Students",
   "evaluation_term_grades_calculate_button": "Calculate",
+  "evaluation_term_grades_recalculate_final_button": "Recalculate final grade",
   "evaluation_term_grades_mode_label": "Calculation type",
   "evaluation_term_grades_mode_dates": "By dates",
   "evaluation_term_grades_mode_accumulated": "Accumulated",

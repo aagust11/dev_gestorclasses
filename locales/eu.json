@@ -160,6 +160,7 @@
   "activities_selected_criteria_label": "Esleitutako irizpideak",
   "activities_selected_criteria_help": "Jarduera honen bidez landuko diren ebaluazio-irizpideak hautatu.",
   "evaluation_term_grades_calculate_button": "Kalkulatu",
+  "evaluation_term_grades_recalculate_final_button": "Nota orokorra birkalkulatu",
   "evaluation_term_grades_mode_label": "Kalkulu mota",
   "evaluation_term_grades_mode_dates": "Dataka",
   "evaluation_term_grades_mode_accumulated": "Metatua",
