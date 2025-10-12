@@ -199,9 +199,7 @@ function handleAction(action, element, event) {
         'set-evaluation-no-evidence-behavior', 'set-evaluation-no-evidence-level',
         'set-evaluation-np-treatment', 'save-evaluation-config', 'reset-evaluation-config',
         'set-term-grade-calculation-mode', 'calculate-term-grades', 'clear-term-grades', 'update-term-grade-numeric', 'update-term-grade-level',
-        'choose-data-file', 'create-data-file', 'reload-data-file', 'clear-data-file-selection',
-        'set-data-persistence-mode', 'save-database-config', 'test-database-connection',
-        'reload-database-data', 'push-database-data', 'disconnect-database'
+        'choose-data-file', 'create-data-file', 'reload-data-file', 'clear-data-file-selection'
     ];
     const forceRenderActions = ['toggle-rubric-not-presented', 'toggle-rubric-delivered-late'];
     const shouldForceRender = forceRenderActions.includes(action);

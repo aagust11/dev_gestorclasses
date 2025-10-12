@@ -2959,9 +2959,6 @@ export function renderSettingsView() {
     }
 
     // --- Data Tab Content ---
-    const persistenceMode = state.dataPersistenceMode || 'file';
-    const isFileMode = persistenceMode === 'file';
-    const isDatabaseMode = persistenceMode === 'database';
     const dataPersistenceStatusKey = `data_file_status_${state.dataPersistenceStatus || 'unconfigured'}`;
     const statusText = t(dataPersistenceStatusKey);
     const statusClassesMap = {
@@ -2973,9 +2970,30 @@ export function renderSettingsView() {
         unsupported: 'bg-gray-200 text-gray-700 dark:bg-gray-800/60 dark:text-gray-200'
     };
     const statusClass = statusClassesMap[state.dataPersistenceStatus] || statusClassesMap.unconfigured;
+    const canUsePersistence = state.dataPersistenceSupported;
     const hasConfiguredFile = Boolean(state.dataFileHandle || state.dataFileName);
-    const filePersistenceAvailable = Boolean(state.filePersistenceSupported);
-    const databaseConfigured = Boolean(state.databaseConfig?.baseUrl);
+    const canClearConfig = hasConfiguredFile || state.dataPersistenceStatus === 'permission-denied';
+    const chooseDisabled = canUsePersistence ? '' : 'disabled aria-disabled="true"';
+    const chooseClasses = canUsePersistence
+        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+        : 'bg-blue-400 text-white cursor-not-allowed opacity-70';
+    const createDisabled = canUsePersistence ? '' : 'disabled aria-disabled="true"';
+    const createClasses = canUsePersistence
+        ? 'bg-green-600 hover:bg-green-700 text-white'
+        : 'bg-green-400 text-white cursor-not-allowed opacity-70';
+    const reloadEnabled = Boolean(state.dataFileHandle) && state.dataPersistenceStatus !== 'permission-denied';
+    const reloadDisabled = reloadEnabled ? '' : 'disabled aria-disabled="true"';
+    const reloadClasses = reloadEnabled
+        ? 'bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200'
+        : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-70 dark:bg-gray-800 dark:text-gray-500';
+    const clearDisabled = canClearConfig ? '' : 'disabled aria-disabled="true"';
+    const clearClasses = canClearConfig
+        ? 'bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200'
+        : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-70 dark:bg-gray-800 dark:text-gray-500';
+
+    const dataFileInfo = hasConfiguredFile
+        ? `<p class="text-sm text-gray-600 dark:text-gray-300"><strong>${t('data_file_current_label')}</strong> ${escapeHtml(state.dataFileName)}</p>`
+        : `<p class="text-sm text-gray-600 dark:text-gray-300">${t('data_file_not_configured')}</p>`;
 
     const errorInfo = state.dataPersistenceStatus === 'error' && state.dataPersistenceError
         ? `<div class="mt-3 text-sm text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 border border-red-200 dark:border-red-700 rounded-md p-3">
@@ -2990,148 +3008,11 @@ export function renderSettingsView() {
             </div>`
         : '';
 
-    const supportInfo = isFileMode && !filePersistenceAvailable
+    const supportInfo = !canUsePersistence
         ? `<div class="mt-3 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-3">
                 ${t('data_persistence_not_supported')}
             </div>`
         : '';
-
-    const fileControls = (() => {
-        if (!isFileMode) {
-            return '';
-        }
-        const canUsePersistence = filePersistenceAvailable;
-        const canClearConfig = hasConfiguredFile || state.dataPersistenceStatus === 'permission-denied';
-        const chooseDisabled = canUsePersistence ? '' : 'disabled aria-disabled="true"';
-        const chooseClasses = canUsePersistence
-            ? 'bg-blue-600 hover:bg-blue-700 text-white'
-            : 'bg-blue-400 text-white cursor-not-allowed opacity-70';
-        const createDisabled = canUsePersistence ? '' : 'disabled aria-disabled="true"';
-        const createClasses = canUsePersistence
-            ? 'bg-green-600 hover:bg-green-700 text-white'
-            : 'bg-green-400 text-white cursor-not-allowed opacity-70';
-        const reloadEnabled = Boolean(state.dataFileHandle) && state.dataPersistenceStatus !== 'permission-denied';
-        const reloadDisabled = reloadEnabled ? '' : 'disabled aria-disabled="true"';
-        const reloadClasses = reloadEnabled
-            ? 'bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200'
-            : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-70 dark:bg-gray-800 dark:text-gray-500';
-        const clearDisabled = canClearConfig ? '' : 'disabled aria-disabled="true"';
-        const clearClasses = canClearConfig
-            ? 'bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200'
-            : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-70 dark:bg-gray-800 dark:text-gray-500';
-
-        const dataFileInfo = hasConfiguredFile
-            ? `<p class="text-sm text-gray-600 dark:text-gray-300"><strong>${t('data_file_current_label')}</strong> ${escapeHtml(state.dataFileName)}</p>`
-            : `<p class="text-sm text-gray-600 dark:text-gray-300">${t('data_file_not_configured')}</p>`;
-
-        return `
-            <div class="mt-6 space-y-3">
-                ${dataFileInfo}
-                ${errorInfo}
-                ${permissionInfo}
-                ${supportInfo}
-                <div class="grid sm:grid-cols-2 gap-3">
-                    <button data-action="choose-data-file" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${chooseClasses}" ${chooseDisabled}>
-                        <i data-lucide="folder-open" class="w-5 h-5"></i>
-                        <span>${t('data_file_choose_button')}</span>
-                    </button>
-                    <button data-action="create-data-file" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${createClasses}" ${createDisabled}>
-                        <i data-lucide="file-plus" class="w-5 h-5"></i>
-                        <span>${t('data_file_create_button')}</span>
-                    </button>
-                    <button data-action="reload-data-file" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${reloadClasses}" ${reloadDisabled}>
-                        <i data-lucide="rotate-cw" class="w-5 h-5"></i>
-                        <span>${t('data_file_reload_button')}</span>
-                    </button>
-                    <button data-action="clear-data-file-selection" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${clearClasses}" ${clearDisabled}>
-                        <i data-lucide="unlink" class="w-5 h-5"></i>
-                        <span>${t('data_file_clear_button')}</span>
-                    </button>
-                </div>
-            </div>
-        `;
-    })();
-
-    const databaseControls = (() => {
-        if (!isDatabaseMode) {
-            return '';
-        }
-
-        const baseUrlValue = escapeHtml(state.databaseConfig?.baseUrl || '');
-        const authTokenValue = escapeHtml(state.databaseConfig?.authToken || '');
-        const reloadDisabled = databaseConfigured ? '' : 'disabled aria-disabled="true"';
-        const reloadClasses = databaseConfigured
-            ? 'bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200'
-            : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-70 dark:bg-gray-800 dark:text-gray-500';
-        const pushDisabled = databaseConfigured ? '' : 'disabled aria-disabled="true"';
-        const pushClasses = databaseConfigured
-            ? 'bg-green-600 hover:bg-green-700 text-white'
-            : 'bg-green-400 text-white cursor-not-allowed opacity-70';
-        const disconnectDisabled = databaseConfigured ? '' : 'disabled aria-disabled="true"';
-        const disconnectClasses = databaseConfigured
-            ? 'bg-red-600 hover:bg-red-700 text-white'
-            : 'bg-red-400 text-white cursor-not-allowed opacity-70';
-        const databaseInfo = databaseConfigured
-            ? `<p class="text-sm text-gray-600 dark:text-gray-300"><strong>${t('database_configured_label')}</strong> <span class="break-all">${escapeHtml(state.databaseConfig.baseUrl)}</span></p>`
-            : `<p class="text-sm text-gray-600 dark:text-gray-300">${t('database_not_configured')}</p>`;
-
-        return `
-            <div class="mt-6 space-y-4">
-                ${databaseInfo}
-                ${errorInfo}
-                ${permissionInfo}
-                <div class="grid gap-4">
-                    <label class="flex flex-col gap-1">
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">${t('database_base_url_label')}</span>
-                        <input id="database-base-url" type="text" inputmode="url" autocomplete="url" class="px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="${t('database_base_url_placeholder')}" value="${baseUrlValue}" />
-                    </label>
-                    <label class="flex flex-col gap-1">
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">${t('database_auth_token_label')}</span>
-                        <input id="database-auth-token" type="password" autocomplete="off" class="px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="${t('database_auth_token_placeholder')}" value="${authTokenValue}" />
-                        <span class="text-xs text-gray-500 dark:text-gray-400">${t('database_auth_token_help')}</span>
-                    </label>
-                </div>
-                <div class="grid sm:grid-cols-2 gap-3">
-                    <button data-action="save-database-config" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white">
-                        <i data-lucide="save" class="w-5 h-5"></i>
-                        <span>${t('database_save_button')}</span>
-                    </button>
-                    <button data-action="test-database-connection" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200">
-                        <i data-lucide="activity" class="w-5 h-5"></i>
-                        <span>${t('database_test_button')}</span>
-                    </button>
-                    <button data-action="reload-database-data" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${reloadClasses}" ${reloadDisabled}>
-                        <i data-lucide="rotate-cw" class="w-5 h-5"></i>
-                        <span>${t('database_reload_button')}</span>
-                    </button>
-                    <button data-action="push-database-data" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${pushClasses}" ${pushDisabled}>
-                        <i data-lucide="upload-cloud" class="w-5 h-5"></i>
-                        <span>${t('database_push_button')}</span>
-                    </button>
-                    <button data-action="disconnect-database" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${disconnectClasses}" ${disconnectDisabled}>
-                        <i data-lucide="plug" class="w-5 h-5"></i>
-                        <span>${t('database_disconnect_button')}</span>
-                    </button>
-                </div>
-            </div>
-        `;
-    })();
-
-    const persistenceModeSelector = `
-        <div class="mt-6">
-            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-200">${t('data_persistence_mode_title')}</h4>
-            <div class="mt-3 grid sm:grid-cols-2 gap-3">
-                <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-md px-3 py-2">
-                    <input type="radio" name="data-persistence-mode" value="file" data-action="set-data-persistence-mode" data-event="change" data-mode="file" ${isFileMode ? 'checked' : ''} class="text-blue-600 border-gray-300 focus:ring-blue-500" />
-                    <span>${t('data_persistence_mode_file')}</span>
-                </label>
-                <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-md px-3 py-2">
-                    <input type="radio" name="data-persistence-mode" value="database" data-action="set-data-persistence-mode" data-event="change" data-mode="database" ${isDatabaseMode ? 'checked' : ''} class="text-blue-600 border-gray-300 focus:ring-blue-500" />
-                    <span>${t('data_persistence_mode_database')}</span>
-                </label>
-            </div>
-        </div>
-    `;
 
     const dataTabContent = `
         <div class="max-w-3xl mx-auto space-y-6">
@@ -3148,9 +3029,30 @@ export function renderSettingsView() {
                         ${statusText}
                     </span>
                 </div>
-                ${persistenceModeSelector}
-                ${isFileMode ? fileControls : ''}
-                ${isDatabaseMode ? databaseControls : ''}
+                <div class="mt-4 space-y-3">
+                    ${dataFileInfo}
+                    ${errorInfo}
+                    ${permissionInfo}
+                    ${supportInfo}
+                    <div class="grid sm:grid-cols-2 gap-3">
+                        <button data-action="choose-data-file" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${chooseClasses}" ${chooseDisabled}>
+                            <i data-lucide="folder-open" class="w-5 h-5"></i>
+                            <span>${t('data_file_choose_button')}</span>
+                        </button>
+                        <button data-action="create-data-file" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${createClasses}" ${createDisabled}>
+                            <i data-lucide="file-plus" class="w-5 h-5"></i>
+                            <span>${t('data_file_create_button')}</span>
+                        </button>
+                        <button data-action="reload-data-file" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${reloadClasses}" ${reloadDisabled}>
+                            <i data-lucide="rotate-cw" class="w-5 h-5"></i>
+                            <span>${t('data_file_reload_button')}</span>
+                        </button>
+                        <button data-action="clear-data-file-selection" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${clearClasses}" ${clearDisabled}>
+                            <i data-lucide="unlink" class="w-5 h-5"></i>
+                            <span>${t('data_file_clear_button')}</span>
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 p-4 rounded-r-lg">
                 <h3 class="text-lg font-semibold text-red-800 dark:text-red-300 flex items-center gap-2"><i data-lucide="alert-triangle" class="w-5 h-5"></i> ${t('danger_zone_title')}</h3>
