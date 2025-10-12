@@ -2,8 +2,22 @@ const DB_NAME = 'gestorClassesPersistence';
 const STORE_NAME = 'fileHandles';
 const HANDLE_KEY = 'dataFile';
 
-const supportsFileSystemAccess = typeof window !== 'undefined'
-    && ('showOpenFilePicker' in window || 'chooseFileSystemEntries' in window);
+const DEFAULT_DATA_FILE_NAME = 'gestor-classes-data.json';
+const isPywebview = typeof window !== 'undefined'
+    && typeof window.pywebview === 'object'
+    && typeof window.pywebview.api === 'object';
+
+function buildPywebviewHandle(info = {}) {
+    return {
+        id: 'pywebview-data-file',
+        name: info.name || DEFAULT_DATA_FILE_NAME,
+        kind: 'pywebview',
+        __pywebview: true,
+    };
+}
+
+const supportsFileSystemAccess = isPywebview || (typeof window !== 'undefined'
+    && ('showOpenFilePicker' in window || 'chooseFileSystemEntries' in window));
 
 function openDb() {
     return new Promise((resolve, reject) => {
@@ -22,6 +36,18 @@ function openDb() {
 export const isFilePersistenceSupported = supportsFileSystemAccess;
 
 export async function getSavedFileHandle() {
+    if (isPywebview) {
+        try {
+            if (typeof window.pywebview.api.ensure_data_file === 'function') {
+                const info = await window.pywebview.api.ensure_data_file();
+                return buildPywebviewHandle(info || {});
+            }
+        } catch (error) {
+            console.error('Error retrieving pywebview data file info', error);
+        }
+        return buildPywebviewHandle();
+    }
+
     if (!supportsFileSystemAccess) {
         return null;
     }
@@ -41,6 +67,9 @@ export async function getSavedFileHandle() {
 }
 
 export async function saveFileHandle(handle) {
+    if (handle?.__pywebview) {
+        return true;
+    }
     if (!supportsFileSystemAccess) {
         return false;
     }
@@ -55,6 +84,16 @@ export async function saveFileHandle(handle) {
 }
 
 export async function clearSavedFileHandle() {
+    if (isPywebview) {
+        try {
+            if (typeof window.pywebview.api.reset_data_file === 'function') {
+                await window.pywebview.api.reset_data_file();
+            }
+        } catch (error) {
+            console.error('Error resetting pywebview data file', error);
+        }
+        return true;
+    }
     if (!supportsFileSystemAccess) {
         return false;
     }
@@ -69,6 +108,18 @@ export async function clearSavedFileHandle() {
 }
 
 export async function requestExistingDataFile() {
+    if (isPywebview) {
+        try {
+            if (typeof window.pywebview.api.ensure_data_file === 'function') {
+                const info = await window.pywebview.api.ensure_data_file();
+                return buildPywebviewHandle(info || {});
+            }
+        } catch (error) {
+            console.error('Error ensuring pywebview data file', error);
+            throw error;
+        }
+        return buildPywebviewHandle();
+    }
     if (!supportsFileSystemAccess || !window.showOpenFilePicker) {
         throw new Error('File System Access API not available');
     }
@@ -84,7 +135,19 @@ export async function requestExistingDataFile() {
     return handle;
 }
 
-export async function requestNewDataFile(suggestedName = 'gestor-classes-dades.json') {
+export async function requestNewDataFile(suggestedName = DEFAULT_DATA_FILE_NAME) {
+    if (isPywebview) {
+        try {
+            if (typeof window.pywebview.api.ensure_data_file === 'function') {
+                const info = await window.pywebview.api.ensure_data_file();
+                return buildPywebviewHandle(info || {});
+            }
+        } catch (error) {
+            console.error('Error creating pywebview data file', error);
+            throw error;
+        }
+        return buildPywebviewHandle();
+    }
     if (!supportsFileSystemAccess || !window.showSaveFilePicker) {
         throw new Error('File System Access API not available');
     }
@@ -101,6 +164,9 @@ export async function requestNewDataFile(suggestedName = 'gestor-classes-dades.j
 }
 
 export async function ensureFilePermission(handle) {
+    if (handle?.__pywebview) {
+        return true;
+    }
     if (!handle) return false;
     if (typeof handle.queryPermission === 'function' && typeof handle.requestPermission === 'function') {
         let permission = await handle.queryPermission({ mode: 'readwrite' });
@@ -117,6 +183,12 @@ export async function ensureFilePermission(handle) {
 }
 
 export async function readDataFromFile(handle) {
+    if (handle?.__pywebview) {
+        if (typeof window.pywebview?.api?.read_data_file === 'function') {
+            return await window.pywebview.api.read_data_file();
+        }
+        return '';
+    }
     if (!handle) {
         throw new Error('No file handle provided');
     }
@@ -125,6 +197,13 @@ export async function readDataFromFile(handle) {
 }
 
 export async function writeDataToFile(handle, data) {
+    if (handle?.__pywebview) {
+        if (typeof window.pywebview?.api?.write_data_file !== 'function') {
+            throw new Error('pywebview data bridge not available');
+        }
+        await window.pywebview.api.write_data_file(String(data ?? ''));
+        return;
+    }
     if (!handle) {
         throw new Error('No file handle provided');
     }
