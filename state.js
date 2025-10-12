@@ -12,16 +12,6 @@ import {
     readDataFromFile,
     writeDataToFile
 } from './filePersistence.js';
-import {
-    getStoredDatabaseConfig,
-    saveDatabaseConfig,
-    clearDatabaseConfig,
-    fetchDataFromDatabase,
-    saveDataToDatabase,
-    testDatabaseConnection,
-    getStoredPersistenceMode,
-    savePersistenceMode
-} from './databasePersistence.js';
 
 const pastelColors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A0C4FF', '#BDB2FF', '#FFC6FF'];
 
@@ -80,26 +70,10 @@ export const state = {
     termGradeExpandedCompetencies: {},
     dataFileHandle: null,
     dataFileName: '',
-    dataPersistenceMode: 'file',
-    databaseConfig: null,
-    filePersistenceSupported: isFilePersistenceSupported,
     dataPersistenceSupported: isFilePersistenceSupported,
     dataPersistenceStatus: isFilePersistenceSupported ? 'unconfigured' : 'unsupported',
     dataPersistenceError: null,
 };
-
-function updatePersistenceSupportFlag() {
-    state.filePersistenceSupported = isFilePersistenceSupported;
-    if (state.dataPersistenceMode === 'database') {
-        state.dataPersistenceSupported = true;
-    } else {
-        state.dataPersistenceSupported = isFilePersistenceSupported;
-    }
-}
-
-function isDatabasePersistenceActive() {
-    return state.dataPersistenceMode === 'database' && state.databaseConfig;
-}
 
 function ensureSavedEvaluationConfig(classId) {
     if (!classId) {
@@ -433,14 +407,6 @@ async function persistDataToFile(handle) {
     await writeDataToFile(handle, serialized);
 }
 
-async function persistDataToDatabase(config) {
-    if (!config) {
-        throw new Error('No database configuration provided');
-    }
-    const payload = buildPersistedDataPayload();
-    await saveDataToDatabase(config, payload);
-}
-
 async function loadDataFromHandle(handle) {
     if (!handle) {
         throw new Error('No file handle configured');
@@ -462,20 +428,6 @@ async function loadDataFromHandle(handle) {
     }
 }
 
-async function loadDataFromDatabase(config) {
-    if (!config) {
-        throw new Error('No database configuration provided');
-    }
-    const data = await fetchDataFromDatabase(config);
-    if (!data || typeof data !== 'object') {
-        populateStateFromPersistedData({});
-        return;
-    }
-    populateStateFromPersistedData(data);
-    state.dataPersistenceStatus = 'ready';
-    state.dataPersistenceError = null;
-}
-
 let saveTimeout;
 export async function saveState() {
     state.learningActivities.forEach(activity => {
@@ -486,27 +438,7 @@ export async function saveState() {
         activity.status = computedStatus;
     });
 
-    if (state.dataPersistenceMode === 'database') {
-        if (isDatabasePersistenceActive()) {
-            try {
-                await persistDataToDatabase(state.databaseConfig);
-                state.dataPersistenceStatus = 'saved';
-                state.dataPersistenceError = null;
-            } catch (error) {
-                console.error('Error saving data to database', error);
-                if (error?.code === 'permission-denied') {
-                    state.dataPersistenceStatus = 'permission-denied';
-                    state.dataPersistenceError = null;
-                } else {
-                    state.dataPersistenceStatus = 'error';
-                    state.dataPersistenceError = error.message || String(error);
-                }
-            }
-        } else {
-            state.dataPersistenceStatus = 'unconfigured';
-            state.dataPersistenceError = null;
-        }
-    } else if (state.dataFileHandle) {
+    if (state.dataFileHandle) {
         try {
             await persistDataToFile(state.dataFileHandle);
             state.dataPersistenceStatus = 'saved';
@@ -516,12 +448,8 @@ export async function saveState() {
             state.dataPersistenceStatus = 'error';
             state.dataPersistenceError = error.message || String(error);
         }
-    } else if (isFilePersistenceSupported) {
+    } else if (state.dataPersistenceSupported) {
         state.dataPersistenceStatus = 'unconfigured';
-        state.dataPersistenceError = null;
-    } else {
-        state.dataPersistenceStatus = 'unsupported';
-        state.dataPersistenceError = null;
     }
 
     const indicator = document.getElementById('save-indicator');
@@ -539,43 +467,8 @@ export async function saveState() {
 }
 
 export async function loadState() {
-    state.dataPersistenceMode = getStoredPersistenceMode();
-    state.databaseConfig = getStoredDatabaseConfig();
-    updatePersistenceSupportFlag();
-
-    if (state.dataPersistenceMode === 'database') {
-        state.dataFileHandle = null;
-        state.dataFileName = '';
-        if (!state.databaseConfig) {
-            populateStateFromPersistedData({});
-            state.dataPersistenceStatus = 'unconfigured';
-            state.dataPersistenceError = null;
-            return;
-        }
-
-        try {
-            await loadDataFromDatabase(state.databaseConfig);
-        } catch (error) {
-            console.error('Error loading data from database', error);
-            populateStateFromPersistedData({});
-            if (error?.code === 'permission-denied') {
-                state.dataPersistenceStatus = 'permission-denied';
-                state.dataPersistenceError = null;
-            } else {
-                state.dataPersistenceStatus = 'error';
-                state.dataPersistenceError = error.message || String(error);
-            }
-        }
-        return;
-    }
-
-    if (!isFilePersistenceSupported) {
-        state.dataPersistenceSupported = false;
-        state.dataFileHandle = null;
-        state.dataFileName = '';
+    if (!state.dataPersistenceSupported) {
         populateStateFromPersistedData({});
-        state.dataPersistenceStatus = 'unsupported';
-        state.dataPersistenceError = null;
         return;
     }
 
@@ -613,10 +506,7 @@ export function resetStateToDefaults() {
 }
 
 export async function pickExistingDataFile() {
-    if (state.dataPersistenceMode !== 'file') {
-        return false;
-    }
-    if (!isFilePersistenceSupported) {
+    if (!state.dataPersistenceSupported) {
         return false;
     }
 
@@ -645,10 +535,7 @@ export async function pickExistingDataFile() {
 }
 
 export async function createDataFileWithCurrentState() {
-    if (state.dataPersistenceMode !== 'file') {
-        return false;
-    }
-    if (!isFilePersistenceSupported) {
+    if (!state.dataPersistenceSupported) {
         return false;
     }
 
@@ -679,9 +566,6 @@ export async function createDataFileWithCurrentState() {
 }
 
 export async function reloadDataFromConfiguredFile() {
-    if (state.dataPersistenceMode !== 'file') {
-        return false;
-    }
     if (!state.dataFileHandle) {
         return false;
     }
@@ -701,127 +585,13 @@ export async function reloadDataFromConfiguredFile() {
 export async function clearConfiguredDataFile() {
     state.dataFileHandle = null;
     state.dataFileName = '';
-    if (isFilePersistenceSupported) {
+    if (state.dataPersistenceSupported) {
         try {
             await clearSavedFileHandle();
         } catch (error) {
             console.error('Error clearing stored file handle', error);
         }
     }
-    if (state.dataPersistenceMode === 'file') {
-        state.dataPersistenceStatus = isFilePersistenceSupported ? 'unconfigured' : 'unsupported';
-        state.dataPersistenceError = null;
-    }
-}
-
-export async function configureDatabasePersistence(config) {
-    const normalized = saveDatabaseConfig(config);
-    state.databaseConfig = normalized;
-    state.dataPersistenceMode = 'database';
-    savePersistenceMode('database');
-    updatePersistenceSupportFlag();
-    try {
-        await loadDataFromDatabase(normalized);
-        return true;
-    } catch (error) {
-        console.error('Error configuring database persistence', error);
-        if (error?.code === 'permission-denied') {
-            state.dataPersistenceStatus = 'permission-denied';
-            state.dataPersistenceError = null;
-        } else {
-            state.dataPersistenceStatus = 'error';
-            state.dataPersistenceError = error.message || String(error);
-        }
-        throw error;
-    }
-}
-
-export async function reloadDataFromDatabase() {
-    if (!isDatabasePersistenceActive()) {
-        return false;
-    }
-    try {
-        await loadDataFromDatabase(state.databaseConfig);
-        return true;
-    } catch (error) {
-        console.error('Error reloading data from database', error);
-        if (error?.code === 'permission-denied') {
-            state.dataPersistenceStatus = 'permission-denied';
-            state.dataPersistenceError = null;
-        } else {
-            state.dataPersistenceStatus = 'error';
-            state.dataPersistenceError = error.message || String(error);
-        }
-        return false;
-    }
-}
-
-export function clearDatabasePersistenceConfig() {
-    clearDatabaseConfig();
-    state.databaseConfig = null;
-    if (state.dataPersistenceMode === 'database') {
-        state.dataPersistenceStatus = 'unconfigured';
-        state.dataPersistenceError = null;
-    }
-    updatePersistenceSupportFlag();
-}
-
-export async function switchDataPersistenceMode(mode) {
-    if (mode !== 'file' && mode !== 'database') {
-        return false;
-    }
-    if (state.dataPersistenceMode === mode) {
-        return true;
-    }
-    state.dataPersistenceMode = mode;
-    savePersistenceMode(mode);
-    updatePersistenceSupportFlag();
-
-    if (mode === 'database') {
-        if (!state.databaseConfig) {
-            state.dataPersistenceStatus = 'unconfigured';
-            state.dataPersistenceError = null;
-            return true;
-        }
-        try {
-            await loadDataFromDatabase(state.databaseConfig);
-            return true;
-        } catch (error) {
-            console.error('Error switching to database persistence', error);
-            if (error?.code === 'permission-denied') {
-                state.dataPersistenceStatus = 'permission-denied';
-                state.dataPersistenceError = null;
-            } else {
-                state.dataPersistenceStatus = 'error';
-                state.dataPersistenceError = error.message || String(error);
-            }
-            return false;
-        }
-    }
-
-    if (!isFilePersistenceSupported) {
-        state.dataFileHandle = null;
-        state.dataFileName = '';
-        state.dataPersistenceStatus = 'unsupported';
-        state.dataPersistenceError = null;
-        return true;
-    }
-
-    if (state.dataFileHandle) {
-        const success = await reloadDataFromConfiguredFile();
-        return success;
-    }
-
-    state.dataFileName = '';
-    state.dataPersistenceStatus = 'unconfigured';
+    state.dataPersistenceStatus = state.dataPersistenceSupported ? 'unconfigured' : 'unsupported';
     state.dataPersistenceError = null;
-    return true;
-}
-
-export async function testDatabasePersistence(config) {
-    const targetConfig = config || state.databaseConfig;
-    if (!targetConfig) {
-        throw new Error('No database configuration is available');
-    }
-    return await testDatabaseConnection(targetConfig);
 }
