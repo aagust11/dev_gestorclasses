@@ -1040,6 +1040,10 @@ function renderEvaluationTermGradesTab(classes) {
     const levelOptions = Array.isArray(normalizedConfig.competency.levels)
         ? normalizedConfig.competency.levels
         : [];
+    const expandedByClass = state.termGradeExpandedCompetencies?.[selectedClass.id] || {};
+    const expandedCompetencyIds = new Set(Array.isArray(expandedByClass?.[selectedTermId]) ? expandedByClass[selectedTermId] : []);
+    const classIdAttr = escapeAttribute(selectedClass.id || '');
+    const termIdAttr = escapeAttribute(selectedTermId || '');
 
     const calculationMode = state.termGradeCalculationMode || 'dates';
     const record = state.termGradeRecords?.[selectedClass.id]?.[selectedTermId] || null;
@@ -1067,6 +1071,13 @@ function renderEvaluationTermGradesTab(classes) {
         </button>
     `;
 
+    const recalculateFinalButtonHtml = `
+        <button data-action="recalculate-term-final-grades" data-class-id="${classIdAttr}" data-term-id="${termIdAttr}" class="inline-flex items-center gap-2 px-3 py-2 border border-blue-600 text-blue-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            ${t('evaluation_term_grades_recalculate_final_button')}
+        </button>
+    `;
+
     const clearButtonDisabledAttr = hasExistingTermGrades ? '' : ' disabled';
     const clearButtonClasses = hasExistingTermGrades
         ? 'inline-flex items-center gap-2 px-3 py-2 border border-red-600 text-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20'
@@ -1084,6 +1095,7 @@ function renderEvaluationTermGradesTab(classes) {
             ${calculationModeSelector}
             <div class="flex flex-wrap gap-2">
                 ${calculateButtonHtml}
+                ${recalculateFinalButtonHtml}
                 ${clearButtonHtml}
             </div>
         </div>
@@ -1111,18 +1123,57 @@ function renderEvaluationTermGradesTab(classes) {
     const usedFootnoteSymbols = new Set();
 
     const headerRow1 = competencies.map(comp => {
-        const criteriaCount = Array.isArray(comp.criteria) ? comp.criteria.length : 0;
-        const colSpan = Math.max(criteriaCount + 1, 1);
+        const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
+        const criteriaCount = criteria.length;
+        const competencyId = comp.id;
         const label = comp.code?.trim() || t('competency_without_code');
-        return `<th scope="col" colspan="${colSpan}" class="term-grade-header term-grade-header--group term-grade-separator px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${escapeHtml(label)}</th>`;
+        const hasCriteria = criteriaCount > 0;
+        const canToggle = hasCriteria && competencyId;
+        const isExpanded = hasCriteria ? (canToggle ? expandedCompetencyIds.has(competencyId) : true) : false;
+        const colSpan = Math.max((isExpanded ? criteriaCount : 0) + 1, 1);
+        const baseClasses = 'term-grade-header term-grade-header--group term-grade-separator px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400';
+
+        if (!canToggle) {
+            return `<th scope="col" colspan="${colSpan}" class="${baseClasses}">${escapeHtml(label)}</th>`;
+        }
+
+        const toggleLabel = isExpanded
+            ? t('evaluation_term_grades_hide_criteria')
+            : t('evaluation_term_grades_show_criteria');
+        const ariaLabel = `${toggleLabel} · ${label}`;
+        const icon = isExpanded ? 'chevron-down' : 'chevron-right';
+
+        return `
+            <th scope="col" colspan="${colSpan}" class="${baseClasses}">
+                <button type="button"
+                    class="term-grade-toggle inline-flex items-center gap-1 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900 rounded"
+                    data-action="toggle-term-grade-competency"
+                    data-class-id="${classIdAttr}"
+                    data-term-id="${termIdAttr}"
+                    data-competency-id="${escapeAttribute(competencyId)}"
+                    aria-expanded="${isExpanded ? 'true' : 'false'}"
+                    aria-label="${escapeAttribute(ariaLabel)}"
+                >
+                    <i data-lucide="${icon}" class="w-4 h-4"></i>
+                    <span>${escapeHtml(label)}</span>
+                </button>
+            </th>
+        `;
     }).join('');
 
     const headerRow2 = competencies.map(comp => {
         const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
-        const criteriaCells = criteria.map(criterion => {
-            const criterionLabel = criterion.code?.trim() || t('criterion_without_code');
-            return `<th scope="col" class="term-grade-header term-grade-header--criterion px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${escapeHtml(criterionLabel)}</th>`;
-        }).join('');
+        const criteriaCount = criteria.length;
+        const competencyId = comp.id;
+        const hasCriteria = criteriaCount > 0;
+        const canToggle = hasCriteria && competencyId;
+        const isExpanded = hasCriteria ? (canToggle ? expandedCompetencyIds.has(competencyId) : true) : false;
+        const criteriaCells = isExpanded
+            ? criteria.map(criterion => {
+                const criterionLabel = criterion.code?.trim() || t('criterion_without_code');
+                return `<th scope="col" class="term-grade-header term-grade-header--criterion px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${escapeHtml(criterionLabel)}</th>`;
+            }).join('')
+            : '';
         const competencyLabel = comp.code?.trim() || t('competency_without_code');
         return `${criteriaCells}<th scope="col" class="term-grade-header term-grade-header--competency term-grade-separator px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${escapeHtml(competencyLabel)}</th>`;
     }).join('');
@@ -1133,22 +1184,30 @@ function renderEvaluationTermGradesTab(classes) {
 
         competencies.forEach(comp => {
             const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
-            criteria.forEach(criterion => {
-                const entry = getTermGradeEntry(record, student.id, 'criteria', criterion.id);
-                (entry.noteSymbols || []).forEach(symbol => symbol && usedFootnoteSymbols.add(symbol));
-                const label = `${comp.code?.trim() || t('competency_without_code')} · ${criterion.code?.trim() || t('criterion_without_code')}`;
-                studentCells.push(renderTermGradeCell(entry, {
-                    classId: selectedClass.id,
-                    termId: selectedTermId,
-                    studentId: student.id,
-                    scope: 'criteria',
-                    targetId: criterion.id,
-                    label,
-                    studentName,
-                    levelOptions,
-                    cellClasses: 'term-grade-cell--criterion',
-                }));
-            });
+            const criteriaCount = criteria.length;
+            const competencyId = comp.id;
+            const hasCriteria = criteriaCount > 0;
+            const canToggle = hasCriteria && competencyId;
+            const isExpanded = hasCriteria ? (canToggle ? expandedCompetencyIds.has(competencyId) : true) : false;
+
+            if (isExpanded && hasCriteria) {
+                criteria.forEach(criterion => {
+                    const entry = getTermGradeEntry(record, student.id, 'criteria', criterion.id);
+                    (entry.noteSymbols || []).forEach(symbol => symbol && usedFootnoteSymbols.add(symbol));
+                    const label = `${comp.code?.trim() || t('competency_without_code')} · ${criterion.code?.trim() || t('criterion_without_code')}`;
+                    studentCells.push(renderTermGradeCell(entry, {
+                        classId: selectedClass.id,
+                        termId: selectedTermId,
+                        studentId: student.id,
+                        scope: 'criteria',
+                        targetId: criterion.id,
+                        label,
+                        studentName,
+                        levelOptions,
+                        cellClasses: 'term-grade-cell--criterion',
+                    }));
+                });
+            }
 
             const compEntry = getTermGradeEntry(record, student.id, 'competencies', comp.id);
             (compEntry.noteSymbols || []).forEach(symbol => symbol && usedFootnoteSymbols.add(symbol));
@@ -1184,7 +1243,17 @@ function renderEvaluationTermGradesTab(classes) {
         return `<tr class="term-grade-row border-b border-gray-100 dark:border-gray-800"><th scope="row" class="term-grade-student-cell px-3 py-2 text-sm font-medium text-left text-gray-800 dark:text-gray-100 min-w-[12rem]">${escapeHtml(studentName)}</th>${studentCellsHtml}${finalCell}</tr>`;
     }).join('');
 
-    const tableBodyHtml = rowsHtml || `<tr class="term-grade-row"><td colspan="${competencies.reduce((sum, comp) => sum + (Array.isArray(comp.criteria) ? comp.criteria.length : 0) + 1, 1) + 1}" class="px-3 py-4 text-sm text-center text-gray-600 dark:text-gray-300">${t('evaluation_grades_no_students')}</td></tr>`;
+    const totalVisibleColumns = competencies.reduce((sum, comp) => {
+        const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
+        const criteriaCount = criteria.length;
+        const competencyId = comp.id;
+        const hasCriteria = criteriaCount > 0;
+        const canToggle = hasCriteria && competencyId;
+        const isExpanded = hasCriteria ? (canToggle ? expandedCompetencyIds.has(competencyId) : true) : false;
+        const visibleCriteria = isExpanded ? criteriaCount : 0;
+        return sum + visibleCriteria + 1;
+    }, 1) + 1;
+    const tableBodyHtml = rowsHtml || `<tr class="term-grade-row"><td colspan="${totalVisibleColumns}" class="px-3 py-4 text-sm text-center text-gray-600 dark:text-gray-300">${t('evaluation_grades_no_students')}</td></tr>`;
 
     const tableHtml = `
         <table class="term-grades-table min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-left">

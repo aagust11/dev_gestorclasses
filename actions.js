@@ -242,7 +242,7 @@ function isActivityWithinTerm(activity, termRange, mode = 'dates') {
     return effectiveEnd >= termRange.start && effectiveEnd <= termRange.end;
 }
 
-function calculateTermGradesForClassTerm(classId, termId, mode = 'dates') {
+function calculateTermGradesForClassTerm(classId, termId, mode = 'dates', existingRecord = null) {
     const targetClass = state.activities.find(activity => activity && activity.type === 'class' && activity.id === classId);
     if (!targetClass) {
         return { students: {} };
@@ -347,6 +347,14 @@ function calculateTermGradesForClassTerm(classId, termId, mode = 'dates') {
     const failLimit = Number.isFinite(limitValue) ? limitValue : 0;
 
     const result = { students: {} };
+    const recordForOverrides = existingRecord && typeof existingRecord === 'object'
+        ? existingRecord
+        : null;
+    const validLevelIds = new Set(
+        Array.isArray(normalizedConfig?.competency?.levels)
+            ? normalizedConfig.competency.levels.map(level => level.id).filter(Boolean)
+            : []
+    );
 
     studentIds.forEach(studentId => {
         const studentRecord = studentData.get(studentId) || { criteria: new Map(), competencies: new Map() };
@@ -355,6 +363,7 @@ function calculateTermGradesForClassTerm(classId, termId, mode = 'dates') {
             competencies: {},
             final: createEmptyTermGradeEntry(),
         };
+        const previousStudentRecord = recordForOverrides?.students?.[studentId];
 
         let caFails = 0;
         let ceFails = 0;
@@ -367,24 +376,48 @@ function calculateTermGradesForClassTerm(classId, termId, mode = 'dates') {
             const compResult = aggregation === COMPETENCY_AGGREGATIONS.MAJORITY
                 ? calculateMajorityCompetencyResult(competencyEvidences, normalizedConfig)
                 : calculateWeightedCompetencyResult(competencyEvidences, normalizedConfig);
-            const compNotes = [];
+            const computedCompNotes = [];
             if (aggregation === COMPETENCY_AGGREGATIONS.MAJORITY && compResult.tieBreak && !compResult.tieBreak.resolved) {
-                compNotes.push('*');
+                computedCompNotes.push('*');
             }
-            const compLevelId = compResult.levelId || '';
+            const previousCompEntry = previousStudentRecord?.competencies?.[compId];
+            const compManual = Boolean(previousCompEntry?.isManual);
+            const manualCompNotes = Array.isArray(previousCompEntry?.noteSymbols)
+                ? previousCompEntry.noteSymbols.filter(Boolean)
+                : [];
+            const compNotes = compManual ? manualCompNotes : computedCompNotes;
+
+            let compLevelId = compResult.levelId || '';
+            if (compManual && previousCompEntry?.levelId && validLevelIds.has(previousCompEntry.levelId)) {
+                compLevelId = previousCompEntry.levelId;
+            } else if (compManual && previousCompEntry?.levelId && !compLevelId) {
+                compLevelId = previousCompEntry.levelId;
+            }
+            const formattedCompNumeric = formatNumericScore(compResult.numericScore);
+            let compNumericScore = formattedCompNumeric;
+            if (compManual && typeof previousCompEntry?.numericScore !== 'undefined') {
+                compNumericScore = previousCompEntry.numericScore;
+            }
+
             computedStudent.competencies[compId] = {
-                numericScore: formatNumericScore(compResult.numericScore),
+                numericScore: compNumericScore,
                 levelId: compLevelId,
-                isManual: false,
+                isManual: compManual,
                 noteSymbols: compNotes,
             };
-            if (compLevelId && failLevels.has(compLevelId)) {
+
+            const levelForAggregation = validLevelIds.has(compLevelId) ? compLevelId : '';
+            if (levelForAggregation && failLevels.has(levelForAggregation)) {
                 ceFails += 1;
             }
-            if (compLevelId) {
+            let evidenceWeight = sumEvidenceWeights(competencyEvidences);
+            if (levelForAggregation && evidenceWeight <= 0 && compManual) {
+                evidenceWeight = 1;
+            }
+            if (levelForAggregation) {
                 ceEvidencesForFinal.push({
-                    levelId: compLevelId,
-                    activityWeight: sumEvidenceWeights(competencyEvidences),
+                    levelId: levelForAggregation,
+                    activityWeight: evidenceWeight,
                     criterionWeight: 1,
                 });
             }
@@ -395,22 +428,42 @@ function calculateTermGradesForClassTerm(classId, termId, mode = 'dates') {
                 const criterionResult = aggregation === COMPETENCY_AGGREGATIONS.MAJORITY
                     ? calculateMajorityCompetencyResult(criterionEvidences, normalizedConfig)
                     : calculateWeightedCompetencyResult(criterionEvidences, normalizedConfig);
-                const criterionNotes = [];
+                const computedCriterionNotes = [];
                 if (aggregation === COMPETENCY_AGGREGATIONS.MAJORITY && criterionResult.tieBreak && !criterionResult.tieBreak.resolved) {
-                    criterionNotes.push('*');
+                    computedCriterionNotes.push('*');
                 }
-                const criterionLevelId = criterionResult.levelId || '';
+                const previousCriterionEntry = previousStudentRecord?.criteria?.[criterionId];
+                const criterionManual = Boolean(previousCriterionEntry?.isManual);
+                const manualCriterionNotes = Array.isArray(previousCriterionEntry?.noteSymbols)
+                    ? previousCriterionEntry.noteSymbols.filter(Boolean)
+                    : [];
+                const criterionNotes = criterionManual ? manualCriterionNotes : computedCriterionNotes;
+
+                let criterionLevelId = criterionResult.levelId || '';
+                if (criterionManual && previousCriterionEntry?.levelId && validLevelIds.has(previousCriterionEntry.levelId)) {
+                    criterionLevelId = previousCriterionEntry.levelId;
+                } else if (criterionManual && previousCriterionEntry?.levelId && !criterionLevelId) {
+                    criterionLevelId = previousCriterionEntry.levelId;
+                }
+                const formattedCriterionNumeric = formatNumericScore(criterionResult.numericScore);
+                let criterionNumericScore = formattedCriterionNumeric;
+                if (criterionManual && typeof previousCriterionEntry?.numericScore !== 'undefined') {
+                    criterionNumericScore = previousCriterionEntry.numericScore;
+                }
+
                 computedStudent.criteria[criterionId] = {
-                    numericScore: formatNumericScore(criterionResult.numericScore),
+                    numericScore: criterionNumericScore,
                     levelId: criterionLevelId,
-                    isManual: false,
+                    isManual: criterionManual,
                     noteSymbols: criterionNotes,
                 };
-                if (criterionLevelId) {
-                    if (failLevels.has(criterionLevelId)) {
+
+                const levelForTie = validLevelIds.has(criterionLevelId) ? criterionLevelId : '';
+                if (levelForTie) {
+                    if (failLevels.has(levelForTie)) {
                         caFails += 1;
                     }
-                    caEvidencesForTie.push({ levelId: criterionLevelId });
+                    caEvidencesForTie.push({ levelId: levelForTie });
                 }
             });
         });
@@ -1033,8 +1086,8 @@ export const actionHandlers = {
             return;
         }
         const termId = element?.dataset?.termId || 'all';
-        const calculated = calculateTermGradesForClassTerm(classId, termId, state.termGradeCalculationMode);
         const existingRecord = ensureTermGradeRecordStructure(classId, termId);
+        const calculated = calculateTermGradesForClassTerm(classId, termId, state.termGradeCalculationMode, existingRecord);
         const mergedRecord = { students: {} };
 
         Object.entries(calculated.students).forEach(([studentId, computedStudent]) => {
@@ -1059,6 +1112,29 @@ export const actionHandlers = {
         });
 
         state.termGradeRecords[classId][termId] = mergedRecord;
+        saveState();
+    },
+
+    'recalculate-term-final-grades': (id, element) => {
+        const classId = element?.dataset?.classId;
+        if (!classId) {
+            return;
+        }
+        const termId = element?.dataset?.termId || 'all';
+        const record = ensureTermGradeRecordStructure(classId, termId);
+        const calculated = calculateTermGradesForClassTerm(classId, termId, state.termGradeCalculationMode, record);
+
+        Object.entries(calculated.students || {}).forEach(([studentId, computedStudent]) => {
+            const targetStudent = ensureTermGradeStudent(record, studentId);
+            const finalEntry = computedStudent?.final || createEmptyTermGradeEntry();
+            targetStudent.final = {
+                numericScore: finalEntry.numericScore,
+                levelId: finalEntry.levelId,
+                isManual: false,
+                noteSymbols: Array.isArray(finalEntry.noteSymbols) ? [...finalEntry.noteSymbols] : [],
+            };
+        });
+
         saveState();
     },
 
@@ -1120,6 +1196,32 @@ export const actionHandlers = {
     'set-term-grade-calculation-mode': (id, element) => {
         const value = element?.value === 'accumulated' ? 'accumulated' : 'dates';
         state.termGradeCalculationMode = value;
+        saveState();
+    },
+
+    'toggle-term-grade-competency': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const competencyId = element?.dataset?.competencyId;
+        if (!classId || !competencyId) {
+            return;
+        }
+        const termId = element?.dataset?.termId || 'all';
+
+        if (!state.termGradeExpandedCompetencies || typeof state.termGradeExpandedCompetencies !== 'object') {
+            state.termGradeExpandedCompetencies = {};
+        }
+        if (!state.termGradeExpandedCompetencies[classId] || typeof state.termGradeExpandedCompetencies[classId] !== 'object') {
+            state.termGradeExpandedCompetencies[classId] = {};
+        }
+
+        const existing = state.termGradeExpandedCompetencies[classId][termId];
+        const currentSet = new Set(Array.isArray(existing) ? existing : []);
+        if (currentSet.has(competencyId)) {
+            currentSet.delete(competencyId);
+        } else {
+            currentSet.add(competencyId);
+        }
+        state.termGradeExpandedCompetencies[classId][termId] = Array.from(currentSet);
         saveState();
     },
 
