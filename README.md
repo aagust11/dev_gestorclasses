@@ -34,38 +34,6 @@ Los archivos de traducción para el contenido de demostración se encuentran en 
 * CSS3 (con Tailwind CSS)
 * JavaScript (Vainilla)
 
-## Ejecutar en modo escritorio con Python
-
-Si prefieres evitar el uso de un servidor local, puedes ejecutar la aplicación como un programa de escritorio usando [pywebview](https://pywebview.flowrl.com/):
-
-1. Instala las dependencias de Python:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # En Windows: .venv\\Scripts\\activate
-   pip install -r requirements.txt
-   ```
-2. Inicia la aplicación:
-   ```bash
-   python app.py
-   ```
-
-La interfaz se abrirá en una ventana nativa y los datos se guardarán automáticamente en el archivo `gestor-classes-data.json` ubicado junto al ejecutable o al script de Python.
-
-### Crear un ejecutable independiente
-
-Puedes empaquetar la aplicación como un ejecutable (por ejemplo, con [PyInstaller](https://pyinstaller.org/)):
-
-```bash
-pyinstaller --name gestor-classes --add-data "index.html:." --add-data "style.css:." \
-  --add-data "main.js:." --add-data "state.js:." --add-data "actions.js:." \
-  --add-data "views.js:." --add-data "i18n.js:." --add-data "manual_i18n.js:." \
-  --add-data "utils.js:." --add-data "evaluation.js:." --add-data "filePersistence.js:." \
-  --add-data "manual.html:." --add-data "logo.png:." --add-data "favicon.ico:." \
-  --add-data "locales:locales" --noconfirm app.py
-```
-
-El ejecutable generado (en la carpeta `dist/gestor-classes`) seguirá guardando los datos en `gestor-classes-data.json` en la misma carpeta.
-
 ## Contribuciones
 
 Este proyecto es mantenido por Àngel AC (aagust11@xtec.cat). Las contribuciones son bienvenidas.
