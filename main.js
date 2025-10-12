@@ -351,12 +351,7 @@ async function init() {
         updateNavButtons();
     });
 
-    try {
-        await loadState();
-    } catch (error) {
-        console.error('Error loading application state', error);
-    }
-
+    loadState();
     render();
     updateNavButtons();
     handleDeferredExampleLoad();

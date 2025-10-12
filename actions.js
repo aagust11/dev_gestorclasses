@@ -1,6 +1,6 @@
 // actions.js: Define toda la lógica de las acciones del usuario.
 
-import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault, regenerateEncryptionKey, clearPersistedStateStorage } from './state.js';
+import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault } from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
 import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig } from './evaluation.js';
@@ -2786,28 +2786,9 @@ export const actionHandlers = {
             reader.readAsText(file);
         });
     },
-    'regenerate-encryption-key': () => {
-        showModal(
-            t('encryption_rotation_confirm_title'),
-            t('encryption_rotation_confirm_text'),
-            () => {
-                regenerateEncryptionKey()
-                    .then(() => {
-                        alert(t('encryption_rotation_success'));
-                    })
-                    .catch(error => {
-                        if (error && error.message === 'Encryption password input cancelled') {
-                            return;
-                        }
-                        console.error('Error regenerating encryption key', error);
-                        alert(t('encryption_rotation_failed'));
-                    });
-            }
-        );
-    },
     'delete-all-data': () => {
         showModal(t('delete_all_data_confirm_title'), t('delete_all_data_confirm_text'), () => {
-            clearPersistedStateStorage();
+            localStorage.removeItem('teacherDashboardData');
             alert(t('delete_all_data_success_alert'));
             window.location.reload();
         });
