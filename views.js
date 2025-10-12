@@ -1071,10 +1071,10 @@ function renderEvaluationTermGradesTab(classes) {
     const clearButtonClasses = hasExistingTermGrades
         ? 'inline-flex items-center gap-2 px-3 py-2 border border-red-600 text-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20'
         : 'inline-flex items-center gap-2 px-3 py-2 border border-red-600 text-red-600 rounded-md opacity-50 cursor-not-allowed';
+    const clearButtonLabel = t('evaluation_term_grades_clear_button');
     const clearButtonHtml = `
-        <button data-action="clear-term-grades" data-class-id="${selectedClass.id}" data-term-id="${selectedTermId}" class="${clearButtonClasses}"${clearButtonDisabledAttr}>
+        <button data-action="clear-term-grades" data-class-id="${selectedClass.id}" data-term-id="${selectedTermId}" class="${clearButtonClasses}"${clearButtonDisabledAttr} aria-label="${escapeAttribute(clearButtonLabel)}" title="${escapeAttribute(clearButtonLabel)}">
             <i data-lucide="eraser" class="w-4 h-4"></i>
-            ${t('evaluation_term_grades_clear_button')}
         </button>
     `;
 
