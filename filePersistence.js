@@ -2,7 +2,7 @@ const DB_NAME = 'gestorClassesPersistence';
 const STORE_NAME = 'fileHandles';
 const HANDLE_KEY = 'dataFile';
 
-const DEFAULT_DATA_FILE_NAME = 'gestor-classes-data.json';
+const DEFAULT_DATA_FILE_NAME = 'gestor-classes-data.jspn';
 const isPywebview = typeof window !== 'undefined'
     && typeof window.pywebview === 'object'
     && typeof window.pywebview.api === 'object';
