@@ -2960,7 +2960,19 @@ export function renderSettingsView() {
 
     // --- Data Tab Content ---
     const dataTabContent = `
-        <div class="max-w-xl mx-auto">
+        <div class="max-w-xl mx-auto space-y-6">
+            <div class="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 p-4 rounded-r-lg">
+                <h3 class="text-lg font-semibold text-blue-800 dark:text-blue-200 flex items-center gap-2">
+                    <i data-lucide="shield-check" class="w-5 h-5"></i>
+                    ${t('encryption_settings_title')}
+                </h3>
+                <p class="mt-3 text-sm text-blue-800/80 dark:text-blue-100">${t('encryption_settings_description')}</p>
+                <button data-action="regenerate-encryption-key" class="mt-4 w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center justify-center gap-2">
+                    <i data-lucide="key-round" class="w-5 h-5"></i>
+                    ${t('regenerate_encryption_key')}
+                </button>
+                <p class="mt-2 text-xs text-blue-700/70 dark:text-blue-200/80">${t('encryption_settings_rotation_hint')}</p>
+            </div>
             <div class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 p-4 rounded-r-lg">
                 <h3 class="text-lg font-semibold text-red-800 dark:text-red-300 flex items-center gap-2"><i data-lucide="alert-triangle" class="w-5 h-5"></i> ${t('danger_zone_title')}</h3>
                 <div class="mt-4 space-y-2">
