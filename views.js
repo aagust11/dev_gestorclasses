@@ -2969,14 +2969,13 @@ export function renderSettingsView() {
         ready: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
         unconfigured: 'bg-gray-200 text-gray-700 dark:bg-gray-800/60 dark:text-gray-200',
         'permission-denied': 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-        unauthenticated: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
         error: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
         unsupported: 'bg-gray-200 text-gray-700 dark:bg-gray-800/60 dark:text-gray-200'
     };
     const statusClass = statusClassesMap[state.dataPersistenceStatus] || statusClassesMap.unconfigured;
     const hasConfiguredFile = Boolean(state.dataFileHandle || state.dataFileName);
     const filePersistenceAvailable = Boolean(state.filePersistenceSupported);
-    const databaseConfigured = Boolean(state.databaseConfig?.documentPath);
+    const databaseConfigured = Boolean(state.databaseConfig?.baseUrl);
 
     const errorInfo = state.dataPersistenceStatus === 'error' && state.dataPersistenceError
         ? `<div class="mt-3 text-sm text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 border border-red-200 dark:border-red-700 rounded-md p-3">
@@ -2988,12 +2987,6 @@ export function renderSettingsView() {
     const permissionInfo = state.dataPersistenceStatus === 'permission-denied'
         ? `<div class="mt-3 text-sm text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-700 rounded-md p-3">
                 ${t('data_file_permission_help')}
-            </div>`
-        : '';
-
-    const unauthenticatedInfo = state.dataPersistenceStatus === 'unauthenticated'
-        ? `<div class="mt-3 text-sm text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-700 rounded-md p-3">
-                ${t('database_sign_in_required_message')}
             </div>`
         : '';
 
@@ -3064,86 +3057,48 @@ export function renderSettingsView() {
             return '';
         }
 
-        const firebaseUser = state.firebaseUser;
-        const defaultDocumentPath = firebaseUser?.uid ? `users/${firebaseUser.uid}/gestorClasses` : '';
-        const currentDocumentPath = state.databaseConfig?.documentPath || defaultDocumentPath;
-        const documentPathValue = escapeHtml(currentDocumentPath || '');
-        const canEditPath = Boolean(firebaseUser?.uid);
-        const pathDisabled = canEditPath ? '' : 'disabled aria-disabled="true"';
-        const saveButtonClasses = canEditPath
-            ? 'bg-blue-600 hover:bg-blue-700 text-white'
-            : 'bg-blue-400 text-white cursor-not-allowed opacity-70';
-        const saveButtonDisabled = canEditPath ? '' : 'disabled aria-disabled="true"';
-        const reloadEnabled = databaseConfigured && Boolean(firebaseUser?.uid);
-        const reloadDisabled = reloadEnabled ? '' : 'disabled aria-disabled="true"';
-        const reloadClasses = reloadEnabled
+        const baseUrlValue = escapeHtml(state.databaseConfig?.baseUrl || '');
+        const authTokenValue = escapeHtml(state.databaseConfig?.authToken || '');
+        const reloadDisabled = databaseConfigured ? '' : 'disabled aria-disabled="true"';
+        const reloadClasses = databaseConfigured
             ? 'bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200'
             : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-70 dark:bg-gray-800 dark:text-gray-500';
-        const pushDisabled = reloadEnabled ? '' : 'disabled aria-disabled="true"';
-        const pushClasses = reloadEnabled
+        const pushDisabled = databaseConfigured ? '' : 'disabled aria-disabled="true"';
+        const pushClasses = databaseConfigured
             ? 'bg-green-600 hover:bg-green-700 text-white'
             : 'bg-green-400 text-white cursor-not-allowed opacity-70';
         const disconnectDisabled = databaseConfigured ? '' : 'disabled aria-disabled="true"';
         const disconnectClasses = databaseConfigured
             ? 'bg-red-600 hover:bg-red-700 text-white'
             : 'bg-red-400 text-white cursor-not-allowed opacity-70';
-        const testDisabled = canEditPath ? '' : 'disabled aria-disabled="true"';
-        const testClasses = canEditPath
-            ? 'bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200'
-            : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-70 dark:bg-gray-800 dark:text-gray-500';
-        const signInButton = firebaseUser?.uid
-            ? `<button data-action="firebase-sign-out" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200">
-                    <i data-lucide="log-out" class="w-5 h-5"></i>
-                    <span>${t('database_sign_out_button')}</span>
-               </button>`
-            : `<button data-action="firebase-sign-in" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white">
-                    <i data-lucide="log-in" class="w-5 h-5"></i>
-                    <span>${t('database_sign_in_button')}</span>
-               </button>`;
-
-        const userIdentity = firebaseUser?.email || firebaseUser?.displayName || firebaseUser?.uid || '';
-        const userInfo = firebaseUser?.uid
-            ? `<p class="text-sm text-gray-600 dark:text-gray-300">${t('database_signed_in_as')} <strong>${escapeHtml(userIdentity)}</strong></p>`
-            : `<p class="text-sm text-gray-600 dark:text-gray-300">${t('database_sign_in_required_message')}</p>`;
-
         const databaseInfo = databaseConfigured
-            ? `<p class="text-sm text-gray-600 dark:text-gray-300"><strong>${t('database_configured_label')}</strong> <span class="break-all">${escapeHtml(state.databaseConfig.documentPath)}</span></p>`
+            ? `<p class="text-sm text-gray-600 dark:text-gray-300"><strong>${t('database_configured_label')}</strong> <span class="break-all">${escapeHtml(state.databaseConfig.baseUrl)}</span></p>`
             : `<p class="text-sm text-gray-600 dark:text-gray-300">${t('database_not_configured')}</p>`;
-
-        const realtimeInfo = databaseConfigured
-            ? `<p class="text-xs text-gray-500 dark:text-gray-400">${t('database_realtime_enabled_help')}</p>`
-            : '';
 
         return `
             <div class="mt-6 space-y-4">
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div class="space-y-1">
-                        ${userInfo}
-                        ${databaseInfo}
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                        ${signInButton}
-                        <button data-action="test-database-connection" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${testClasses}" ${testDisabled}>
-                            <i data-lucide="activity" class="w-5 h-5"></i>
-                            <span>${t('database_test_button')}</span>
-                        </button>
-                    </div>
-                </div>
+                ${databaseInfo}
                 ${errorInfo}
                 ${permissionInfo}
-                ${unauthenticatedInfo}
                 <div class="grid gap-4">
                     <label class="flex flex-col gap-1">
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">${t('database_document_path_label')}</span>
-                        <input id="firebase-document-path" type="text" class="px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="${t('database_document_path_placeholder')}" value="${documentPathValue}" ${pathDisabled} />
-                        <span class="text-xs text-gray-500 dark:text-gray-400">${t('database_document_path_help')}</span>
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">${t('database_base_url_label')}</span>
+                        <input id="database-base-url" type="text" inputmode="url" autocomplete="url" class="px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="${t('database_base_url_placeholder')}" value="${baseUrlValue}" />
                     </label>
-                    ${realtimeInfo}
+                    <label class="flex flex-col gap-1">
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">${t('database_auth_token_label')}</span>
+                        <input id="database-auth-token" type="password" autocomplete="off" class="px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="${t('database_auth_token_placeholder')}" value="${authTokenValue}" />
+                        <span class="text-xs text-gray-500 dark:text-gray-400">${t('database_auth_token_help')}</span>
+                    </label>
                 </div>
                 <div class="grid sm:grid-cols-2 gap-3">
-                    <button data-action="save-database-config" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${saveButtonClasses}" ${saveButtonDisabled}>
+                    <button data-action="save-database-config" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white">
                         <i data-lucide="save" class="w-5 h-5"></i>
                         <span>${t('database_save_button')}</span>
+                    </button>
+                    <button data-action="test-database-connection" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200">
+                        <i data-lucide="activity" class="w-5 h-5"></i>
+                        <span>${t('database_test_button')}</span>
                     </button>
                     <button data-action="reload-database-data" class="px-4 py-2 rounded-md flex items-center justify-center gap-2 ${reloadClasses}" ${reloadDisabled}>
                         <i data-lucide="rotate-cw" class="w-5 h-5"></i>
