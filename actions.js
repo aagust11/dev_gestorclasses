@@ -1,6 +1,6 @@
 // actions.js: Define toda la lógica de las acciones del usuario.
 
-import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault, pickExistingDataFile, createDataFileWithCurrentState, reloadDataFromConfiguredFile, clearConfiguredDataFile, resetStateToDefaults } from './state.js';
+import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault, pickExistingDataFile, createDataFileWithCurrentState, reloadDataFromConfiguredFile, clearConfiguredDataFile, resetStateToDefaults, configureDatabasePersistence, reloadDataFromDatabase, clearDatabasePersistenceConfig, switchDataPersistenceMode, testDatabasePersistence } from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
 import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig } from './evaluation.js';
@@ -2813,6 +2813,87 @@ export const actionHandlers = {
     'clear-data-file-selection': async () => {
         await clearConfiguredDataFile();
         alert(t('data_file_cleared_alert'));
+    },
+    'set-data-persistence-mode': async (id, element, event) => {
+        const mode = element?.dataset?.mode || event?.target?.value;
+        if (!mode) {
+            return;
+        }
+        const success = await switchDataPersistenceMode(mode);
+        if (!success) {
+            if (state.dataPersistenceStatus === 'permission-denied') {
+                alert(t('database_permission_denied_alert'));
+            } else if (state.dataPersistenceStatus === 'error' && state.dataPersistenceError) {
+                alert(`${t('database_generic_error_alert')}: ${state.dataPersistenceError}`);
+            }
+        }
+    },
+    'save-database-config': async () => {
+        const baseUrlInput = document.getElementById('database-base-url');
+        const authTokenInput = document.getElementById('database-auth-token');
+        const baseUrl = baseUrlInput?.value?.trim() || '';
+        const authToken = authTokenInput?.value?.trim() || '';
+
+        if (!baseUrl) {
+            alert(t('database_missing_url_alert'));
+            return;
+        }
+
+        try {
+            await configureDatabasePersistence({ baseUrl, authToken });
+            alert(t('database_config_saved_alert'));
+        } catch (error) {
+            const message = error?.message || String(error);
+            alert(`${t('database_generic_error_alert')}: ${message}`);
+        }
+    },
+    'test-database-connection': async () => {
+        const baseUrlInput = document.getElementById('database-base-url');
+        const authTokenInput = document.getElementById('database-auth-token');
+        const inputBaseUrl = baseUrlInput?.value?.trim() || '';
+        const inputAuthToken = authTokenInput?.value?.trim() || '';
+        const baseUrl = inputBaseUrl || state.databaseConfig?.baseUrl || '';
+        if (!baseUrl) {
+            alert(t('database_missing_url_alert'));
+            return;
+        }
+        const config = {
+            baseUrl,
+            authToken: inputAuthToken || state.databaseConfig?.authToken || ''
+        };
+
+        try {
+            await testDatabasePersistence(config);
+            alert(t('database_connection_success_alert'));
+        } catch (error) {
+            const message = error?.message || String(error);
+            alert(`${t('database_generic_error_alert')}: ${message}`);
+        }
+    },
+    'reload-database-data': async () => {
+        const success = await reloadDataFromDatabase();
+        if (!success) {
+            if (state.dataPersistenceStatus === 'permission-denied') {
+                alert(t('database_permission_denied_alert'));
+            } else if (state.dataPersistenceStatus === 'error' && state.dataPersistenceError) {
+                alert(`${t('database_generic_error_alert')}: ${state.dataPersistenceError}`);
+            }
+        }
+    },
+    'push-database-data': async () => {
+        await saveState();
+        if (state.dataPersistenceStatus === 'permission-denied') {
+            alert(t('database_permission_denied_alert'));
+        } else if (state.dataPersistenceStatus === 'error' && state.dataPersistenceError) {
+            alert(`${t('database_generic_error_alert')}: ${state.dataPersistenceError}`);
+        } else if (state.dataPersistenceStatus === 'saved') {
+            alert(t('database_push_success_alert'));
+        }
+    },
+    'disconnect-database': async () => {
+        clearDatabasePersistenceConfig();
+        await switchDataPersistenceMode('file');
+        alert(t('database_disconnected_alert'));
     },
     'delete-all-data': () => {
         showModal(t('delete_all_data_confirm_title'), t('delete_all_data_confirm_text'), () => {
