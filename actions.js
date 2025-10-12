@@ -1076,6 +1076,7 @@ export const actionHandlers = {
     },
 
     'recalculate-term-final-grades': (id, element) => {
+    'clear-term-grades': (id, element) => {
         const classId = element?.dataset?.classId;
         if (!classId) {
             return;
@@ -1097,6 +1098,15 @@ export const actionHandlers = {
             };
         });
 
+        const classRecords = state.termGradeRecords?.[classId];
+        if (!classRecords || !classRecords[termId]) {
+            return;
+        }
+
+        delete classRecords[termId];
+        if (Object.keys(classRecords).length === 0) {
+            delete state.termGradeRecords[classId];
+        }
         saveState();
     },
 

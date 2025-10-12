@@ -143,6 +143,7 @@
   "evaluation_grades_student_column": "Alumnat",
   "evaluation_term_grades_calculate_button": "Càlcul",
   "evaluation_term_grades_recalculate_final_button": "Recalcula nota global",
+  "evaluation_term_grades_clear_button": "Esborra qualificacions",
   "evaluation_term_grades_mode_label": "Tipus de càlcul",
   "evaluation_term_grades_mode_dates": "Per dates",
   "evaluation_term_grades_mode_accumulated": "Acumulat",
