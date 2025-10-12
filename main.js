@@ -1,9 +1,10 @@
 // main.js: El punto de entrada principal que une todo.
 
-import { state, loadState } from './state.js';
+import { state, loadState, applyFirebaseUser } from './state.js';
 import * as views from './views.js';
 import { actionHandlers } from './actions.js';
 import { initI18n, t } from './i18n.js';
+import { initFirebase, waitForFirebaseAuthReady, onFirebaseUserChanged } from './firebaseClient.js';
 
 const mainContent = document.getElementById('main-content');
 const navButtons = document.querySelectorAll('.nav-button');
@@ -354,11 +355,27 @@ async function init() {
         updateNavButtons();
     });
 
+    await initFirebase();
+    const initialUser = await waitForFirebaseAuthReady();
+    applyFirebaseUser(initialUser);
+
     await loadState();
     render();
     updateNavButtons();
     handleDeferredExampleLoad();
-    
+
+    let skipFirstAuthCallback = true;
+    onFirebaseUserChanged(async user => {
+        if (skipFirstAuthCallback) {
+            skipFirstAuthCallback = false;
+            return;
+        }
+        applyFirebaseUser(user);
+        await loadState();
+        render();
+        updateNavButtons();
+    });
+
     navButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             state.activeView = btn.dataset.view;
