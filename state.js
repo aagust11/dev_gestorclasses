@@ -12,16 +12,6 @@ import {
     readDataFromFile,
     writeDataToFile
 } from './filePersistence.js';
-import {
-    getStoredDatabaseConfig,
-    saveDatabaseConfig,
-    clearDatabaseConfig,
-    fetchDataFromDatabase,
-    saveDataToDatabase,
-    testDatabaseConnection,
-    getStoredPersistenceMode,
-    savePersistenceMode
-} from './databasePersistence.js';
 
 const pastelColors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A0C4FF', '#BDB2FF', '#FFC6FF'];
 
@@ -436,14 +426,6 @@ async function persistDataToFile(handle) {
     await writeDataToFile(handle, serialized);
 }
 
-async function persistDataToDatabase(config) {
-    if (!config) {
-        throw new Error('No database configuration provided');
-    }
-    const payload = buildPersistedDataPayload();
-    await saveDataToDatabase(config, payload);
-}
-
 async function loadDataFromHandle(handle) {
     if (!handle) {
         throw new Error('No file handle configured');
@@ -465,20 +447,6 @@ async function loadDataFromHandle(handle) {
     }
 }
 
-async function loadDataFromDatabase(config) {
-    if (!config) {
-        throw new Error('No database configuration provided');
-    }
-    const data = await fetchDataFromDatabase(config);
-    if (!data || typeof data !== 'object') {
-        populateStateFromPersistedData({});
-        return;
-    }
-    populateStateFromPersistedData(data);
-    state.dataPersistenceStatus = 'ready';
-    state.dataPersistenceError = null;
-}
-
 let saveTimeout;
 export async function saveState() {
     state.learningActivities.forEach(activity => {
@@ -489,27 +457,7 @@ export async function saveState() {
         activity.status = computedStatus;
     });
 
-    if (state.dataPersistenceMode === 'database') {
-        if (isDatabasePersistenceActive()) {
-            try {
-                await persistDataToDatabase(state.databaseConfig);
-                state.dataPersistenceStatus = 'saved';
-                state.dataPersistenceError = null;
-            } catch (error) {
-                console.error('Error saving data to database', error);
-                if (error?.code === 'permission-denied') {
-                    state.dataPersistenceStatus = 'permission-denied';
-                    state.dataPersistenceError = null;
-                } else {
-                    state.dataPersistenceStatus = 'error';
-                    state.dataPersistenceError = error.message || String(error);
-                }
-            }
-        } else {
-            state.dataPersistenceStatus = 'unconfigured';
-            state.dataPersistenceError = null;
-        }
-    } else if (state.dataFileHandle) {
+    if (state.dataFileHandle) {
         try {
             await persistDataToFile(state.dataFileHandle);
             state.dataPersistenceStatus = 'saved';
@@ -521,10 +469,6 @@ export async function saveState() {
         }
     } else if (isFilePersistenceSupported()) {
         state.dataPersistenceStatus = 'unconfigured';
-        state.dataPersistenceError = null;
-    } else {
-        state.dataPersistenceStatus = 'unsupported';
-        state.dataPersistenceError = null;
     }
 
     const indicator = document.getElementById('save-indicator');
@@ -577,8 +521,6 @@ export async function loadState() {
         state.dataFileHandle = null;
         state.dataFileName = '';
         populateStateFromPersistedData({});
-        state.dataPersistenceStatus = 'unsupported';
-        state.dataPersistenceError = null;
         return;
     }
 
@@ -682,9 +624,6 @@ export async function createDataFileWithCurrentState() {
 }
 
 export async function reloadDataFromConfiguredFile() {
-    if (state.dataPersistenceMode !== 'file') {
-        return false;
-    }
     if (!state.dataFileHandle) {
         return false;
     }
@@ -818,13 +757,4 @@ export async function switchDataPersistenceMode(mode) {
     state.dataFileName = '';
     state.dataPersistenceStatus = 'unconfigured';
     state.dataPersistenceError = null;
-    return true;
-}
-
-export async function testDatabasePersistence(config) {
-    const targetConfig = config || state.databaseConfig;
-    if (!targetConfig) {
-        throw new Error('No database configuration is available');
-    }
-    return await testDatabaseConnection(targetConfig);
 }
