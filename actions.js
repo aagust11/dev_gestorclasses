@@ -1,10 +1,9 @@
 // actions.js: Define toda la lógica de las acciones del usuario.
 
-import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault, pickExistingDataFile, createDataFileWithCurrentState, reloadDataFromConfiguredFile, clearConfiguredDataFile, resetStateToDefaults, configureDatabasePersistence, reloadDataFromDatabase, clearDatabasePersistenceConfig, switchDataPersistenceMode, testDatabasePersistence, getDefaultFirebaseDocumentPath } from './state.js';
+import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault, pickExistingDataFile, createDataFileWithCurrentState, reloadDataFromConfiguredFile, clearConfiguredDataFile, resetStateToDefaults, configureDatabasePersistence, reloadDataFromDatabase, clearDatabasePersistenceConfig, switchDataPersistenceMode, testDatabasePersistence } from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
 import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig } from './evaluation.js';
-import { signInWithGoogle, signOutFromFirebase } from './firebaseClient.js';
 
 function generateRubricItemId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -2830,22 +2829,18 @@ export const actionHandlers = {
         }
     },
     'save-database-config': async () => {
-        if (!state.firebaseUser?.uid) {
-            alert(t('database_sign_in_first_alert'));
+        const baseUrlInput = document.getElementById('database-base-url');
+        const authTokenInput = document.getElementById('database-auth-token');
+        const baseUrl = baseUrlInput?.value?.trim() || '';
+        const authToken = authTokenInput?.value?.trim() || '';
+
+        if (!baseUrl) {
+            alert(t('database_missing_url_alert'));
             return;
         }
-        const documentPathInput = document.getElementById('firebase-document-path');
-        const documentPath = documentPathInput?.value?.trim() || getDefaultFirebaseDocumentPath();
-        if (!documentPath) {
-            alert(t('database_missing_document_alert'));
-            return;
-        }
+
         try {
-            await configureDatabasePersistence({
-                documentPath,
-                userUid: state.firebaseUser.uid,
-                realtime: true
-            });
+            await configureDatabasePersistence({ baseUrl, authToken });
             alert(t('database_config_saved_alert'));
         } catch (error) {
             const message = error?.message || String(error);
@@ -2853,21 +2848,18 @@ export const actionHandlers = {
         }
     },
     'test-database-connection': async () => {
-        if (!state.firebaseUser?.uid) {
-            alert(t('database_sign_in_first_alert'));
-            return;
-        }
-        const documentPathInput = document.getElementById('firebase-document-path');
-        const inputDocumentPath = documentPathInput?.value?.trim() || '';
-        const documentPath = inputDocumentPath || state.databaseConfig?.documentPath || getDefaultFirebaseDocumentPath();
-        if (!documentPath) {
-            alert(t('database_missing_document_alert'));
+        const baseUrlInput = document.getElementById('database-base-url');
+        const authTokenInput = document.getElementById('database-auth-token');
+        const inputBaseUrl = baseUrlInput?.value?.trim() || '';
+        const inputAuthToken = authTokenInput?.value?.trim() || '';
+        const baseUrl = inputBaseUrl || state.databaseConfig?.baseUrl || '';
+        if (!baseUrl) {
+            alert(t('database_missing_url_alert'));
             return;
         }
         const config = {
-            documentPath,
-            userUid: state.firebaseUser.uid,
-            realtime: true
+            baseUrl,
+            authToken: inputAuthToken || state.databaseConfig?.authToken || ''
         };
 
         try {
@@ -2883,8 +2875,6 @@ export const actionHandlers = {
         if (!success) {
             if (state.dataPersistenceStatus === 'permission-denied') {
                 alert(t('database_permission_denied_alert'));
-            } else if (state.dataPersistenceStatus === 'unauthenticated') {
-                alert(t('database_sign_in_first_alert'));
             } else if (state.dataPersistenceStatus === 'error' && state.dataPersistenceError) {
                 alert(`${t('database_generic_error_alert')}: ${state.dataPersistenceError}`);
             }
@@ -2894,8 +2884,6 @@ export const actionHandlers = {
         await saveState();
         if (state.dataPersistenceStatus === 'permission-denied') {
             alert(t('database_permission_denied_alert'));
-        } else if (state.dataPersistenceStatus === 'unauthenticated') {
-            alert(t('database_sign_in_first_alert'));
         } else if (state.dataPersistenceStatus === 'error' && state.dataPersistenceError) {
             alert(`${t('database_generic_error_alert')}: ${state.dataPersistenceError}`);
         } else if (state.dataPersistenceStatus === 'saved') {
@@ -2906,25 +2894,6 @@ export const actionHandlers = {
         clearDatabasePersistenceConfig();
         await switchDataPersistenceMode('file');
         alert(t('database_disconnected_alert'));
-    },
-    'firebase-sign-in': async () => {
-        try {
-            await signInWithGoogle();
-        } catch (error) {
-            const message = error?.message || String(error);
-            alert(`${t('database_sign_in_error_alert')}: ${message}`);
-        }
-    },
-    'firebase-sign-out': async () => {
-        try {
-            await signOutFromFirebase();
-            clearDatabasePersistenceConfig();
-            await switchDataPersistenceMode('file');
-            alert(t('database_signed_out_alert'));
-        } catch (error) {
-            const message = error?.message || String(error);
-            alert(`${t('database_sign_out_error_alert')}: ${message}`);
-        }
     },
     'delete-all-data': () => {
         showModal(t('delete_all_data_confirm_title'), t('delete_all_data_confirm_text'), () => {

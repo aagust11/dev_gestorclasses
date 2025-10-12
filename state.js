@@ -19,19 +19,11 @@ import {
     fetchDataFromDatabase,
     saveDataToDatabase,
     testDatabaseConnection,
-    subscribeToDatabaseDocument,
     getStoredPersistenceMode,
     savePersistenceMode
 } from './databasePersistence.js';
 
 const pastelColors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A0C4FF', '#BDB2FF', '#FFC6FF'];
-
-function buildDefaultFirestoreDocumentPath(uid) {
-    if (!uid) {
-        return '';
-    }
-    return `users/${uid}/gestorClasses`;
-}
 
 // El estado central de la aplicación.
 export const LEARNING_ACTIVITY_STATUS = {
@@ -94,10 +86,7 @@ export const state = {
     dataPersistenceSupported: isFilePersistenceSupported,
     dataPersistenceStatus: isFilePersistenceSupported ? 'unconfigured' : 'unsupported',
     dataPersistenceError: null,
-    firebaseUser: null,
 };
-
-let databaseRealtimeUnsubscribe = null;
 
 function updatePersistenceSupportFlag() {
     state.filePersistenceSupported = isFilePersistenceSupported;
@@ -108,65 +97,8 @@ function updatePersistenceSupportFlag() {
     }
 }
 
-function triggerRenderEvent() {
-    if (typeof document !== 'undefined') {
-        document.dispatchEvent(new Event('render'));
-    }
-}
-
-function detachDatabaseRealtimeSubscription() {
-    if (typeof databaseRealtimeUnsubscribe === 'function') {
-        try {
-            databaseRealtimeUnsubscribe();
-        } catch (error) {
-            console.error('Error detaching database realtime subscription', error);
-        }
-    }
-    databaseRealtimeUnsubscribe = null;
-}
-
-function attachDatabaseRealtimeSubscription(config) {
-    detachDatabaseRealtimeSubscription();
-    if (!config?.documentPath || config.realtime === false) {
-        return;
-    }
-    try {
-        databaseRealtimeUnsubscribe = subscribeToDatabaseDocument(
-            config,
-            data => {
-                if (state.dataPersistenceMode !== 'database') {
-                    return;
-                }
-                if (!data || typeof data !== 'object') {
-                    populateStateFromPersistedData({});
-                } else {
-                    populateStateFromPersistedData(data);
-                }
-                state.dataPersistenceStatus = 'ready';
-                state.dataPersistenceError = null;
-                triggerRenderEvent();
-            },
-            error => {
-                console.error('Realtime database subscription error', error);
-                if (error?.code === 'permission-denied') {
-                    state.dataPersistenceStatus = 'permission-denied';
-                    state.dataPersistenceError = null;
-                } else {
-                    state.dataPersistenceStatus = 'error';
-                    state.dataPersistenceError = error?.message || String(error);
-                }
-                triggerRenderEvent();
-            }
-        );
-    } catch (error) {
-        console.error('Error subscribing to database document', error);
-    }
-}
-
 function isDatabasePersistenceActive() {
-    return state.dataPersistenceMode === 'database'
-        && Boolean(state.databaseConfig?.documentPath)
-        && Boolean(state.firebaseUser?.uid);
+    return state.dataPersistenceMode === 'database' && state.databaseConfig;
 }
 
 function ensureSavedEvaluationConfig(classId) {
@@ -537,12 +469,11 @@ async function loadDataFromDatabase(config) {
     const data = await fetchDataFromDatabase(config);
     if (!data || typeof data !== 'object') {
         populateStateFromPersistedData({});
-    } else {
-        populateStateFromPersistedData(data);
+        return;
     }
+    populateStateFromPersistedData(data);
     state.dataPersistenceStatus = 'ready';
     state.dataPersistenceError = null;
-    attachDatabaseRealtimeSubscription(config);
 }
 
 let saveTimeout;
@@ -608,46 +539,17 @@ export async function saveState() {
 }
 
 export async function loadState() {
-    const storedMode = getStoredPersistenceMode();
-    state.dataPersistenceMode = state.firebaseUser ? 'database' : storedMode;
-    if (state.firebaseUser && storedMode !== 'database') {
-        savePersistenceMode('database');
-    }
+    state.dataPersistenceMode = getStoredPersistenceMode();
     state.databaseConfig = getStoredDatabaseConfig();
     updatePersistenceSupportFlag();
 
     if (state.dataPersistenceMode === 'database') {
         state.dataFileHandle = null;
         state.dataFileName = '';
-        if (!state.firebaseUser) {
-            detachDatabaseRealtimeSubscription();
+        if (!state.databaseConfig) {
             populateStateFromPersistedData({});
-            state.dataPersistenceStatus = 'unauthenticated';
+            state.dataPersistenceStatus = 'unconfigured';
             state.dataPersistenceError = null;
-            return;
-        }
-
-        if (!state.databaseConfig || state.databaseConfig.userUid !== state.firebaseUser.uid) {
-            const defaultDocumentPath = buildDefaultFirestoreDocumentPath(state.firebaseUser.uid);
-            try {
-                await configureDatabasePersistence({
-                    documentPath: defaultDocumentPath,
-                    userUid: state.firebaseUser.uid,
-                    realtime: true
-                });
-                state.dataPersistenceStatus = 'ready';
-                state.dataPersistenceError = null;
-            } catch (error) {
-                console.error('Error configuring database persistence', error);
-                populateStateFromPersistedData({});
-                if (error?.code === 'permission-denied') {
-                    state.dataPersistenceStatus = 'permission-denied';
-                    state.dataPersistenceError = null;
-                } else {
-                    state.dataPersistenceStatus = 'error';
-                    state.dataPersistenceError = error.message || String(error);
-                }
-            }
             return;
         }
 
@@ -656,7 +558,6 @@ export async function loadState() {
         } catch (error) {
             console.error('Error loading data from database', error);
             populateStateFromPersistedData({});
-            detachDatabaseRealtimeSubscription();
             if (error?.code === 'permission-denied') {
                 state.dataPersistenceStatus = 'permission-denied';
                 state.dataPersistenceError = null;
@@ -668,7 +569,6 @@ export async function loadState() {
         return;
     }
 
-    detachDatabaseRealtimeSubscription();
     if (!isFilePersistenceSupported) {
         state.dataPersistenceSupported = false;
         state.dataFileHandle = null;
@@ -815,11 +715,7 @@ export async function clearConfiguredDataFile() {
 }
 
 export async function configureDatabasePersistence(config) {
-    const configWithUser = {
-        ...config,
-        userUid: config?.userUid || state.firebaseUser?.uid || ''
-    };
-    const normalized = saveDatabaseConfig(configWithUser);
+    const normalized = saveDatabaseConfig(config);
     state.databaseConfig = normalized;
     state.dataPersistenceMode = 'database';
     savePersistenceMode('database');
@@ -829,7 +725,6 @@ export async function configureDatabasePersistence(config) {
         return true;
     } catch (error) {
         console.error('Error configuring database persistence', error);
-        detachDatabaseRealtimeSubscription();
         if (error?.code === 'permission-denied') {
             state.dataPersistenceStatus = 'permission-denied';
             state.dataPersistenceError = null;
@@ -850,7 +745,6 @@ export async function reloadDataFromDatabase() {
         return true;
     } catch (error) {
         console.error('Error reloading data from database', error);
-        detachDatabaseRealtimeSubscription();
         if (error?.code === 'permission-denied') {
             state.dataPersistenceStatus = 'permission-denied';
             state.dataPersistenceError = null;
@@ -865,7 +759,6 @@ export async function reloadDataFromDatabase() {
 export function clearDatabasePersistenceConfig() {
     clearDatabaseConfig();
     state.databaseConfig = null;
-    detachDatabaseRealtimeSubscription();
     if (state.dataPersistenceMode === 'database') {
         state.dataPersistenceStatus = 'unconfigured';
         state.dataPersistenceError = null;
@@ -890,11 +783,6 @@ export async function switchDataPersistenceMode(mode) {
             state.dataPersistenceError = null;
             return true;
         }
-        if (!state.firebaseUser?.uid) {
-            state.dataPersistenceStatus = 'unauthenticated';
-            state.dataPersistenceError = null;
-            return true;
-        }
         try {
             await loadDataFromDatabase(state.databaseConfig);
             return true;
@@ -910,8 +798,6 @@ export async function switchDataPersistenceMode(mode) {
             return false;
         }
     }
-
-    detachDatabaseRealtimeSubscription();
 
     if (!isFilePersistenceSupported) {
         state.dataFileHandle = null;
@@ -938,27 +824,4 @@ export async function testDatabasePersistence(config) {
         throw new Error('No database configuration is available');
     }
     return await testDatabaseConnection(targetConfig);
-}
-
-export function getDefaultFirebaseDocumentPath() {
-    return buildDefaultFirestoreDocumentPath(state.firebaseUser?.uid || '');
-}
-
-export function applyFirebaseUser(user) {
-    if (user && typeof user === 'object') {
-        state.firebaseUser = {
-            uid: user.uid,
-            displayName: user.displayName || '',
-            email: user.email || ''
-        };
-        return;
-    }
-
-    state.firebaseUser = null;
-    if (state.dataPersistenceMode === 'database') {
-        detachDatabaseRealtimeSubscription();
-        populateStateFromPersistedData({});
-        state.dataPersistenceStatus = 'unauthenticated';
-        state.dataPersistenceError = null;
-    }
 }
