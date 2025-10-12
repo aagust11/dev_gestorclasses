@@ -1,3 +1,9 @@
+import {
+    readDocument,
+    writeDocument,
+    subscribeToDocument
+} from './firebaseClient.js';
+
 const CONFIG_STORAGE_KEY = 'gestorClassesDatabaseConfig';
 const MODE_STORAGE_KEY = 'gestorClassesPersistenceMode';
 
@@ -23,11 +29,19 @@ function safeParse(value) {
     }
 }
 
-function normalizeBaseUrl(url) {
-    if (typeof url !== 'string') {
+function normalizeDocumentPath(path) {
+    if (typeof path !== 'string') {
         return '';
     }
-    return url.replace(/\/$/, '');
+    const trimmed = path.trim().replace(/^\/+|\/+$/g, '');
+    if (!trimmed) {
+        return '';
+    }
+    const segments = trimmed.split('/').filter(Boolean);
+    if (segments.length % 2 !== 0) {
+        throw new Error('El camí del document de Firestore ha de contenir un nombre parell de segments.');
+    }
+    return segments.join('/');
 }
 
 export function getStoredPersistenceMode() {
@@ -63,29 +77,36 @@ export function getStoredDatabaseConfig() {
     if (!stored || typeof stored !== 'object') {
         return null;
     }
-    const baseUrl = normalizeBaseUrl(stored.baseUrl);
-    const authToken = typeof stored.authToken === 'string' ? stored.authToken : '';
-    if (!baseUrl) {
+    try {
+        const documentPath = normalizeDocumentPath(stored.documentPath);
+        if (!documentPath) {
+            return null;
+        }
+        const userUid = typeof stored.userUid === 'string' ? stored.userUid : '';
+        const realtime = stored.realtime !== false;
+        return { documentPath, userUid, realtime };
+    } catch (error) {
+        console.error('Invalid database configuration found in storage', error);
         return null;
     }
-    return { baseUrl, authToken };
 }
 
 export function saveDatabaseConfig(config) {
     if (!config || typeof config !== 'object') {
-        return;
+        throw new Error('No database configuration provided');
     }
     const storage = getStorage();
     if (!storage) {
         throw new Error('Local storage is not available in this environment');
     }
-    const baseUrl = normalizeBaseUrl(config.baseUrl);
-    if (!baseUrl) {
-        throw new Error('El camp de l\'URL de l\'API és obligatori');
+    const documentPath = normalizeDocumentPath(config.documentPath);
+    if (!documentPath) {
+        throw new Error('El camí del document de Firestore és obligatori');
     }
     const payload = {
-        baseUrl,
-        authToken: typeof config.authToken === 'string' ? config.authToken : ''
+        documentPath,
+        userUid: typeof config.userUid === 'string' ? config.userUid : '',
+        realtime: config.realtime !== false
     };
     storage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(payload));
     return payload;
@@ -99,83 +120,63 @@ export function clearDatabaseConfig() {
     storage.removeItem(CONFIG_STORAGE_KEY);
 }
 
-function buildHeaders(config) {
-    const headers = {
-        'Content-Type': 'application/json'
-    };
-    if (config.authToken) {
-        headers['Authorization'] = `Bearer ${config.authToken}`;
+function mapFirebaseError(error, defaultMessage) {
+    if (error && typeof error === 'object') {
+        const code = error.code || error.errorCode;
+        if (code === 'permission-denied' || code === 'auth/permission-denied') {
+            const mapped = new Error('The data server denied the request');
+            mapped.code = 'permission-denied';
+            return mapped;
+        }
     }
-    return headers;
+    return new Error(defaultMessage || 'Unexpected Firebase error');
 }
 
 export async function fetchDataFromDatabase(config) {
-    if (!config?.baseUrl) {
+    if (!config?.documentPath) {
         throw new Error('No database configuration is available');
     }
-    const endpoint = `${normalizeBaseUrl(config.baseUrl)}/data`;
-    const response = await fetch(endpoint, {
-        method: 'GET',
-        headers: buildHeaders(config),
-        credentials: 'include'
-    });
-    if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-            const error = new Error('The data server denied the request');
-            error.code = 'permission-denied';
-            throw error;
+    try {
+        const data = await readDocument(config.documentPath);
+        if (!data || typeof data !== 'object') {
+            return {};
         }
-        throw new Error(`Error recuperant les dades: ${response.status}`);
+        return data;
+    } catch (error) {
+        console.error('Error fetching Firestore document', error);
+        throw mapFirebaseError(error, 'Error recuperant les dades de Firebase');
     }
-    const payload = await response.json();
-    if (!payload || typeof payload !== 'object') {
-        return {};
-    }
-    if (payload.data && typeof payload.data === 'object') {
-        return payload.data;
-    }
-    return payload;
 }
 
 export async function saveDataToDatabase(config, data) {
-    if (!config?.baseUrl) {
+    if (!config?.documentPath) {
         throw new Error('No database configuration is available');
     }
-    const endpoint = `${normalizeBaseUrl(config.baseUrl)}/data`;
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: buildHeaders(config),
-        credentials: 'include',
-        body: JSON.stringify({ data })
-    });
-    if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-            const error = new Error('The data server denied the request');
-            error.code = 'permission-denied';
-            throw error;
-        }
-        throw new Error(`Error desant les dades: ${response.status}`);
+    try {
+        await writeDocument(config.documentPath, data);
+        return { ok: true };
+    } catch (error) {
+        console.error('Error saving Firestore document', error);
+        throw mapFirebaseError(error, 'Error desant les dades a Firebase');
     }
-    return await response.json();
 }
 
 export async function testDatabaseConnection(config) {
-    if (!config?.baseUrl) {
+    if (!config?.documentPath) {
         throw new Error('No database configuration is available');
     }
-    const endpoint = `${normalizeBaseUrl(config.baseUrl)}/status`;
-    const response = await fetch(endpoint, {
-        method: 'GET',
-        headers: buildHeaders(config),
-        credentials: 'include'
-    });
-    if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-            const error = new Error('The data server denied the request');
-            error.code = 'permission-denied';
-            throw error;
-        }
-        throw new Error(`Error comprovant l'estat de la base de dades: ${response.status}`);
+    try {
+        const data = await readDocument(config.documentPath);
+        return { ok: true, exists: Boolean(data && typeof data === 'object') };
+    } catch (error) {
+        console.error('Error testing Firestore document access', error);
+        throw mapFirebaseError(error, 'Error comprovant l\'accés a Firebase');
     }
-    return await response.json();
+}
+
+export function subscribeToDatabaseDocument(config, onData, onError) {
+    if (!config?.documentPath) {
+        throw new Error('No database configuration is available');
+    }
+    return subscribeToDocument(config.documentPath, onData, onError);
 }
