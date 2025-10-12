@@ -12,6 +12,7 @@ const MIN_ENCRYPTION_PASSWORD_LENGTH = 8;
 let encryptionKey = null;
 let encryptionMetadataCache = null;
 let encryptionMetadataLoaded = false;
+let inMemoryEncryptedPayload = null;
 
 const pastelColors = ['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A0C4FF', '#BDB2FF', '#FFC6FF'];
 
@@ -378,32 +379,15 @@ async function ensureEncryptionKey({ metadataHint = null, forcePrompt = false, r
 }
 
 function storeLocalEncryptedPayload(payload) {
-    const storage = getLocalStorageInstance();
-    if (!storage) {
+    if (!payload || typeof payload !== 'object') {
+        inMemoryEncryptedPayload = null;
         return;
     }
-    storage.setItem(ENCRYPTED_STATE_STORAGE_KEY, JSON.stringify(payload));
+    inMemoryEncryptedPayload = payload;
 }
 
 function loadLocalEncryptedPayload() {
-    const storage = getLocalStorageInstance();
-    if (!storage) {
-        return null;
-    }
-    const raw = storage.getItem(ENCRYPTED_STATE_STORAGE_KEY);
-    if (!raw) {
-        return null;
-    }
-    try {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') {
-            return parsed;
-        }
-    } catch (error) {
-        console.warn('No se pudo parsear el estado cifrado local, se eliminará.', error);
-        storage.removeItem(ENCRYPTED_STATE_STORAGE_KEY);
-    }
-    return null;
+    return inMemoryEncryptedPayload;
 }
 
 function loadLegacyPlainState() {
@@ -800,11 +784,7 @@ export async function saveState() {
         removeLegacyPlainState();
         persistRemoteState(encryptedPayload);
     } catch (error) {
-        console.error('No se pudo cifrar el estado antes de guardarlo. Se usará una copia local sin cifrar como respaldo.', error);
-        const storage = getLocalStorageInstance();
-        if (storage) {
-            storage.setItem(LEGACY_STATE_STORAGE_KEY, JSON.stringify(dataToSave));
-        }
+        console.error('No se pudo cifrar el estado antes de guardarlo. Los datos no se han sincronizado.', error);
     }
 
     const indicator = document.getElementById('save-indicator');
