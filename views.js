@@ -1042,6 +1042,8 @@ function renderEvaluationTermGradesTab(classes) {
         : [];
 
     const calculationMode = state.termGradeCalculationMode || 'dates';
+    const record = state.termGradeRecords?.[selectedClass.id]?.[selectedTermId] || null;
+    const hasExistingTermGrades = Boolean(record && Object.keys(record.students || {}).length > 0);
     const calculationModeSelector = `
         <fieldset class="term-grade-mode flex flex-col gap-1">
             <legend class="text-sm font-medium text-gray-700 dark:text-gray-200">${t('evaluation_term_grades_mode_label')}</legend>
@@ -1065,11 +1067,25 @@ function renderEvaluationTermGradesTab(classes) {
         </button>
     `;
 
+    const clearButtonDisabledAttr = hasExistingTermGrades ? '' : ' disabled';
+    const clearButtonClasses = hasExistingTermGrades
+        ? 'inline-flex items-center gap-2 px-3 py-2 border border-red-600 text-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20'
+        : 'inline-flex items-center gap-2 px-3 py-2 border border-red-600 text-red-600 rounded-md opacity-50 cursor-not-allowed';
+    const clearButtonLabel = t('evaluation_term_grades_clear_button');
+    const clearButtonHtml = `
+        <button data-action="clear-term-grades" data-class-id="${selectedClass.id}" data-term-id="${selectedTermId}" class="${clearButtonClasses}"${clearButtonDisabledAttr} aria-label="${escapeAttribute(clearButtonLabel)}" title="${escapeAttribute(clearButtonLabel)}">
+            <i data-lucide="eraser" class="w-4 h-4"></i>
+        </button>
+    `;
+
     const calculationControlsHtml = `
         <div class="flex flex-wrap items-end gap-4">
             ${termFilterHtml}
             ${calculationModeSelector}
-            ${calculateButtonHtml}
+            <div class="flex flex-wrap gap-2">
+                ${calculateButtonHtml}
+                ${clearButtonHtml}
+            </div>
         </div>
     `;
 
@@ -1092,7 +1108,6 @@ function renderEvaluationTermGradesTab(classes) {
     }
 
     const competencies = Array.isArray(selectedClass.competencies) ? selectedClass.competencies : [];
-    const record = state.termGradeRecords?.[selectedClass.id]?.[selectedTermId] || null;
     const usedFootnoteSymbols = new Set();
 
     const headerRow1 = competencies.map(comp => {
