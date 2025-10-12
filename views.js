@@ -1061,16 +1061,12 @@ function renderEvaluationTermGradesTab(classes) {
     `;
 
     const calculateButtonHtml = `
-        <button data-action="calculate-term-grades" data-class-id="${selectedClassIdAttr}" data-term-id="${selectedTermIdAttr}" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+        <button data-action="calculate-term-grades" data-class-id="${selectedClass.id}" data-term-id="${selectedTermId}" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
             <i data-lucide="calculator" class="w-4 h-4"></i>
             ${t('evaluation_term_grades_calculate_button')}
         </button>
     `;
 
-    const recalculateFinalButtonHtml = `
-        <button data-action="recalculate-term-final-grades" data-class-id="${selectedClassIdAttr}" data-term-id="${selectedTermIdAttr}" class="inline-flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
-            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-            ${t('evaluation_term_grades_recalculate_final_button')}
     const clearButtonDisabledAttr = hasExistingTermGrades ? '' : ' disabled';
     const clearButtonClasses = hasExistingTermGrades
         ? 'inline-flex items-center gap-2 px-3 py-2 border border-red-600 text-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20'
@@ -1086,9 +1082,6 @@ function renderEvaluationTermGradesTab(classes) {
         <div class="flex flex-wrap items-end gap-4">
             ${termFilterHtml}
             ${calculationModeSelector}
-            <div class="flex items-center gap-2">
-                ${calculateButtonHtml}
-                ${recalculateFinalButtonHtml}
             <div class="flex flex-wrap gap-2">
                 ${calculateButtonHtml}
                 ${clearButtonHtml}
@@ -1117,54 +1110,18 @@ function renderEvaluationTermGradesTab(classes) {
     const competencies = Array.isArray(selectedClass.competencies) ? selectedClass.competencies : [];
     const usedFootnoteSymbols = new Set();
 
-    const termKey = selectedTermId || 'all';
-    const expandedCompetenciesForClass = state.termGradeExpandedCompetencies?.[selectedClass.id] || {};
-    const expandedCompetencies = expandedCompetenciesForClass[termKey] || {};
-    const getCompetencyKey = (comp, index) => {
-        if (comp && typeof comp.id === 'string' && comp.id.trim()) {
-            return comp.id.trim();
-        }
-        if (comp && typeof comp.code === 'string' && comp.code.trim()) {
-            return `code-${comp.code.trim()}`;
-        }
-        return `index-${index}`;
-    };
-    const sanitizeForCss = (value = '') => value.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const selectedClassIdAttr = escapeAttribute(selectedClass.id || '');
-    const selectedTermIdAttr = escapeAttribute(selectedTermId || '');
-
-    const headerRow1 = competencies.map((comp, index) => {
+    const headerRow1 = competencies.map(comp => {
         const criteriaCount = Array.isArray(comp.criteria) ? comp.criteria.length : 0;
         const colSpan = Math.max(criteriaCount + 1, 1);
         const label = comp.code?.trim() || t('competency_without_code');
-        const competencyKey = getCompetencyKey(comp, index);
-        const isExpanded = Boolean(expandedCompetencies?.[competencyKey]);
-        const toggleIcon = isExpanded ? 'chevron-down' : 'chevron-right';
-        const headerContent = criteriaCount > 0
-            ? [
-                `<button type="button" class="term-grade-toggle"`,
-                `    data-action="toggle-term-grade-competency"`,
-                `    data-class-id="${selectedClassIdAttr}"`,
-                `    data-term-id="${selectedTermIdAttr}"`,
-                `    data-competency-id="${escapeAttribute(competencyKey)}"`,
-                `    aria-expanded="${isExpanded}">`,
-                `    <i data-lucide="${toggleIcon}" class="w-4 h-4"></i>`,
-                `    <span>${escapeHtml(label)}</span>`,
-                `</button>`,
-            ].join('')
-            : `<span class="term-grade-group-label">${escapeHtml(label)}</span>`;
-        return `<th scope="col" colspan="${colSpan}" class="term-grade-header term-grade-header--group term-grade-separator px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${headerContent}</th>`;
+        return `<th scope="col" colspan="${colSpan}" class="term-grade-header term-grade-header--group term-grade-separator px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${escapeHtml(label)}</th>`;
     }).join('');
 
-    const headerRow2 = competencies.map((comp, index) => {
+    const headerRow2 = competencies.map(comp => {
         const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
-        const competencyKey = getCompetencyKey(comp, index);
-        const sanitizedKey = sanitizeForCss(competencyKey);
-        const isExpanded = Boolean(expandedCompetencies?.[competencyKey]);
-        const expandedAttr = isExpanded ? 'true' : 'false';
         const criteriaCells = criteria.map(criterion => {
             const criterionLabel = criterion.code?.trim() || t('criterion_without_code');
-            return `<th scope="col" class="term-grade-header term-grade-header--criterion term-grade-criteria-column term-grade-criteria-column--${sanitizedKey} px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center" data-expanded="${expandedAttr}">${escapeHtml(criterionLabel)}</th>`;
+            return `<th scope="col" class="term-grade-header term-grade-header--criterion px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${escapeHtml(criterionLabel)}</th>`;
         }).join('');
         const competencyLabel = comp.code?.trim() || t('competency_without_code');
         return `${criteriaCells}<th scope="col" class="term-grade-header term-grade-header--competency term-grade-separator px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${escapeHtml(competencyLabel)}</th>`;
@@ -1174,12 +1131,8 @@ function renderEvaluationTermGradesTab(classes) {
         const studentCells = [];
         const studentName = student.name || '';
 
-        competencies.forEach((comp, compIndex) => {
+        competencies.forEach(comp => {
             const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
-            const competencyKey = getCompetencyKey(comp, compIndex);
-            const sanitizedKey = sanitizeForCss(competencyKey);
-            const isExpanded = Boolean(expandedCompetencies?.[competencyKey]);
-            const expandedAttr = isExpanded ? 'true' : 'false';
             criteria.forEach(criterion => {
                 const entry = getTermGradeEntry(record, student.id, 'criteria', criterion.id);
                 (entry.noteSymbols || []).forEach(symbol => symbol && usedFootnoteSymbols.add(symbol));
@@ -1193,11 +1146,7 @@ function renderEvaluationTermGradesTab(classes) {
                     label,
                     studentName,
                     levelOptions,
-                    cellClasses: `term-grade-cell--criterion term-grade-criteria-cell term-grade-criteria-cell--${sanitizedKey}`,
-                    dataAttributes: {
-                        expanded: expandedAttr,
-                        'competency-key': sanitizedKey,
-                    },
+                    cellClasses: 'term-grade-cell--criterion',
                 }));
             });
 
@@ -1339,46 +1288,20 @@ function renderTermGradeCell(entry, meta) {
         cellClassNames.push(extraCellClasses);
     }
     const selectedLevelAttr = escapeAttribute(levelValue || 'none');
-    const classIdAttr = escapeAttribute(classId || '');
-    const termIdAttr = escapeAttribute(termId || '');
-    const studentIdAttr = escapeAttribute(studentId || '');
-    const scopeAttr = escapeAttribute(scope || '');
-    const targetIdAttr = escapeAttribute(dataTargetId || '');
-
-    const dataAttributeEntries = meta?.dataAttributes && typeof meta.dataAttributes === 'object'
-        ? Object.entries(meta.dataAttributes).filter(([key, value]) => {
-            if (value === undefined || value === null) {
-                return false;
-            }
-            const normalizedKey = String(key || '').trim();
-            return normalizedKey.length > 0;
-        })
-        : [];
-
-    const dataAttributesHtml = dataAttributeEntries
-        .map(([key, value]) => {
-            const normalizedKey = String(key)
-                .trim()
-                .replace(/[^a-zA-Z0-9_-]/g, '-')
-                .toLowerCase();
-            const attributeValue = escapeAttribute(String(value));
-            return ` data-${normalizedKey}="${attributeValue}"`;
-        })
-        .join('');
 
     return `
-        <td class="${cellClassNames.join(' ')}"${dataAttributesHtml}>
+        <td class="${cellClassNames.join(' ')}">
             <div class="term-grade-cell-content">
                 <input
                     type="number"
                     step="0.01"
                     data-action="update-term-grade-numeric"
                     data-event="change"
-                    data-class-id="${classIdAttr}"
-                    data-term-id="${termIdAttr}"
-                    data-student-id="${studentIdAttr}"
-                    data-scope="${scopeAttr}"
-                    data-target-id="${targetIdAttr}"
+                    data-class-id="${classId}"
+                    data-term-id="${termId}"
+                    data-student-id="${studentId}"
+                    data-scope="${scope}"
+                    data-target-id="${dataTargetId}"
                     value="${escapeAttribute(numericValue || '')}"
                     class="term-grade-score-input border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-xs text-gray-800 dark:text-gray-100 text-right"
                     aria-label="${escapeAttribute(ariaLabel)}"
@@ -1386,11 +1309,11 @@ function renderTermGradeCell(entry, meta) {
                 <select
                     data-action="update-term-grade-level"
                     data-event="change"
-                    data-class-id="${classIdAttr}"
-                    data-term-id="${termIdAttr}"
-                    data-student-id="${studentIdAttr}"
-                    data-scope="${scopeAttr}"
-                    data-target-id="${targetIdAttr}"
+                    data-class-id="${classId}"
+                    data-term-id="${termId}"
+                    data-student-id="${studentId}"
+                    data-scope="${scope}"
+                    data-target-id="${dataTargetId}"
                     class="term-grade-level-select border border-gray-300 dark:border-gray-600 rounded-md text-xs text-gray-700 dark:text-gray-200"
                     aria-label="${escapeAttribute(ariaLabel)}"
                     data-selected-level="${selectedLevelAttr}"

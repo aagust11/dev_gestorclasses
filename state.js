@@ -56,7 +56,6 @@ export const state = {
     settingsEvaluationSelectedClassId: null,
     evaluationSettingsFeedback: {},
     termGradeRecords: {},
-    termGradeExpandedCompetencies: {},
 };
 
 function ensureSavedEvaluationConfig(classId) {
@@ -304,7 +303,6 @@ export function saveState() {
         evaluationSettings: state.evaluationSettings,
         settingsEvaluationSelectedClassId: state.settingsEvaluationSelectedClassId,
         termGradeRecords: state.termGradeRecords,
-        termGradeExpandedCompetencies: state.termGradeExpandedCompetencies,
     };
     localStorage.setItem('teacherDashboardData', JSON.stringify(dataToSave));
     
@@ -376,9 +374,6 @@ export function loadState() {
         state.settingsEvaluationSelectedClassId = parsedData.settingsEvaluationSelectedClassId || null;
         state.termGradeRecords = parsedData.termGradeRecords && typeof parsedData.termGradeRecords === 'object'
             ? parsedData.termGradeRecords
-            : {};
-        state.termGradeExpandedCompetencies = parsedData.termGradeExpandedCompetencies && typeof parsedData.termGradeExpandedCompetencies === 'object'
-            ? parsedData.termGradeExpandedCompetencies
             : {};
         state.evaluationSettingsFeedback = {};
     }
