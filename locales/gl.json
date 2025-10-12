@@ -142,6 +142,7 @@
   "evaluation_grades_no_criteria": "Sen criterios",
   "evaluation_grades_student_column": "Alumnado",
   "evaluation_term_grades_calculate_button": "Cálculo",
+  "evaluation_term_grades_recalculate_final_button": "Recalcular nota global",
   "evaluation_term_grades_clear_button": "Borrar cualificacións",
   "evaluation_term_grades_mode_label": "Tipo de cálculo",
   "evaluation_term_grades_mode_dates": "Por datas",
