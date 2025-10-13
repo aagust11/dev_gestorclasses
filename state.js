@@ -727,6 +727,26 @@ export function resetStateToDefaults() {
     populateStateFromPersistedData({});
 }
 
+export async function refreshDataFromFile() {
+    if (!state.dataPersistenceSupported || !state.dataFileHandle) {
+        return;
+    }
+
+    try {
+        const hasPermission = await ensureFilePermission(state.dataFileHandle);
+        if (!hasPermission) {
+            state.dataPersistenceStatus = 'permission-denied';
+            state.dataPersistenceError = null;
+            return;
+        }
+        await loadDataFromHandle(state.dataFileHandle);
+    } catch (error) {
+        console.error('Error reloading data file', error);
+        state.dataPersistenceStatus = 'error';
+        state.dataPersistenceError = error.message || String(error);
+    }
+}
+
 export async function pickExistingDataFile() {
     if (!state.dataPersistenceSupported) {
         return false;
