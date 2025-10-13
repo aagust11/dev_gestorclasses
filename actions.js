@@ -29,7 +29,7 @@ function ensureRubricEvaluation(rubric, studentId) {
         rubric.evaluations[studentId] = {
             scores: {},
             comment: '',
-            flags: { notPresented: false, deliveredLate: false }
+            flags: { notPresented: false, deliveredLate: false, exempt: false }
         };
     } else {
         const evaluation = rubric.evaluations[studentId];
@@ -40,10 +40,11 @@ function ensureRubricEvaluation(rubric, studentId) {
             evaluation.comment = '';
         }
         if (!evaluation.flags || typeof evaluation.flags !== 'object') {
-            evaluation.flags = { notPresented: false, deliveredLate: false };
+            evaluation.flags = { notPresented: false, deliveredLate: false, exempt: false };
         } else {
             evaluation.flags.notPresented = Boolean(evaluation.flags.notPresented);
             evaluation.flags.deliveredLate = Boolean(evaluation.flags.deliveredLate);
+            evaluation.flags.exempt = Boolean(evaluation.flags.exempt);
         }
     }
     return rubric.evaluations[studentId];
@@ -350,6 +351,10 @@ function calculateTermGradesForClassTerm(classId, termId, mode = 'dates', existi
                 const flags = evaluation?.flags && typeof evaluation.flags === 'object' ? evaluation.flags : {};
                 const scores = evaluation?.scores && typeof evaluation.scores === 'object' ? evaluation.scores : {};
                 const isNotPresented = Boolean(flags.notPresented);
+                const isExempt = Boolean(flags.exempt);
+                if (isExempt) {
+                    return;
+                }
                 const scoringMode = item?.scoring?.mode === 'numeric' ? 'numeric' : 'competency';
                 const rawScore = scores[item.id];
                 let levelId = '';
@@ -1965,7 +1970,7 @@ export const actionHandlers = {
         const item = rubric.items.find(entry => entry.id === itemId);
         if (!item || item.scoring?.mode === 'numeric') return;
         const evaluation = ensureRubricEvaluation(rubric, studentId);
-        if (!evaluation || evaluation.flags?.notPresented) {
+        if (!evaluation || evaluation.flags?.notPresented || evaluation.flags?.exempt) {
             return;
         }
         const current = evaluation.scores[itemId];
@@ -1988,7 +1993,7 @@ export const actionHandlers = {
         const item = rubric.items.find(entry => entry.id === itemId);
         if (!item || item.scoring?.mode !== 'numeric') return;
         const evaluation = ensureRubricEvaluation(rubric, studentId);
-        if (!evaluation || evaluation.flags?.notPresented) {
+        if (!evaluation || evaluation.flags?.notPresented || evaluation.flags?.exempt) {
             return;
         }
         const { number, hasValue } = parseLocaleNumberInput(element.value);
@@ -2033,6 +2038,7 @@ export const actionHandlers = {
         if (evaluation.flags.notPresented) {
             evaluation.scores = {};
             evaluation.flags.deliveredLate = false;
+            evaluation.flags.exempt = false;
         }
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
@@ -2045,9 +2051,28 @@ export const actionHandlers = {
         if (!activity) return;
         const rubric = ensureLearningActivityRubric(activity);
         const evaluation = ensureRubricEvaluation(rubric, studentId);
-        if (!evaluation) return;
+        if (!evaluation || evaluation.flags?.exempt) return;
         const current = Boolean(evaluation.flags?.deliveredLate);
         evaluation.flags.deliveredLate = !current;
+        saveState();
+        document.dispatchEvent(new CustomEvent('render'));
+    },
+    'toggle-rubric-exempt': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const studentId = element?.dataset?.studentId;
+        if (!activityId || !studentId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        const evaluation = ensureRubricEvaluation(rubric, studentId);
+        if (!evaluation) return;
+        const current = Boolean(evaluation.flags?.exempt);
+        evaluation.flags.exempt = !current;
+        if (evaluation.flags.exempt) {
+            evaluation.flags.notPresented = false;
+            evaluation.flags.deliveredLate = false;
+            evaluation.scores = {};
+        }
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
     },

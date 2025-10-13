@@ -370,7 +370,8 @@ function normalizeRubricStructure(rawRubric) {
                 comment: typeof normalizedEvaluation.comment === 'string' ? normalizedEvaluation.comment : '',
                 flags: {
                     notPresented: Boolean(flags.notPresented),
-                    deliveredLate: Boolean(flags.deliveredLate)
+                    deliveredLate: Boolean(flags.deliveredLate),
+                    exempt: Boolean(flags.exempt)
                 }
             };
         });
@@ -429,7 +430,7 @@ function isLearningActivityFullyCorrected(activity) {
             ? evaluation.flags
             : {};
 
-        if (flags.notPresented) {
+        if (flags.notPresented || flags.exempt) {
             return true;
         }
 

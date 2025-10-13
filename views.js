@@ -974,10 +974,13 @@ function renderEvaluationGradesTab(classes) {
                 const scores = evaluation && evaluation.scores && typeof evaluation.scores === 'object' ? evaluation.scores : {};
                 const generalComment = typeof evaluation?.comment === 'string' ? evaluation.comment.trim() : '';
                 const flags = evaluation && typeof evaluation.flags === 'object' ? evaluation.flags : {};
+                const isExempt = Boolean(flags.exempt);
                 const isNotPresented = Boolean(flags.notPresented);
                 const isDeliveredLate = Boolean(flags.deliveredLate);
                 const statusTooltipParts = [];
-                if (isNotPresented) {
+                if (isExempt) {
+                    statusTooltipParts.push(t('rubric_flag_exempt'));
+                } else if (isNotPresented) {
                     statusTooltipParts.push(t('rubric_flag_not_presented'));
                 } else if (isDeliveredLate) {
                     statusTooltipParts.push(t('rubric_flag_delivered_late'));
@@ -989,22 +992,29 @@ function renderEvaluationGradesTab(classes) {
                         tooltipParts.push(`${t('evaluation_tooltip_general_comment')}: ${generalComment}`);
                     }
                     const tooltipAttr = tooltipParts.length > 0 ? ` title="${escapeAttribute(tooltipParts.join('\\n'))}"` : '';
-                    const textClasses = isNotPresented
-                        ? 'text-red-600 dark:text-red-300 font-semibold'
-                        : isDeliveredLate
-                            ? 'text-amber-600 dark:text-amber-300 font-semibold'
-                            : 'text-gray-400';
-                    const label = isNotPresented
-                        ? t('rubric_flag_not_presented_short')
-                        : isDeliveredLate
-                            ? t('rubric_flag_delivered_late_short')
-                            : '—';
+                    const textClasses = isExempt
+                        ? 'text-emerald-600 dark:text-emerald-300 font-semibold'
+                        : isNotPresented
+                            ? 'text-red-600 dark:text-red-300 font-semibold'
+                            : isDeliveredLate
+                                ? 'text-amber-600 dark:text-amber-300 font-semibold'
+                                : 'text-gray-400';
+                    const label = isExempt
+                        ? t('rubric_flag_exempt_short')
+                        : isNotPresented
+                            ? t('rubric_flag_not_presented_short')
+                            : isDeliveredLate
+                                ? t('rubric_flag_delivered_late_short')
+                                : '—';
                     const deliveredLateIcon = '<i data-lucide="file-clock" class="w-3.5 h-3.5 inline-block align-text-top ml-1 text-amber-500 dark:text-amber-300"></i>';
-                    const statusIcon = isNotPresented
-                        ? '<i data-lucide="shredder" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
-                        : isDeliveredLate
-                            ? deliveredLateIcon
-                            : '';
+                    const exemptIcon = '<i data-lucide="book-dashed" class="w-3.5 h-3.5 inline-block align-text-top ml-1 text-emerald-500 dark:text-emerald-300"></i>';
+                    const statusIcon = isExempt
+                        ? exemptIcon
+                        : isNotPresented
+                            ? '<i data-lucide="shredder" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
+                            : isDeliveredLate
+                                ? deliveredLateIcon
+                                : '';
                     return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><span class="${textClasses}">${escapeHtml(label)}</span>${statusIcon}</td>`;
                 }
 
@@ -1026,7 +1036,10 @@ function renderEvaluationGradesTab(classes) {
                     let labelHtml;
                     let textClasses;
 
-                    if (isNotPresented) {
+                    if (isExempt) {
+                        textClasses = 'text-emerald-600 dark:text-emerald-300 font-semibold';
+                        labelHtml = `<span class="${textClasses}">${escapeHtml(t('rubric_flag_exempt_short'))}</span>`;
+                    } else if (isNotPresented) {
                         textClasses = 'text-red-600 dark:text-red-300 font-semibold';
                         labelHtml = `<span class="${textClasses}">${escapeHtml(t('rubric_flag_not_presented_short'))}</span>`;
                     } else if (scoringMode === 'numeric') {
@@ -1098,11 +1111,14 @@ function renderEvaluationGradesTab(classes) {
 
                     const tooltipAttr = tooltipParts.length > 0 ? ` title="${escapeAttribute(tooltipParts.join('\\n'))}"` : '';
                     const deliveredLateIcon = '<i data-lucide="file-clock" class="w-3.5 h-3.5 inline-block align-text-top ml-1 text-amber-500 dark:text-amber-300"></i>';
-                    const statusIcon = isNotPresented
-                        ? '<i data-lucide="shredder" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
-                        : isDeliveredLate
-                            ? deliveredLateIcon
-                            : '';
+                    const exemptIcon = '<i data-lucide="book-dashed" class="w-3.5 h-3.5 inline-block align-text-top ml-1 text-emerald-500 dark:text-emerald-300"></i>';
+                    const statusIcon = isExempt
+                        ? exemptIcon
+                        : isNotPresented
+                            ? '<i data-lucide="shredder" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
+                            : isDeliveredLate
+                                ? deliveredLateIcon
+                                : '';
                     return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}>${labelHtml}${statusIcon}</td>`;
                 }).join('');
             }).join('');
@@ -3543,6 +3559,10 @@ export function renderLearningActivityRubricView() {
             active: 'bg-gray-700 text-white border-gray-800 shadow-sm dark:bg-gray-200 dark:text-gray-900 dark:border-gray-300',
             inactive: 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700'
         },
+        exempt: {
+            active: 'bg-emerald-500 text-white border-emerald-600 shadow-sm',
+            inactive: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700 dark:hover:bg-emerald-900/40'
+        },
         deliveredLate: {
             active: 'bg-amber-500 text-white border-amber-600 shadow-sm',
             inactive: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700 dark:hover:bg-amber-900/40'
@@ -3557,7 +3577,9 @@ export function renderLearningActivityRubricView() {
             const comment = evaluation.comment || '';
             const flags = evaluation.flags && typeof evaluation.flags === 'object' ? evaluation.flags : {};
             const isNotPresented = Boolean(flags.notPresented);
+            const isExempt = Boolean(flags.exempt);
             const isDeliveredLate = Boolean(flags.deliveredLate);
+            const evaluationDisabled = isNotPresented || isExempt;
 
             const studentRows = rubricItems.map((item, index) => {
                 const competency = competencies.find(comp => comp.id === item.competencyId);
@@ -3647,8 +3669,8 @@ export function renderLearningActivityRubricView() {
                             ? `<div class="text-xs text-gray-500 dark:text-gray-400 leading-snug">${summaryParts.map(line => `<div>${escapeHtml(line)}</div>`).join('')}</div>`
                             : '';
 
-                        const numericDisabledAttr = isNotPresented ? ' disabled aria-disabled="true"' : '';
-                        const numericDisabledClass = isNotPresented ? ' opacity-60 cursor-not-allowed' : '';
+                        const numericDisabledAttr = evaluationDisabled ? ' disabled aria-disabled="true"' : '';
+                        const numericDisabledClass = evaluationDisabled ? ' opacity-60 cursor-not-allowed' : '';
                         const placeholder = t('rubric_numeric_input_placeholder');
 
                         return `<td colspan="${RUBRIC_LEVELS.length}" class="px-2 py-2 align-top">
@@ -3675,11 +3697,11 @@ export function renderLearningActivityRubricView() {
                         }
                         const ariaLabel = ariaLabelParts.join('. ');
                         const isActive = currentLevel === level;
-                        const disabledAttr = isNotPresented ? ' disabled' : '';
-                        const disabledClasses = isNotPresented ? ' opacity-60 cursor-not-allowed' : '';
+                        const disabledAttr = evaluationDisabled ? ' disabled' : '';
+                        const disabledClasses = evaluationDisabled ? ' opacity-60 cursor-not-allowed' : '';
                         const buttonClasses = `${baseLevelButtonClass} ${isActive ? levelStyles[level].active : levelStyles[level].inactive}${disabledClasses}`;
                         return `<td class="px-2 py-2 text-center align-top">
-                            <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${buttonClasses}" aria-pressed="${isActive}" aria-label="${escapeHtml(ariaLabel)}" title="${escapeHtml(tooltip)}" data-tooltip-comment="${escapeHtml(commentTemplate)}"${disabledAttr} aria-disabled="${isNotPresented}">
+                            <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${buttonClasses}" aria-pressed="${isActive}" aria-label="${escapeHtml(ariaLabel)}" title="${escapeHtml(tooltip)}" data-tooltip-comment="${escapeHtml(commentTemplate)}"${disabledAttr} aria-disabled="${evaluationDisabled}">
                                 <span class="block text-[11px] font-bold leading-none">${level}</span>
                                 <span class="sr-only">${escapeHtml(levelLabel)}</span>
                             </button>
@@ -3687,7 +3709,8 @@ export function renderLearningActivityRubricView() {
                     }).join('');
 
                 const notPresentedButtonClasses = `${flagButtonBaseClass} ${(isNotPresented ? flagButtonVariants.notPresented.active : flagButtonVariants.notPresented.inactive)}`;
-                const deliveredLateDisabled = isNotPresented;
+                const exemptButtonClasses = `${flagButtonBaseClass} ${(isExempt ? flagButtonVariants.exempt.active : flagButtonVariants.exempt.inactive)}`;
+                const deliveredLateDisabled = isNotPresented || isExempt;
                 const deliveredLateButtonClasses = `${flagButtonBaseClass} ${(isDeliveredLate ? flagButtonVariants.deliveredLate.active : flagButtonVariants.deliveredLate.inactive)}${deliveredLateDisabled ? ' opacity-60 cursor-not-allowed' : ''}`;
                 const deliveredLateDisabledAttr = deliveredLateDisabled ? ' disabled aria-disabled="true"' : '';
                 const flagButtonsHtml = `
@@ -3696,6 +3719,11 @@ export function renderLearningActivityRubricView() {
                             <i data-lucide="shredder" class="w-3.5 h-3.5"></i>
                             <span>${escapeHtml(t('rubric_flag_not_presented'))}</span>
                             <span class="font-bold">(${escapeHtml(t('rubric_flag_not_presented_short'))})</span>
+                        </button>
+                        <button type="button" class="${exemptButtonClasses}" data-action="toggle-rubric-exempt" data-learning-activity-id="${activity.id}" data-student-id="${student.id}" aria-pressed="${isExempt}" title="${escapeHtml(t('rubric_flag_exempt_hint'))}">
+                            <i data-lucide="book-dashed" class="w-3.5 h-3.5"></i>
+                            <span>${escapeHtml(t('rubric_flag_exempt'))}</span>
+                            <span class="font-bold">(${escapeHtml(t('rubric_flag_exempt_short'))})</span>
                         </button>
                         <button type="button" class="${deliveredLateButtonClasses}" data-action="toggle-rubric-delivered-late" data-learning-activity-id="${activity.id}" data-student-id="${student.id}" aria-pressed="${isDeliveredLate}" title="${escapeHtml(t('rubric_flag_delivered_late_hint'))}"${deliveredLateDisabledAttr}>
                             <i data-lucide="file-clock" class="w-3.5 h-3.5"></i>
