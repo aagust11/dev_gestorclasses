@@ -331,6 +331,18 @@ function normalizeRubricStructure(rawRubric) {
                 normalizedComments[level] = typeof levelComments[level] === 'string' ? levelComments[level] : '';
             });
 
+            const rawScoring = item?.scoring && typeof item.scoring === 'object'
+                ? item.scoring
+                : {};
+            const mode = rawScoring.mode === 'numeric' ? 'numeric' : 'competency';
+            const parsedMax = Number(rawScoring.maxScore);
+            const normalizedScoring = mode === 'numeric'
+                ? {
+                    mode: 'numeric',
+                    maxScore: Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : 10,
+                }
+                : { mode: 'competency', maxScore: null };
+
             return {
                 id: item?.id || generateId('rubric-item'),
                 competencyId: item?.competencyId || '',
@@ -338,6 +350,7 @@ function normalizeRubricStructure(rawRubric) {
                 weight: typeof item?.weight === 'number' && !Number.isNaN(item.weight) ? item.weight : 1,
                 generalComment: typeof item?.generalComment === 'string' ? item.generalComment : '',
                 levelComments: normalizedComments,
+                scoring: normalizedScoring,
             };
         }) : [],
         evaluations: {}
@@ -426,6 +439,20 @@ function isLearningActivityFullyCorrected(activity) {
 
         return rubricItems.every(item => {
             const value = scores[item.id];
+            const scoringMode = item?.scoring?.mode === 'numeric' ? 'numeric' : 'competency';
+            if (scoringMode === 'numeric') {
+                if (value && typeof value === 'object' && value.mode === 'numeric') {
+                    return Number.isFinite(Number(value.value));
+                }
+                if (typeof value === 'number') {
+                    return Number.isFinite(value);
+                }
+                if (typeof value === 'string') {
+                    const parsed = Number(value.replace(',', '.'));
+                    return Number.isFinite(parsed);
+                }
+                return false;
+            }
             return typeof value === 'string' && RUBRIC_LEVELS.includes(value);
         });
     });

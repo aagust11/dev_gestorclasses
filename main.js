@@ -200,6 +200,7 @@ function handleAction(action, element, event) {
         'close-learning-activity-criteria', 'go-to-competency-settings',
         'open-learning-activity-rubric', 'close-learning-activity-rubric', 'set-learning-activity-rubric-tab',
         'add-rubric-item', 'remove-rubric-item', 'move-rubric-item', 'set-rubric-score',
+        'update-rubric-item-scoring-mode', 'update-rubric-item-max-score', 'set-rubric-numeric-score',
         'filter-learning-activity-rubric-students', 'set-evaluation-tab', 'select-evaluation-class',
         'go-to-evaluation-for-learning-activity', 'select-settings-evaluation-class',
         'change-evaluation-modality', 'update-competency-level-value', 'update-competency-minimum',

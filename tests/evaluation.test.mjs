@@ -7,6 +7,7 @@ import {
   normalizeEvaluationConfig,
   NP_TREATMENTS,
   NO_EVIDENCE_BEHAVIOR,
+  computeNumericEvidence,
 } from '../evaluation.js';
 
 function cloneConfig(config) {
@@ -96,6 +97,28 @@ function cloneConfig(config) {
     { levelId: 'NP' },
   ], custom);
   assert.strictEqual(result.levelId, 'NP');
+}
+
+// Test: numeric evidence computation scales to four-point reference
+{
+  const config = createDefaultEvaluationConfig();
+  const normalized = normalizeEvaluationConfig(config);
+  const numeric = computeNumericEvidence(7.5, 10, null, { normalizedConfig: normalized });
+  assert.strictEqual(numeric.levelId, 'AN');
+  assert.ok(Math.abs(numeric.scoreOutOfFour - 3) < 1e-9);
+  assert.ok(Math.abs(numeric.normalizedScore - 3) < 1e-9);
+}
+
+// Test: weighted average honours explicit numeric overrides
+{
+  const config = createDefaultEvaluationConfig();
+  const evidences = [
+    { levelId: 'AS', activityWeight: 1, criterionWeight: 1, numericScore: 3.2 },
+    { levelId: 'AE', activityWeight: 1, criterionWeight: 1, numericScore: 3.6 },
+  ];
+  const result = calculateWeightedCompetencyResult(evidences, config);
+  assert.strictEqual(result.levelId, 'AN');
+  assert.ok(Math.abs(result.numericScore - 3.4) < 1e-9);
 }
 
 console.log('All evaluation tests passed.');

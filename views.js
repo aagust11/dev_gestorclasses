@@ -3,7 +3,7 @@
 import { state, LEARNING_ACTIVITY_STATUS, RUBRIC_LEVELS, calculateLearningActivityStatus, ensureEvaluationDraft } from './state.js';
 import { darkenColor, getWeekStartDate, getWeekDateRange, formatDate, isSameDate, findNextSession, findPreviousSession, DAY_KEYS, findNextClassSession, getCurrentTermDateRange, getWeeksForCourse, isHoliday, normalizeStudentAnnotation, STUDENT_ATTENDANCE_STATUS, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
-import { COMPETENCY_LEVEL_IDS, EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, validateCompetencyEvaluationConfig, normalizeEvaluationConfig } from './evaluation.js';
+import { COMPETENCY_LEVEL_IDS, EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, validateCompetencyEvaluationConfig, normalizeEvaluationConfig, computeNumericEvidence } from './evaluation.js';
 
 const sortStudentsByName = (studentA, studentB) => studentA.name.localeCompare(studentB.name);
 
@@ -15,6 +15,42 @@ const escapeHtml = (value = '') => String(value)
     .replace(/'/g, '&#39;');
 
 const escapeAttribute = (value = '') => escapeHtml(value).replace(/\n/g, '&#10;');
+
+function getRubricNumericValue(entry) {
+    if (entry && typeof entry === 'object') {
+        if (entry.mode === 'numeric' && typeof entry.value !== 'undefined') {
+            const parsed = Number(entry.value);
+            return Number.isFinite(parsed) ? parsed : NaN;
+        }
+        if (typeof entry.value === 'number') {
+            return entry.value;
+        }
+    }
+    if (typeof entry === 'number') {
+        return entry;
+    }
+    if (typeof entry === 'string') {
+        const parsed = Number(entry.replace(',', '.'));
+        return Number.isFinite(parsed) ? parsed : NaN;
+    }
+    return NaN;
+}
+
+function formatDecimal(value, locale, { minimumFractionDigits = 0, maximumFractionDigits = 2, useGrouping = false } = {}) {
+    if (!Number.isFinite(value)) {
+        return '';
+    }
+    try {
+        return Number(value).toLocaleString(locale || 'ca', {
+            minimumFractionDigits,
+            maximumFractionDigits,
+            useGrouping,
+        });
+    } catch (error) {
+        const digits = Math.max(minimumFractionDigits, maximumFractionDigits);
+        return Number(value).toFixed(digits);
+    }
+}
 
 function renderMobileHeaderActions(actions) {
     const container = document.getElementById('mobile-header-actions');
@@ -816,6 +852,8 @@ function renderEvaluationGradesTab(classes) {
     const { selectedClass, classButtonsHtml } = buildEvaluationClassSelection(classes);
     const selectedTermId = state.evaluationSelectedTermId || 'all';
     const { termFilterHtml, termRange } = buildEvaluationTermFilter(selectedTermId);
+    const locale = document.documentElement.lang || 'ca';
+    const classEvaluationConfig = normalizeEvaluationConfig(state.evaluationSettings?.[selectedClass?.id]);
 
     const filterBySelectedTerm = (activity) => {
         if (!termRange) {
@@ -881,10 +919,24 @@ function renderEvaluationGradesTab(classes) {
         const secondaryHtml = competencyName
             ? `<div class="text-[11px] text-gray-500 dark:text-gray-400 font-normal">${escapeHtml(competencyName)}</div>`
             : '';
+        const scoringMode = item.scoring?.mode === 'numeric' ? 'numeric' : 'competency';
+        let scoringInfoHtml = '';
+        if (scoringMode === 'numeric') {
+            const maxScore = Number(item.scoring?.maxScore);
+            if (Number.isFinite(maxScore) && maxScore > 0) {
+                const formattedMax = formatDecimal(maxScore, locale, { maximumFractionDigits: 2, useGrouping: false });
+                const suffixTemplate = t('rubric_numeric_header_suffix');
+                const suffixText = suffixTemplate.startsWith('[')
+                    ? formattedMax
+                    : suffixTemplate.replace('{{max}}', formattedMax);
+                scoringInfoHtml = `<div class="text-[11px] text-gray-500 dark:text-gray-400 font-normal">${escapeHtml(suffixText)}</div>`;
+            }
+        }
         return `
             <div class="space-y-0.5">
                 <div>${escapeHtml(primary)}</div>
                 ${secondaryHtml}
+                ${scoringInfoHtml}
             </div>
         `;
     };
@@ -957,7 +1009,9 @@ function renderEvaluationGradesTab(classes) {
                 }
 
                 return rubricItems.map(item => {
-                    const scoreLevel = scores[item.id] || '';
+                    const scoringMode = item.scoring?.mode === 'numeric' ? 'numeric' : 'competency';
+                    const rawScore = scores[item.id];
+                    const scoreLevel = scoringMode === 'numeric' ? '' : (rawScore || '');
                     const levelComment = scoreLevel && item.levelComments && typeof item.levelComments === 'object'
                         ? (item.levelComments[scoreLevel] || '')
                         : '';
@@ -968,12 +1022,65 @@ function renderEvaluationGradesTab(classes) {
                     if (generalComment) {
                         tooltipParts.push(`${t('evaluation_tooltip_general_comment')}: ${generalComment}`);
                     }
-                    const tooltipAttr = tooltipParts.length > 0 ? ` title="${escapeAttribute(tooltipParts.join('\\n'))}"` : '';
+
                     let labelHtml;
                     let textClasses;
+
                     if (isNotPresented) {
                         textClasses = 'text-red-600 dark:text-red-300 font-semibold';
                         labelHtml = `<span class="${textClasses}">${escapeHtml(t('rubric_flag_not_presented_short'))}</span>`;
+                    } else if (scoringMode === 'numeric') {
+                        const numericValue = getRubricNumericValue(rawScore);
+                        const maxScore = Number(item.scoring?.maxScore);
+                        const hasNumericValue = Number.isFinite(numericValue);
+                        const hasValidMax = Number.isFinite(maxScore) && maxScore > 0;
+                        if (hasNumericValue && hasValidMax) {
+                            const numericResult = computeNumericEvidence(numericValue, maxScore, null, { normalizedConfig: classEvaluationConfig });
+                            const levelId = numericResult?.levelId || '';
+                            const levelLabel = levelId ? t(`rubric_level_${levelId}_label`) : '';
+                            const formattedValue = formatDecimal(numericValue, locale, { maximumFractionDigits: 2, useGrouping: false });
+                            const formattedMax = formatDecimal(maxScore, locale, { maximumFractionDigits: 2, useGrouping: false });
+                            const formattedNormalized = Number.isFinite(numericResult?.scoreOutOfFour)
+                                ? formatDecimal(numericResult.scoreOutOfFour, locale, { maximumFractionDigits: 2, useGrouping: false })
+                                : '';
+                            const ratioTemplate = t('rubric_numeric_ratio');
+                            const ratioText = ratioTemplate.startsWith('[')
+                                ? `${formattedValue} / ${formattedMax}`
+                                : ratioTemplate.replace('{{value}}', formattedValue).replace('{{max}}', formattedMax);
+                            const equivalenceTemplate = t('rubric_numeric_equivalence');
+                            const equivalenceText = levelId && formattedNormalized
+                                ? (equivalenceTemplate.startsWith('[')
+                                    ? `${levelId} (${formattedNormalized}/4)`
+                                    : equivalenceTemplate
+                                        .replace('{{level}}', levelId)
+                                        .replace('{{level_label}}', levelLabel.startsWith('[') ? levelId : levelLabel)
+                                        .replace('{{score}}', formattedNormalized))
+                                : '';
+                            const summary = equivalenceText ? `${ratioText} · ${equivalenceText}` : ratioText;
+                            textClasses = 'text-gray-800 dark:text-gray-100 font-medium';
+                            const srOnlyLabel = levelLabel && !levelLabel.startsWith('[')
+                                ? `<span class="sr-only"> (${escapeHtml(levelLabel)})</span>`
+                                : '';
+                            labelHtml = `<span class="${textClasses}">${escapeHtml(summary)}</span>${srOnlyLabel}`;
+                            tooltipParts.push(ratioText);
+                            if (equivalenceText) {
+                                tooltipParts.push(equivalenceText);
+                            }
+                        } else if (hasValidMax) {
+                            const maxHintTemplate = t('rubric_numeric_max_hint');
+                            const formattedMax = formatDecimal(maxScore, locale, { maximumFractionDigits: 2, useGrouping: false });
+                            const maxHint = maxHintTemplate.startsWith('[')
+                                ? formattedMax
+                                : maxHintTemplate.replace('{{max}}', formattedMax);
+                            textClasses = 'text-gray-400';
+                            labelHtml = `<span class="${textClasses}">${escapeHtml(maxHint)}</span>`;
+                            tooltipParts.push(maxHint);
+                        } else {
+                            const missingMaxTemplate = t('rubric_numeric_missing_max');
+                            textClasses = 'text-red-600 dark:text-red-300 font-semibold';
+                            const message = missingMaxTemplate.startsWith('[') ? '—' : missingMaxTemplate;
+                            labelHtml = `<span class="${textClasses}">${escapeHtml(message)}</span>`;
+                        }
                     } else if (scoreLevel) {
                         const key = `rubric_level_${scoreLevel}_label`;
                         const translated = t(key);
@@ -988,6 +1095,8 @@ function renderEvaluationGradesTab(classes) {
                             : 'text-gray-400';
                         labelHtml = `<span class="${textClasses}">${escapeHtml(isDeliveredLate ? t('rubric_flag_delivered_late_short') : '—')}</span>`;
                     }
+
+                    const tooltipAttr = tooltipParts.length > 0 ? ` title="${escapeAttribute(tooltipParts.join('\\n'))}"` : '';
                     const deliveredLateIcon = '<i data-lucide="file-clock" class="w-3.5 h-3.5 inline-block align-text-top ml-1 text-amber-500 dark:text-amber-300"></i>';
                     const statusIcon = isNotPresented
                         ? '<i data-lucide="shredder" class="w-3.5 h-3.5 inline-block align-text-top ml-1"></i>'
@@ -3228,6 +3337,8 @@ export function renderLearningActivityRubricView() {
     }
 
     const targetClass = state.activities.find(a => a.id === activity.classId);
+    const locale = document.documentElement.lang || 'ca';
+    const normalizedEvaluationConfig = normalizeEvaluationConfig(state.evaluationSettings?.[activity.classId]);
     const rubric = activity.rubric || { items: [], evaluations: {} };
     const rubricItems = Array.isArray(rubric.items) ? rubric.items : [];
     const evaluations = rubric.evaluations && typeof rubric.evaluations === 'object' ? rubric.evaluations : {};
@@ -3325,6 +3436,11 @@ export function renderLearningActivityRubricView() {
             const generalCommentValue = escapeHtml(typeof item.generalComment === 'string' ? item.generalComment : '');
             const moveUpDisabled = index === 0 ? 'disabled aria-disabled="true"' : '';
             const moveDownDisabled = index === rubricItems.length - 1 ? 'disabled aria-disabled="true"' : '';
+            const scoringMode = item.scoring?.mode === 'numeric' ? 'numeric' : 'competency';
+            const maxScoreNumber = Number(item.scoring?.maxScore);
+            const maxScoreDisplay = scoringMode === 'numeric' && Number.isFinite(maxScoreNumber)
+                ? formatDecimal(maxScoreNumber, locale, { maximumFractionDigits: 2, useGrouping: false })
+                : '';
 
             const levelCommentsHtml = RUBRIC_LEVELS.map(level => {
                 const levelLabel = t(`rubric_level_${level}_label`);
@@ -3362,6 +3478,22 @@ export function renderLearningActivityRubricView() {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                    <div class="flex flex-col sm:flex-row sm:items-end gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1" for="rubric-scoring-mode-${item.id}">${t('rubric_scoring_mode_label')}</label>
+                            <select id="rubric-scoring-mode-${item.id}" data-action="update-rubric-item-scoring-mode" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" class="w-full sm:w-56 p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm">
+                                <option value="competency" ${scoringMode === 'competency' ? 'selected' : ''}>${t('rubric_scoring_mode_competency')}</option>
+                                <option value="numeric" ${scoringMode === 'numeric' ? 'selected' : ''}>${t('rubric_scoring_mode_numeric')}</option>
+                            </select>
+                        </div>
+                        ${scoringMode === 'numeric'
+                            ? `<div class="flex-1">
+                                    <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1" for="rubric-max-score-${item.id}">${t('rubric_numeric_max_score_label')}</label>
+                                    <input id="rubric-max-score-${item.id}" type="text" inputmode="decimal" pattern="[0-9]*[,.]?[0-9]*" data-event="change" value="${escapeAttribute(maxScoreDisplay)}" data-action="update-rubric-item-max-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" placeholder="${escapeAttribute(t('rubric_numeric_max_score_placeholder'))}" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md text-sm">
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${t('rubric_numeric_max_score_help')}</p>
+                                </div>`
+                            : ''}
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1" for="rubric-general-comment-${item.id}">${t('rubric_item_comment_label')}</label>
@@ -3434,32 +3566,125 @@ export function renderLearningActivityRubricView() {
                 const competencyLabel = competency?.code || t('competency_without_code');
                 const criterionCode = criterion?.code || t('criterion_without_code');
                 const criterionDescription = criterion?.description || t('criterion_without_description');
+                const scoringMode = item.scoring?.mode === 'numeric' ? 'numeric' : 'competency';
                 const currentLevel = scores[item.id] || '';
 
-                const scoreCells = RUBRIC_LEVELS.map(level => {
-                    const levelLabel = t(`rubric_level_${level}_label`);
-                    const commentTemplate = item.levelComments?.[level]?.trim() || '';
-                    const tooltipParts = [`${criterionCode} · ${levelLabel}`];
-                    if (commentTemplate) {
-                        tooltipParts.push(commentTemplate);
-                    }
-                    const tooltip = tooltipParts.join('\n');
-                    const ariaLabelParts = [levelLabel];
-                    if (commentTemplate) {
-                        ariaLabelParts.push(commentTemplate);
-                    }
-                    const ariaLabel = ariaLabelParts.join('. ');
-                    const isActive = currentLevel === level;
-                    const disabledAttr = isNotPresented ? ' disabled' : '';
-                    const disabledClasses = isNotPresented ? ' opacity-60 cursor-not-allowed' : '';
-                    const buttonClasses = `${baseLevelButtonClass} ${isActive ? levelStyles[level].active : levelStyles[level].inactive}${disabledClasses}`;
-                    return `<td class="px-2 py-2 text-center align-top">
-                        <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${buttonClasses}" aria-pressed="${isActive}" aria-label="${escapeHtml(ariaLabel)}" title="${escapeHtml(tooltip)}" data-tooltip-comment="${escapeHtml(commentTemplate)}"${disabledAttr} aria-disabled="${isNotPresented}">
-                            <span class="block text-[11px] font-bold leading-none">${level}</span>
-                            <span class="sr-only">${escapeHtml(levelLabel)}</span>
-                        </button>
-                    </td>`;
-                }).join('');
+                const scoreCells = scoringMode === 'numeric'
+                    ? (() => {
+                        const numericValue = getRubricNumericValue(scores[item.id]);
+                        const maxScore = Number(item.scoring?.maxScore);
+                        const hasNumericValue = Number.isFinite(numericValue);
+                        const hasValidMax = Number.isFinite(maxScore) && maxScore > 0;
+                        const numericResult = hasNumericValue && hasValidMax
+                            ? computeNumericEvidence(numericValue, maxScore, null, { normalizedConfig: normalizedEvaluationConfig })
+                            : null;
+                        const normalizedScore = numericResult?.scoreOutOfFour;
+                        const derivedLevelId = numericResult?.levelId || '';
+                        const levelLabel = derivedLevelId ? t(`rubric_level_${derivedLevelId}_label`) : '';
+                        const badgeClasses = derivedLevelId
+                            ? levelStyles[derivedLevelId]?.active || 'bg-gray-200 text-gray-700 border-gray-300'
+                            : 'bg-gray-200 text-gray-600 border-gray-300';
+                        const badgeHtml = derivedLevelId
+                            ? `<span class="inline-flex items-center px-2 py-1 rounded-md border text-xs font-semibold ${badgeClasses}">${escapeHtml(derivedLevelId)}<span class="sr-only"> — ${escapeHtml(levelLabel)}</span></span>`
+                            : '';
+                        const formattedInputValue = hasNumericValue
+                            ? formatDecimal(numericValue, locale, { maximumFractionDigits: 2, useGrouping: false })
+                            : '';
+                        const formattedValue = hasNumericValue
+                            ? formatDecimal(numericValue, locale, { maximumFractionDigits: 2, useGrouping: false })
+                            : '';
+                        const formattedMax = hasValidMax
+                            ? formatDecimal(maxScore, locale, { maximumFractionDigits: 2, useGrouping: false })
+                            : '';
+                        const formattedNormalized = Number.isFinite(normalizedScore)
+                            ? formatDecimal(normalizedScore, locale, { maximumFractionDigits: 2, useGrouping: false })
+                            : '';
+                        const ratioTemplate = t('rubric_numeric_ratio');
+                        const maxHintTemplate = t('rubric_numeric_max_hint');
+                        const missingMaxTemplate = t('rubric_numeric_missing_max');
+                        const equivalenceTemplate = t('rubric_numeric_equivalence');
+                        const enterValueTemplate = t('rubric_numeric_enter_value');
+
+                        const ratioText = hasNumericValue && hasValidMax
+                            ? (ratioTemplate.startsWith('[')
+                                ? `${formattedValue} / ${formattedMax}`
+                                : ratioTemplate.replace('{{value}}', formattedValue).replace('{{max}}', formattedMax))
+                            : hasValidMax
+                                ? (maxHintTemplate.startsWith('[')
+                                    ? `${formattedMax}`
+                                    : maxHintTemplate.replace('{{max}}', formattedMax))
+                                : (missingMaxTemplate.startsWith('[')
+                                    ? ''
+                                    : missingMaxTemplate);
+
+                        const equivalenceText = Number.isFinite(normalizedScore) && derivedLevelId
+                            ? (equivalenceTemplate.startsWith('[')
+                                ? `${derivedLevelId} (${formattedNormalized}/4)`
+                                : equivalenceTemplate
+                                    .replace('{{level}}', derivedLevelId)
+                                    .replace('{{level_label}}', levelLabel.startsWith('[') ? derivedLevelId : levelLabel)
+                                    .replace('{{score}}', formattedNormalized))
+                            : '';
+
+                        const helperText = !hasNumericValue && hasValidMax
+                            ? ''
+                            : (!hasNumericValue
+                                ? (enterValueTemplate.startsWith('[') ? '' : enterValueTemplate)
+                                : '');
+
+                        const summaryParts = [];
+                        if (ratioText) {
+                            summaryParts.push(ratioText);
+                        }
+                        if (equivalenceText) {
+                            summaryParts.push(equivalenceText);
+                        }
+                        if (helperText) {
+                            summaryParts.push(helperText);
+                        }
+
+                        const summaryHtml = summaryParts.length > 0
+                            ? `<div class="text-xs text-gray-500 dark:text-gray-400 leading-snug">${summaryParts.map(line => `<div>${escapeHtml(line)}</div>`).join('')}</div>`
+                            : '';
+
+                        const numericDisabledAttr = isNotPresented ? ' disabled aria-disabled="true"' : '';
+                        const numericDisabledClass = isNotPresented ? ' opacity-60 cursor-not-allowed' : '';
+                        const placeholder = t('rubric_numeric_input_placeholder');
+
+                        return `<td colspan="${RUBRIC_LEVELS.length}" class="px-2 py-2 align-top">
+                            <div class="flex flex-col gap-1">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <input type="text" inputmode="decimal" pattern="[0-9]*[,.]?[0-9]*" data-event="change" data-action="set-rubric-numeric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" value="${escapeAttribute(formattedInputValue)}" placeholder="${escapeAttribute(placeholder)}" class="w-28 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm${numericDisabledClass}"${numericDisabledAttr}>
+                                    ${badgeHtml}
+                                </div>
+                                ${summaryHtml}
+                            </div>
+                        </td>`;
+                    })()
+                    : RUBRIC_LEVELS.map(level => {
+                        const levelLabel = t(`rubric_level_${level}_label`);
+                        const commentTemplate = item.levelComments?.[level]?.trim() || '';
+                        const tooltipParts = [`${criterionCode} · ${levelLabel}`];
+                        if (commentTemplate) {
+                            tooltipParts.push(commentTemplate);
+                        }
+                        const tooltip = tooltipParts.join('\n');
+                        const ariaLabelParts = [levelLabel];
+                        if (commentTemplate) {
+                            ariaLabelParts.push(commentTemplate);
+                        }
+                        const ariaLabel = ariaLabelParts.join('. ');
+                        const isActive = currentLevel === level;
+                        const disabledAttr = isNotPresented ? ' disabled' : '';
+                        const disabledClasses = isNotPresented ? ' opacity-60 cursor-not-allowed' : '';
+                        const buttonClasses = `${baseLevelButtonClass} ${isActive ? levelStyles[level].active : levelStyles[level].inactive}${disabledClasses}`;
+                        return `<td class="px-2 py-2 text-center align-top">
+                            <button type="button" data-action="set-rubric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" data-level="${level}" class="${buttonClasses}" aria-pressed="${isActive}" aria-label="${escapeHtml(ariaLabel)}" title="${escapeHtml(tooltip)}" data-tooltip-comment="${escapeHtml(commentTemplate)}"${disabledAttr} aria-disabled="${isNotPresented}">
+                                <span class="block text-[11px] font-bold leading-none">${level}</span>
+                                <span class="sr-only">${escapeHtml(levelLabel)}</span>
+                            </button>
+                        </td>`;
+                    }).join('');
 
                 const notPresentedButtonClasses = `${flagButtonBaseClass} ${(isNotPresented ? flagButtonVariants.notPresented.active : flagButtonVariants.notPresented.inactive)}`;
                 const deliveredLateDisabled = isNotPresented;

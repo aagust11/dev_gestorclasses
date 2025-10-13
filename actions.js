@@ -3,7 +3,7 @@
 import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault, pickExistingDataFile, createDataFileWithCurrentState, reloadDataFromConfiguredFile, clearConfiguredDataFile, resetStateToDefaults, scheduleTemplateSync, isTemplateActivity } from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
-import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig } from './evaluation.js';
+import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig, computeNumericEvidence } from './evaluation.js';
 
 function generateRubricItemId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -55,6 +55,40 @@ function createDefaultLevelComments() {
         comments[level] = '';
     });
     return comments;
+}
+
+function parseRubricNumericScore(entry) {
+    if (entry && typeof entry === 'object') {
+        if (entry.mode === 'numeric') {
+            const parsed = Number(entry.value);
+            return Number.isFinite(parsed) ? parsed : NaN;
+        }
+        if (typeof entry.value === 'number') {
+            return entry.value;
+        }
+    }
+    if (typeof entry === 'number') {
+        return entry;
+    }
+    if (typeof entry === 'string') {
+        const normalized = entry.replace(',', '.');
+        const parsed = Number(normalized);
+        return Number.isFinite(parsed) ? parsed : NaN;
+    }
+    return NaN;
+}
+
+function parseLocaleNumberInput(value) {
+    if (typeof value !== 'string') {
+        return { number: NaN, hasValue: false };
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return { number: NaN, hasValue: false };
+    }
+    const normalized = trimmed.replace(/\s+/g, '').replace(',', '.');
+    const parsed = Number(normalized);
+    return { number: Number.isFinite(parsed) ? parsed : NaN, hasValue: true };
 }
 
 function makeCriterionKey(competencyId = '', criterionId = '') {
@@ -316,10 +350,30 @@ function calculateTermGradesForClassTerm(classId, termId, mode = 'dates', existi
                 const flags = evaluation?.flags && typeof evaluation.flags === 'object' ? evaluation.flags : {};
                 const scores = evaluation?.scores && typeof evaluation.scores === 'object' ? evaluation.scores : {};
                 const isNotPresented = Boolean(flags.notPresented);
-                let levelId = scores[item.id];
+                const scoringMode = item?.scoring?.mode === 'numeric' ? 'numeric' : 'competency';
+                const rawScore = scores[item.id];
+                let levelId = '';
+                let numericScoreOverride = null;
+
                 if (isNotPresented) {
                     levelId = 'NP';
+                    numericScoreOverride = 0;
+                } else if (scoringMode === 'numeric') {
+                    const numericValue = parseRubricNumericScore(rawScore);
+                    const maxScore = item?.scoring?.maxScore;
+                    if (Number.isFinite(numericValue) && Number.isFinite(Number(maxScore))) {
+                        const numericResult = computeNumericEvidence(numericValue, maxScore, null, { normalizedConfig });
+                        if (numericResult.levelId) {
+                            levelId = numericResult.levelId;
+                        }
+                        if (Number.isFinite(numericResult.normalizedScore)) {
+                            numericScoreOverride = numericResult.normalizedScore;
+                        }
+                    }
+                } else if (typeof rawScore === 'string') {
+                    levelId = rawScore;
                 }
+
                 if (!levelId) {
                     return;
                 }
@@ -332,6 +386,9 @@ function calculateTermGradesForClassTerm(classId, termId, mode = 'dates', existi
                 }
 
                 const evidence = { levelId, activityWeight, criterionWeight };
+                if (Number.isFinite(numericScoreOverride)) {
+                    evidence.numericScore = numericScoreOverride;
+                }
                 studentRecord.criteria.get(criterionId).push(evidence);
                 studentRecord.competencies.get(competencyId).push(evidence);
             });
@@ -593,6 +650,7 @@ function ensureRubricHasItemForCriterion(rubric, competencyId, criterionId) {
         criterionId,
         weight: 1,
         levelComments: createDefaultLevelComments(),
+        scoring: { mode: 'competency', maxScore: null },
     };
 
     rubric.items.push(newItem);
@@ -1765,6 +1823,7 @@ export const actionHandlers = {
             weight: 1,
             generalComment: '',
             levelComments: createDefaultLevelComments(),
+            scoring: { mode: 'competency', maxScore: null },
         });
         ensureActivityHasCriterionRef(activity, competencyId, criterionId);
         select.value = '';
@@ -1823,6 +1882,52 @@ export const actionHandlers = {
         item.weight = Number.isFinite(value) ? value : 1;
         saveState();
     },
+    'update-rubric-item-scoring-mode': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const itemId = element?.dataset?.itemId;
+        if (!activityId || !itemId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        const item = rubric.items.find(entry => entry.id === itemId);
+        if (!item) return;
+        const previousMode = item.scoring?.mode === 'numeric' ? 'numeric' : 'competency';
+        const newMode = element.value === 'numeric' ? 'numeric' : 'competency';
+        if (newMode === 'numeric') {
+            const parsedMax = Number(item.scoring?.maxScore);
+            const maxScore = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : 10;
+            item.scoring = { mode: 'numeric', maxScore };
+        } else {
+            item.scoring = { mode: 'competency', maxScore: null };
+        }
+        if (newMode !== previousMode) {
+            cleanRubricEvaluations(rubric, [item.id]);
+        }
+        saveState();
+        document.dispatchEvent(new CustomEvent('render'));
+    },
+    'update-rubric-item-max-score': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const itemId = element?.dataset?.itemId;
+        if (!activityId || !itemId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        const item = rubric.items.find(entry => entry.id === itemId);
+        if (!item || item.scoring?.mode !== 'numeric') return;
+        const { number, hasValue } = parseLocaleNumberInput(element.value);
+        if (!hasValue) {
+            document.dispatchEvent(new CustomEvent('render'));
+            return;
+        }
+        if (!Number.isFinite(number) || number <= 0) {
+            document.dispatchEvent(new CustomEvent('render'));
+            return;
+        }
+        item.scoring.maxScore = number;
+        saveState();
+        document.dispatchEvent(new CustomEvent('render'));
+    },
     'update-rubric-item-general-comment': (id, element) => {
         const activityId = element?.dataset?.learningActivityId;
         const itemId = element?.dataset?.itemId;
@@ -1857,6 +1962,8 @@ export const actionHandlers = {
         const activity = state.learningActivities.find(act => act.id === activityId);
         if (!activity) return;
         const rubric = ensureLearningActivityRubric(activity);
+        const item = rubric.items.find(entry => entry.id === itemId);
+        if (!item || item.scoring?.mode === 'numeric') return;
         const evaluation = ensureRubricEvaluation(rubric, studentId);
         if (!evaluation || evaluation.flags?.notPresented) {
             return;
@@ -1867,6 +1974,36 @@ export const actionHandlers = {
         } else {
             evaluation.scores[itemId] = level;
         }
+        saveState();
+        document.dispatchEvent(new CustomEvent('render'));
+    },
+    'set-rubric-numeric-score': (id, element) => {
+        const activityId = element?.dataset?.learningActivityId;
+        const itemId = element?.dataset?.itemId;
+        const studentId = element?.dataset?.studentId;
+        if (!activityId || !itemId || !studentId) return;
+        const activity = state.learningActivities.find(act => act.id === activityId);
+        if (!activity) return;
+        const rubric = ensureLearningActivityRubric(activity);
+        const item = rubric.items.find(entry => entry.id === itemId);
+        if (!item || item.scoring?.mode !== 'numeric') return;
+        const evaluation = ensureRubricEvaluation(rubric, studentId);
+        if (!evaluation || evaluation.flags?.notPresented) {
+            return;
+        }
+        const { number, hasValue } = parseLocaleNumberInput(element.value);
+        if (!hasValue) {
+            delete evaluation.scores[itemId];
+            saveState();
+            document.dispatchEvent(new CustomEvent('render'));
+            return;
+        }
+        if (!Number.isFinite(number)) {
+            document.dispatchEvent(new CustomEvent('render'));
+            return;
+        }
+        const sanitized = Math.max(0, number);
+        evaluation.scores[itemId] = { mode: 'numeric', value: sanitized };
         saveState();
         document.dispatchEvent(new CustomEvent('render'));
     },
