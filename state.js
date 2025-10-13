@@ -259,13 +259,19 @@ function synchronizeTemplateData(templateId) {
             const key = `${child.id}|||${sourceActivity.id}`;
             const existing = childActivityIndex.get(key);
             if (existing) {
+                const existingEvaluations = existing?.rubric?.evaluations && typeof existing.rubric.evaluations === 'object'
+                    ? existing.rubric.evaluations
+                    : {};
                 existing.title = typeof sourceActivity.title === 'string' ? sourceActivity.title : '';
                 existing.shortCode = typeof sourceActivity.shortCode === 'string' ? sourceActivity.shortCode : '';
                 existing.description = typeof sourceActivity.description === 'string' ? sourceActivity.description : '';
                 existing.criteriaRefs = cloneCriteriaRefs(clonedCriteriaRefs);
                 existing.startDate = sourceActivity.startDate || '';
                 existing.endDate = sourceActivity.endDate || '';
-                existing.rubric = normalizeRubricStructure(clonedRubric);
+                existing.rubric = normalizeRubricStructure({
+                    ...clonedRubric,
+                    evaluations: existingEvaluations,
+                });
                 existing.statusIsManual = statusIsManual;
                 existing.status = statusIsManual ? status : calculateLearningActivityStatus(existing);
                 existing.weight = normalizedWeight;
