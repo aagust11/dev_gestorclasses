@@ -1,6 +1,6 @@
 // actions.js: Define toda la lógica de las acciones del usuario.
 
-import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault, pickExistingDataFile, createDataFileWithCurrentState, reloadDataFromConfiguredFile, clearConfiguredDataFile, resetStateToDefaults } from './state.js';
+import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault, pickExistingDataFile, createDataFileWithCurrentState, reloadDataFromConfiguredFile, clearConfiguredDataFile, resetStateToDefaults, scheduleTemplateSync, isTemplateActivity } from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
 import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig } from './evaluation.js';
@@ -1031,6 +1031,10 @@ export const actionHandlers = {
             return;
         }
         persistEvaluationDraft(classId);
+        const targetClass = state.activities.find(a => a.id === classId);
+        if (isTemplateActivity(targetClass)) {
+            scheduleTemplateSync(classId);
+        }
         setEvaluationFeedback(classId, {
             type: 'success',
             message: t('evaluation_save_success'),
@@ -1048,6 +1052,10 @@ export const actionHandlers = {
             type: 'info',
             message: t('evaluation_reset_to_defaults'),
         });
+        const targetClass = state.activities.find(a => a.id === classId);
+        if (isTemplateActivity(targetClass)) {
+            scheduleTemplateSync(classId);
+        }
     },
 
     'set-evaluation-tab': (id, element) => {
@@ -1607,6 +1615,10 @@ export const actionHandlers = {
         state.learningActivityDraft = null;
         state.learningActivityGuideVisible = false;
         state.activeView = 'activities';
+        const targetClass = state.activities.find(a => a.id === draft.classId);
+        if (isTemplateActivity(targetClass)) {
+            scheduleTemplateSync(targetClass.id);
+        }
         saveState();
     },
     'delete-learning-activity': (id, element) => {
@@ -1635,6 +1647,10 @@ export const actionHandlers = {
             state.learningActivityCriteriaModalOpen = false;
             state.learningActivityGuideVisible = false;
 
+            const parentClass = state.activities.find(a => a.id === activity.classId);
+            if (isTemplateActivity(parentClass)) {
+                scheduleTemplateSync(parentClass.id);
+            }
             saveState();
             state.activeView = 'activities';
             document.dispatchEvent(new CustomEvent('render'));
@@ -2096,6 +2112,9 @@ export const actionHandlers = {
         }
         state.expandedCompetencyClassIds = expanded;
 
+        if (isTemplateActivity(activity)) {
+            scheduleTemplateSync(activity.id);
+        }
         saveState();
     },
     'select-competency': (id, element) => {
@@ -2128,6 +2147,9 @@ export const actionHandlers = {
             }
             competency.code = value;
         }
+        if (isTemplateActivity(activity)) {
+            scheduleTemplateSync(activity.id);
+        }
         saveState();
     },
     'update-competency-description': (id, element) => {
@@ -2139,6 +2161,9 @@ export const actionHandlers = {
         if (!competency) return;
 
         competency.description = element.value;
+        if (isTemplateActivity(activity)) {
+            scheduleTemplateSync(activity.id);
+        }
         saveState();
     },
     'delete-competency': (id, element) => {
@@ -2156,6 +2181,9 @@ export const actionHandlers = {
             state.settingsActiveTab = 'competencies';
         }
 
+        if (isTemplateActivity(activity)) {
+            scheduleTemplateSync(activity.id);
+        }
         saveState();
     },
     'add-criterion': (id, element) => {
@@ -2176,6 +2204,9 @@ export const actionHandlers = {
             description: ''
         });
 
+        if (isTemplateActivity(activity)) {
+            scheduleTemplateSync(activity.id);
+        }
         saveState();
     },
     'update-criterion-code': (id, element) => {
@@ -2198,6 +2229,9 @@ export const actionHandlers = {
             }
             criterion.code = value;
         }
+        if (isTemplateActivity(activity)) {
+            scheduleTemplateSync(activity.id);
+        }
         saveState();
     },
     'update-criterion-description': (id, element) => {
@@ -2212,6 +2246,9 @@ export const actionHandlers = {
         if (!criterion) return;
 
         criterion.description = element.value;
+        if (isTemplateActivity(activity)) {
+            scheduleTemplateSync(activity.id);
+        }
         saveState();
     },
     'delete-criterion': (id, element) => {
@@ -2223,6 +2260,9 @@ export const actionHandlers = {
         if (!competency) return;
 
         competency.criteria = competency.criteria?.filter(cr => cr.id !== criterionId) || [];
+        if (isTemplateActivity(activity)) {
+            scheduleTemplateSync(activity.id);
+        }
         saveState();
     },
     'export-student-docx': () => {
@@ -2315,23 +2355,56 @@ export const actionHandlers = {
         const name = nameInput.value.trim();
         const type = document.querySelector('input[name="activityType"]:checked').value;
         if (name) {
-            state.activities.push({
+            const isTemplate = type === 'template';
+            const newActivity = {
                 id: crypto.randomUUID(),
                 name,
-                type,
+                type: isTemplate ? 'class' : type,
+                isTemplate,
+                templateId: null,
                 studentIds: [],
                 color: getRandomPastelColor(),
                 startDate: state.courseStartDate,
                 endDate: state.courseEndDate,
                 competencies: []
-            });
+            };
+            state.activities.push(newActivity);
             nameInput.value = '';
+            if (isTemplate) {
+                scheduleTemplateSync(newActivity.id);
+            }
             saveState();
         }
     },
     'delete-activity': (id) => {
         showModal(t('delete_activity_confirm_title'), t('delete_activity_confirm_text'), () => {
+            const target = state.activities.find(a => a.id === id);
             state.activities = state.activities.filter(a => a.id !== id);
+            if (target) {
+                if (isTemplateActivity(target)) {
+                    const templateActivityIds = new Set(
+                        state.learningActivities
+                            .filter(activity => activity.classId === id)
+                            .map(activity => activity.id)
+                    );
+                    state.activities.forEach(activity => {
+                        if (activity.templateId === id) {
+                            activity.templateId = null;
+                        }
+                    });
+                    state.learningActivities = state.learningActivities.filter(activity => {
+                        if (activity.classId === id) {
+                            return false;
+                        }
+                        if (!activity.templateSourceId) {
+                            return true;
+                        }
+                        return !templateActivityIds.has(activity.templateSourceId);
+                    });
+                } else {
+                    state.learningActivities = state.learningActivities.filter(activity => activity.classId !== id);
+                }
+            }
             saveState();
             document.dispatchEvent(new CustomEvent('render'));
         });
@@ -2348,16 +2421,52 @@ export const actionHandlers = {
             const nameInput = document.getElementById(`edit-activity-name-${id}`);
             const startDateInput = document.getElementById(`edit-activity-start-${id}`);
             const endDateInput = document.getElementById(`edit-activity-end-${id}`);
-            
+
             const newName = nameInput.value.trim();
             if (newName) {
                 activity.name = newName;
             }
             activity.startDate = startDateInput.value;
             activity.endDate = endDateInput.value;
+            if (isTemplateActivity(activity)) {
+                scheduleTemplateSync(activity.id);
+            }
             saveState();
         }
         state.editingActivityId = null;
+    },
+    'update-class-template': (id, element) => {
+        const activityId = element?.dataset?.activityId;
+        if (!activityId) {
+            return;
+        }
+        const activity = state.activities.find(a => a.id === activityId);
+        if (!activity || activity.type !== 'class' || activity.isTemplate) {
+            return;
+        }
+        const rawValue = element.value || '';
+        const isValidTemplate = state.activities.some(candidate => (
+            candidate.id === rawValue
+            && isTemplateActivity(candidate)
+        ));
+        const nextTemplateId = isValidTemplate ? rawValue : null;
+        const previousTemplateId = activity.templateId || null;
+        if (previousTemplateId === nextTemplateId) {
+            return;
+        }
+        activity.templateId = nextTemplateId;
+        if (previousTemplateId) {
+            scheduleTemplateSync(previousTemplateId);
+        }
+        if (nextTemplateId) {
+            scheduleTemplateSync(nextTemplateId);
+        } else {
+            state.learningActivities = state.learningActivities.filter(learningActivity => (
+                learningActivity.classId !== activity.id
+                || !learningActivity.templateSourceId
+            ));
+        }
+        saveState();
     },
     'change-activity-color': (id, element) => {
          const activity = state.activities.find(a => a.id === id);
