@@ -197,7 +197,7 @@ function handleAction(action, element, event) {
         'change-evaluation-modality', 'update-competency-level-value', 'update-competency-minimum',
         'update-competency-max-not-achieved', 'update-competency-aggregation',
         'set-evaluation-no-evidence-behavior', 'set-evaluation-no-evidence-level',
-        'set-evaluation-np-treatment', 'save-evaluation-config', 'reset-evaluation-config',
+        'set-evaluation-np-treatment', 'save-evaluation-config', 'reset-evaluation-config', 'update-class-template',
         'set-term-grade-calculation-mode', 'calculate-term-grades', 'clear-term-grades', 'update-term-grade-numeric', 'update-term-grade-level',
         'choose-data-file', 'create-data-file', 'reload-data-file', 'clear-data-file-selection'
     ];

@@ -239,7 +239,7 @@ export function renderScheduleView() {
 
 export function renderClassesView() {
     renderMobileHeaderActions([]);
-    const classes = state.activities.filter(a => a.type === 'class').sort((a, b) => a.name.localeCompare(b.name));
+    const classes = state.activities.filter(a => a.type === 'class' && !a.isTemplate).sort((a, b) => a.name.localeCompare(b.name));
 
     if (classes.length === 0) {
         return `<div class="p-4 sm:p-6"><h2 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-6">${t('classes_view_title')}</h2><p class="text-gray-500 dark:text-gray-400">${t('no_classes_created')}</p></div>`;
@@ -312,6 +312,7 @@ export function renderClassesView() {
 export function renderActivitiesView() {
     renderMobileHeaderActions([]);
     const classes = state.activities.filter(a => a.type === 'class').sort((a, b) => a.name.localeCompare(b.name));
+    const templateMap = new Map(classes.filter(cls => cls.isTemplate).map(cls => [cls.id, cls]));
 
     const locale = document.documentElement.lang || 'ca';
     const formatDateForDisplay = (isoString) => {
@@ -330,7 +331,7 @@ export function renderActivitiesView() {
         `;
     }
 
-    const selectOptions = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    const selectOptions = classes.map(c => `<option value="${c.id}">${c.name}${c.isTemplate ? ` (${t('template_group_badge')})` : ''}</option>`).join('');
 
     const cardsHtml = classes.map(c => {
         const classActivities = state.learningActivities
@@ -343,6 +344,16 @@ export function renderActivitiesView() {
 
         const isExpanded = state.expandedLearningActivityClassIds?.includes(c.id);
         const visibleActivities = isExpanded ? classActivities : classActivities.slice(0, 3);
+        const isTemplate = Boolean(c.isTemplate);
+        const parentTemplate = !isTemplate ? templateMap.get(c.templateId) : null;
+        const badgeHtml = isTemplate
+            ? `<span class="inline-flex items-center gap-1 text-xs font-semibold text-purple-600 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/40 px-2 py-1 rounded-full">${t('template_group_badge')}</span>`
+            : '';
+        const templateInfo = isTemplate
+            ? `<p class="text-xs text-blue-600 dark:text-blue-300 mt-1">${t('template_group_template_notice')}</p>`
+            : parentTemplate
+                ? `<p class="text-xs text-gray-600 dark:text-gray-400 mt-1">${t('template_group_label')}: <span class="font-semibold">${parentTemplate.name}</span> · ${t('template_group_inherited_notice')}</p>`
+                : '';
 
         const statusMeta = {
             [LEARNING_ACTIVITY_STATUS.SCHEDULED]: {
@@ -378,6 +389,9 @@ export function renderActivitiesView() {
             const status = calculateLearningActivityStatus(activity);
             activity.status = status;
             const statusInfo = statusMeta[status] || statusMeta[LEARNING_ACTIVITY_STATUS.SCHEDULED];
+            const inheritedBadge = activity.templateSourceId
+                ? `<span class="inline-flex items-center gap-2 px-2 py-1 text-xs font-semibold text-purple-600 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/40 rounded-full">${t('activities_inherited_badge')}</span>`
+                : '';
 
             return `
                 <div class="p-3 border border-gray-200 dark:border-gray-700 rounded-md bg-white/60 dark:bg-gray-800/60 shadow-sm">
@@ -398,9 +412,12 @@ export function renderActivitiesView() {
                         ${createdDate ? `<div class="mt-3 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2"><i data-lucide="calendar" class="w-4 h-4"></i><span>${t('activities_created_on')} ${createdDate}</span></div>` : ''}
                     </div>
                     <div class="mt-3 flex items-center justify-between gap-2">
-                        <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold border ${statusInfo.classes}">
-                            ${statusInfo.label}
-                        </span>
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold border ${statusInfo.classes}">
+                                ${statusInfo.label}
+                            </span>
+                            ${inheritedBadge}
+                        </div>
                         <button
                             data-action="open-learning-activity-rubric"
                             data-class-id="${c.id}"
@@ -428,9 +445,13 @@ export function renderActivitiesView() {
             <div id="activities-card-${c.id}" class="bg-white dark:bg-gray-800 rounded-lg shadow-md flex flex-col">
                 <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-t-lg">
                     <div class="flex items-start justify-between gap-3">
-                        <div>
-                            <h3 class="text-xl font-bold" style="color: ${darkenColor(c.color, 40)}">${c.name}</h3>
-                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 flex items-center gap-2">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-xl font-bold" style="color: ${darkenColor(c.color, 40)}">${c.name}</h3>
+                                ${badgeHtml}
+                            </div>
+                            ${templateInfo}
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-2 flex items-center gap-2">
                                 <i data-lucide="list" class="w-4 h-4"></i>
                                 <span>${classActivities.length} ${t('activities_total_label')}</span>
                             </p>
@@ -488,7 +509,7 @@ export function renderEvaluationView() {
     renderMobileHeaderActions([]);
 
     const classes = state.activities
-        .filter(activity => activity.type === 'class')
+        .filter(activity => activity.type === 'class' && !activity.isTemplate)
         .sort((a, b) => a.name.localeCompare(b.name));
 
     const availableTermIds = new Set((state.terms || []).map(term => term.id));
@@ -2265,12 +2286,14 @@ export function renderSettingsView() {
             </div>`;
     }).join('');
     
+    const scheduleSelectableActivities = state.activities.filter(act => !(act.type === 'class' && act.isTemplate));
+
     const scheduleTableRows = state.timeSlots.map(time => {
         const cells = DAY_KEYS.map(day => `
             <td class="p-1 border border-gray-200 dark:border-gray-700">
                 <select data-action="schedule-change" data-day="${day}" data-time="${time.label}" class="w-full p-1 border-0 rounded-md focus:ring-1 focus:ring-blue-500 text-xs bg-white dark:bg-gray-700">
                     <option value="">${t('free')}</option>
-                    ${state.activities.map(act => `<option value="${act.id}" ${state.schedule[`${day}-${time.label}`] === act.id ? 'selected' : ''}>${act.name}</option>`).join('')}
+                    ${scheduleSelectableActivities.map(act => `<option value="${act.id}" ${state.schedule[`${day}-${time.label}`] === act.id ? 'selected' : ''}>${act.name}</option>`).join('')}
                 </select>
             </td>
         `).join('');
@@ -2330,7 +2353,7 @@ export function renderSettingsView() {
                             <div><label class="block text-sm font-medium">${t('day')}</label><select id="override-day" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md">${DAY_KEYS.map(day => `<option value="${day}">${t(day.toLowerCase())}</option>`).join('')}</select></div>
                             <div><label class="block text-sm font-medium">${t('timeslot')}</label><select id="override-time" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md">${state.timeSlots.map(t => `<option>${t.label}</option>`).join('')}</select></div>
                         </div>
-                        <div><label class="block text-sm font-medium">${t('replace_with')}</label><select id="override-activity" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md">${state.activities.map(a => `<option value="${a.id}">${a.name}</option>`).join('')}</select></div>
+                        <div><label class="block text-sm font-medium">${t('replace_with')}</label><select id="override-activity" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md">${scheduleSelectableActivities.map(a => `<option value="${a.id}">${a.name}</option>`).join('')}</select></div>
                         <div class="grid grid-cols-2 gap-4">
                             <div><label class="block text-sm font-medium">${t('from_date')}</label><input type="date" id="override-start-date" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md"></div>
                             <div><label class="block text-sm font-medium">${t('until_date')}</label><input type="date" id="override-end-date" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md"></div>
@@ -2344,13 +2367,35 @@ export function renderSettingsView() {
     `;
 
     // --- Activities Tab Content ---
-    const activitiesHtml = state.activities.map(act => {
+    const templateClasses = state.activities
+        .filter(act => act.type === 'class' && act.isTemplate)
+        .sort((a, b) => a.name.localeCompare(b.name));
+    const templateMap = new Map(templateClasses.map(tpl => [tpl.id, tpl]));
+    const activitiesList = [...state.activities].sort((a, b) => {
+        if (a.type === b.type) {
+            if (a.type === 'class' && b.type === 'class') {
+                if (Boolean(a.isTemplate) !== Boolean(b.isTemplate)) {
+                    return a.isTemplate ? -1 : 1;
+                }
+            }
+            return a.name.localeCompare(b.name);
+        }
+        if (a.type === 'class') return -1;
+        if (b.type === 'class') return 1;
+        return a.name.localeCompare(b.name);
+    });
+
+    const activitiesHtml = activitiesList.map(act => {
+        const isClass = act.type === 'class';
+        const isTemplate = isClass && Boolean(act.isTemplate);
+        const parentTemplate = isClass && !isTemplate ? templateMap.get(act.templateId) : null;
+
         let studentsInClassHtml = '';
-        if (act.type === 'class') {
+        if (isClass && !isTemplate) {
             const enrolledStudents = state.students
                 .filter(s => act.studentIds?.includes(s.id))
                 .sort(sortStudentsByName);
-            
+
             const enrolledStudentsHtml = enrolledStudents.map(student => `
                 <div class="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md text-sm">
                     <button data-action="select-student" data-student-id="${student.id}" class="text-left font-medium text-blue-600 dark:text-blue-400 hover:underline flex-grow">${student.name}</button>
@@ -2361,7 +2406,7 @@ export function renderSettingsView() {
             const availableStudents = state.students
                 .filter(s => !act.studentIds?.includes(s.id))
                 .sort(sortStudentsByName);
-                
+
             const availableStudentsOptions = availableStudents.map(student => `<option value="${student.id}">${student.name}</option>`).join('');
 
             studentsInClassHtml = `
@@ -2386,12 +2431,44 @@ export function renderSettingsView() {
             `;
         }
 
+        const badgeHtml = isTemplate
+            ? `<span class="inline-flex items-center gap-1 text-xs font-semibold text-purple-600 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/40 px-2 py-1 rounded-full">${t('template_group_badge')}</span>`
+            : '';
+
+        const templateInfoView = isClass
+            ? `<div class="mt-2 text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                    <div>${t('template_group_label')}: <span class="font-semibold">${parentTemplate ? parentTemplate.name : t('template_group_none')}</span></div>
+                    ${isTemplate ? `<div class="text-blue-600 dark:text-blue-300">${t('template_group_template_notice')}</div>` : parentTemplate ? `<div>${t('template_group_inherited_notice')}</div>` : ''}
+               </div>`
+            : '';
+
         if (state.editingActivityId === act.id) {
+            const availableTemplateOptions = templateClasses
+                .filter(tpl => tpl.id !== act.id)
+                .map(tpl => `<option value="${tpl.id}" ${act.templateId === tpl.id ? 'selected' : ''}>${tpl.name}</option>`)
+                .join('');
+            const templateControls = isClass
+                ? (isTemplate
+                    ? `<p class="mt-4 text-xs text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 px-3 py-2 rounded-md">${t('template_group_template_notice')}</p>`
+                    : `<div class="mt-4">
+                            <label class="block text-sm font-medium text-gray-600 dark:text-gray-300">${t('assign_template_group')}</label>
+                            <select data-action="update-class-template" data-event="change" data-activity-id="${act.id}" class="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm">
+                                <option value="">${t('template_group_none')}</option>
+                                ${availableTemplateOptions}
+                            </select>
+                            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">${t('template_group_cascade_hint')}</p>
+                            ${parentTemplate ? `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${t('template_group_inherited_notice')}</p>` : ''}
+                        </div>`)
+                : '';
+
             return `
             <div id="edit-activity-form-${act.id}" class="p-4 border rounded-md bg-white dark:bg-gray-700 border-blue-500">
-                <div class="flex justify-between items-center">
-                    <input type="color" data-action="change-activity-color" data-id="${act.id}" value="${act.color}" class="p-0 border-none rounded-full cursor-pointer w-7 h-7">
-                    <input type="text" id="edit-activity-name-${act.id}" value="${act.name}" class="flex-grow p-1 mx-2 border-0 bg-transparent rounded-md focus:ring-0 font-semibold">
+                <div class="flex justify-between items-center gap-2">
+                    <div class="flex items-center gap-2 flex-grow">
+                        <input type="color" data-action="change-activity-color" data-id="${act.id}" value="${act.color}" class="p-0 border-none rounded-full cursor-pointer w-7 h-7">
+                        <input type="text" id="edit-activity-name-${act.id}" value="${act.name}" class="flex-grow p-1 border-0 bg-transparent rounded-md focus:ring-0 font-semibold">
+                        ${badgeHtml}
+                    </div>
                     <div class="flex items-center gap-2">
                         <button data-action="save-activity" data-id="${act.id}" class="text-green-600 hover:text-green-800"><i data-lucide="check" class="w-5 h-5"></i></button>
                         <button data-action="cancel-edit-activity" class="text-red-600 hover:text-red-800"><i data-lucide="x" class="w-5 h-5"></i></button>
@@ -2407,22 +2484,26 @@ export function renderSettingsView() {
                         <input type="date" id="edit-activity-end-${act.id}" value="${act.endDate || ''}" class="w-full p-1 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md">
                     </div>
                 </div>
+                ${templateControls}
                 ${studentsInClassHtml}
             </div>`;
         }
+
         return `
         <div class="p-4 border border-gray-200 dark:border-gray-700 rounded-md">
-            <div class="flex justify-between items-center">
+            <div class="flex justify-between items-start gap-2">
                 <div class="flex items-center gap-2 flex-grow">
                    <input type="color" data-action="change-activity-color" data-id="${act.id}" value="${act.color}" class="p-0 border-none rounded-full cursor-pointer w-7 h-7">
-                   <span class="font-semibold cursor-pointer" data-action="edit-activity" data-id="${act.id}">${act.name} <span class="text-xs text-gray-500 dark:text-gray-400 font-normal">(${act.type === 'class' ? t('class') : t('general')})</span></span>
+                   <span class="font-semibold cursor-pointer" data-action="edit-activity" data-id="${act.id}">${act.name} <span class="text-xs text-gray-500 dark:text-gray-400 font-normal">(${isClass ? (isTemplate ? t('template_group_badge') : t('class')) : t('general')})</span></span>
+                   ${badgeHtml}
                 </div>
                 <button data-action="delete-activity" data-id="${act.id}" class="text-red-500 hover:text-red-700 ml-2"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
             </div>
+            ${templateInfoView}
             ${studentsInClassHtml}
         </div>`;
     }).join('');
-    
+
     const activitiesTabContent = `
         <div class="grid lg:grid-cols-2 gap-8 items-start">
             <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
@@ -2431,8 +2512,9 @@ export function renderSettingsView() {
                     <input type="text" id="new-activity-name" placeholder="${t('activity_name_placeholder')}" class="flex-grow p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md"/>
                     <button data-action="add-activity" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center gap-2"><i data-lucide="plus-circle" class="w-5 h-5"></i>${t('add')}</button>
                 </div>
-                <div class="flex gap-4 mb-4 text-sm">
+                <div class="flex flex-wrap gap-4 mb-4 text-sm">
                     <label class="flex items-center gap-2"><input type="radio" name="activityType" value="class" checked class="form-radio text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600"/>${t('activity_type_class')}</label>
+                    <label class="flex items-center gap-2"><input type="radio" name="activityType" value="template" class="form-radio text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600"/>${t('activity_type_template')}</label>
                     <label class="flex items-center gap-2"><input type="radio" name="activityType" value="general" class="form-radio text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600"/>${t('activity_type_general')}</label>
                 </div>
                 <div class="space-y-3 max-h-96 overflow-y-auto pr-2">${activitiesHtml}</div>
@@ -2440,7 +2522,7 @@ export function renderSettingsView() {
             <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                 <h3 class="text-lg font-semibold mb-3 flex items-center gap-2"><i data-lucide="clipboard-paste" class="w-5 h-5"></i> ${t('quick_import_title')}</h3>
                 <div class="space-y-4">
-                    <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">${t('step1_select_class')}</label><select id="import-target-class" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md"><option value="">${t('choose_a_class')}</option>${state.activities.filter(a => a.type === 'class').map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select></div>
+                    <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">${t('step1_select_class')}</label><select id="import-target-class" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md"><option value="">${t('choose_a_class')}</option>${state.activities.filter(a => a.type === 'class' && !a.isTemplate).map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select></div>
                     <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">${t('step2_paste_list')}</label><textarea id="student-list-text" placeholder="Juan Pérez\nMaría García\n..." class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md h-32"></textarea></div>
                     <button data-action="import-students" class="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center justify-center gap-2"><i data-lucide="upload" class="w-5 h-5"></i> ${t('import_students')}</button>
                 </div>
@@ -2456,6 +2538,16 @@ export function renderSettingsView() {
     const competencyCardsHtml = classesWithStudents.map(c => {
         const competencies = c.competencies || [];
         const competencyCount = competencies.length;
+        const isTemplate = Boolean(c.isTemplate);
+        const parentTemplate = !isTemplate ? templateMap.get(c.templateId) : null;
+        const badgeHtml = isTemplate
+            ? `<span class="inline-flex items-center gap-1 text-xs font-semibold text-purple-600 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/40 px-2 py-1 rounded-full">${t('template_group_badge')}</span>`
+            : '';
+        const templateInfo = isTemplate
+            ? `<p class="text-xs text-blue-600 dark:text-blue-300 mt-1">${t('template_group_template_notice')}</p>`
+            : parentTemplate
+                ? `<p class="text-xs text-gray-600 dark:text-gray-400 mt-1">${t('template_group_label')}: <span class="font-semibold">${parentTemplate.name}</span> · ${t('template_group_inherited_notice')}</p>`
+                : `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${t('template_group_label')}: <span class="font-semibold">${t('template_group_none')}</span></p>`;
 
         const competenciesHtml = competencies.map(comp => `
             <button
@@ -2487,7 +2579,11 @@ export function renderSettingsView() {
         return `
             <div id="competency-card-${c.id}" class="bg-white dark:bg-gray-800 rounded-lg shadow-md flex flex-col">
                 <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-t-lg flex flex-col gap-3">
-                    <h3 class="text-xl font-bold" style="color: ${darkenColor(c.color, 40)}">${c.name}</h3>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-xl font-bold flex-grow" style="color: ${darkenColor(c.color, 40)}">${c.name}</h3>
+                        ${badgeHtml}
+                    </div>
+                    ${templateInfo}
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                         <div class="flex items-end gap-3 flex-wrap">
                             <button data-action="add-competency" data-activity-id="${c.id}" class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800">
@@ -2559,9 +2655,10 @@ export function renderSettingsView() {
         }
 
         const selectedClassId = state.settingsEvaluationSelectedClassId;
-        const evaluationClassOptions = evaluationClasses.map(cls => `
-            <option value="${cls.id}" ${cls.id === selectedClassId ? 'selected' : ''}>${escapeHtml(cls.name)}</option>
-        `).join('');
+        const evaluationClassOptions = evaluationClasses.map(cls => {
+            const suffix = cls.isTemplate ? ` (${t('template_group_badge')})` : '';
+            return `<option value="${cls.id}" ${cls.id === selectedClassId ? 'selected' : ''}>${escapeHtml(cls.name + suffix)}</option>`;
+        }).join('');
 
         const draft = ensureEvaluationDraft(selectedClassId);
         const normalizedDraft = normalizeEvaluationConfig(draft || {});

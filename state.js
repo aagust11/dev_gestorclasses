@@ -75,6 +75,19 @@ export const state = {
     dataPersistenceError: null,
 };
 
+const pendingTemplateSync = new Set();
+
+export function isTemplateActivity(activity) {
+    return Boolean(activity && activity.type === 'class' && activity.isTemplate);
+}
+
+export function scheduleTemplateSync(templateId) {
+    if (!templateId || typeof templateId !== 'string') {
+        return;
+    }
+    pendingTemplateSync.add(templateId);
+}
+
 function ensureSavedEvaluationConfig(classId) {
     if (!classId) {
         return null;
@@ -126,6 +139,184 @@ function generateId(prefix = 'id') {
     }
     const random = Math.random().toString(16).slice(2, 10);
     return `${prefix}-${Date.now()}-${random}`;
+}
+
+function cloneCompetenciesList(competencies = []) {
+    if (!Array.isArray(competencies)) {
+        return [];
+    }
+    return competencies.map(comp => ({
+        id: comp?.id || generateId('competency'),
+        code: typeof comp?.code === 'string' ? comp.code : '',
+        description: typeof comp?.description === 'string' ? comp.description : '',
+        criteria: Array.isArray(comp?.criteria)
+            ? comp.criteria.map(criterion => ({
+                id: criterion?.id || generateId('criterion'),
+                code: typeof criterion?.code === 'string' ? criterion.code : '',
+                description: typeof criterion?.description === 'string' ? criterion.description : '',
+            }))
+            : [],
+    }));
+}
+
+function cloneCriteriaRefs(criteriaRefs = []) {
+    if (!Array.isArray(criteriaRefs)) {
+        return [];
+    }
+    return criteriaRefs.map(ref => ({
+        competencyId: ref?.competencyId || '',
+        criterionId: ref?.criterionId || '',
+    }));
+}
+
+function synchronizeTemplateData(templateId) {
+    const template = state.activities.find(activity => activity.id === templateId);
+    if (!isTemplateActivity(template)) {
+        return;
+    }
+
+    const children = state.activities.filter(activity => (
+        activity.type === 'class'
+        && !activity.isTemplate
+        && activity.templateId === templateId
+    ));
+    const childIds = new Set(children.map(child => child.id));
+
+    const templateCompetencies = cloneCompetenciesList(template.competencies || []);
+    template.competencies = cloneCompetenciesList(template.competencies || []);
+    children.forEach(child => {
+        child.competencies = cloneCompetenciesList(templateCompetencies);
+    });
+
+    const templateActivities = state.learningActivities.filter(activity => activity.classId === templateId);
+    const templateActivityIds = new Set();
+
+    const now = new Date().toISOString();
+
+    templateActivities.forEach(activity => {
+        templateActivityIds.add(activity.id);
+        activity.isTemplateSource = true;
+        if (activity.templateSourceId) {
+            delete activity.templateSourceId;
+        }
+        activity.criteriaRefs = cloneCriteriaRefs(activity.criteriaRefs);
+        activity.rubric = normalizeRubricStructure(activity.rubric);
+        const weightValue = Number.parseFloat(activity.weight);
+        activity.weight = Number.isFinite(weightValue) && weightValue >= 0 ? weightValue : 1;
+        const isValidStatus = Object.values(LEARNING_ACTIVITY_STATUS).includes(activity.status);
+        const statusIsManual = Boolean(activity.statusIsManual && isValidStatus);
+        activity.statusIsManual = statusIsManual;
+        const computedStatus = statusIsManual && isValidStatus
+            ? activity.status
+            : calculateLearningActivityStatus(activity);
+        activity.status = computedStatus;
+        if (!activity.createdAt) {
+            activity.createdAt = now;
+        }
+        activity.updatedAt = now;
+    });
+
+    state.learningActivities = state.learningActivities.filter(activity => {
+        if (activity.classId === templateId) {
+            return true;
+        }
+        if (!activity.templateSourceId) {
+            return true;
+        }
+        if (!templateActivityIds.has(activity.templateSourceId)) {
+            return false;
+        }
+        if (!childIds.has(activity.classId)) {
+            return false;
+        }
+        return true;
+    });
+
+    const childActivityIndex = new Map();
+    state.learningActivities.forEach(activity => {
+        if (!activity.templateSourceId) {
+            return;
+        }
+        const key = `${activity.classId}|||${activity.templateSourceId}`;
+        childActivityIndex.set(key, activity);
+    });
+
+    templateActivities.forEach(sourceActivity => {
+        const weightValue = Number.parseFloat(sourceActivity.weight);
+        const normalizedWeight = Number.isFinite(weightValue) && weightValue >= 0 ? weightValue : 1;
+        const clonedCriteriaRefs = cloneCriteriaRefs(sourceActivity.criteriaRefs);
+        const clonedRubric = normalizeRubricStructure(sourceActivity.rubric);
+        const statusIsManual = Boolean(sourceActivity.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(sourceActivity.status));
+        const status = statusIsManual
+            ? sourceActivity.status
+            : calculateLearningActivityStatus({
+                startDate: sourceActivity.startDate,
+                endDate: sourceActivity.endDate,
+                status: sourceActivity.status,
+            });
+
+        children.forEach(child => {
+            const key = `${child.id}|||${sourceActivity.id}`;
+            const existing = childActivityIndex.get(key);
+            if (existing) {
+                existing.title = typeof sourceActivity.title === 'string' ? sourceActivity.title : '';
+                existing.shortCode = typeof sourceActivity.shortCode === 'string' ? sourceActivity.shortCode : '';
+                existing.description = typeof sourceActivity.description === 'string' ? sourceActivity.description : '';
+                existing.criteriaRefs = cloneCriteriaRefs(clonedCriteriaRefs);
+                existing.startDate = sourceActivity.startDate || '';
+                existing.endDate = sourceActivity.endDate || '';
+                existing.rubric = normalizeRubricStructure(clonedRubric);
+                existing.statusIsManual = statusIsManual;
+                existing.status = statusIsManual ? status : calculateLearningActivityStatus(existing);
+                existing.weight = normalizedWeight;
+                existing.templateSourceId = sourceActivity.id;
+                existing.isTemplateSource = false;
+                if (!existing.createdAt) {
+                    existing.createdAt = now;
+                }
+                existing.updatedAt = now;
+            } else {
+                state.learningActivities.push({
+                    id: generateId('learning-activity'),
+                    classId: child.id,
+                    title: typeof sourceActivity.title === 'string' ? sourceActivity.title : '',
+                    shortCode: typeof sourceActivity.shortCode === 'string' ? sourceActivity.shortCode : '',
+                    description: typeof sourceActivity.description === 'string' ? sourceActivity.description : '',
+                    criteriaRefs: cloneCriteriaRefs(clonedCriteriaRefs),
+                    createdAt: now,
+                    updatedAt: now,
+                    startDate: sourceActivity.startDate || '',
+                    endDate: sourceActivity.endDate || '',
+                    rubric: normalizeRubricStructure(clonedRubric),
+                    status: statusIsManual ? status : calculateLearningActivityStatus({
+                        startDate: sourceActivity.startDate,
+                        endDate: sourceActivity.endDate,
+                        status,
+                    }),
+                    statusIsManual: statusIsManual,
+                    weight: normalizedWeight,
+                    templateSourceId: sourceActivity.id,
+                    isTemplateSource: false,
+                });
+            }
+        });
+    });
+
+    const templateConfig = ensureSavedEvaluationConfig(templateId) || createDefaultEvaluationConfig();
+    const normalizedConfig = cloneEvaluationConfig(templateConfig);
+    children.forEach(child => {
+        state.evaluationSettings[child.id] = cloneEvaluationConfig(normalizedConfig);
+        state.evaluationSettingsDraft[child.id] = cloneEvaluationConfig(normalizedConfig);
+    });
+}
+
+function applyPendingTemplateSyncs() {
+    if (pendingTemplateSync.size === 0) {
+        return;
+    }
+    const toSync = Array.from(pendingTemplateSync);
+    pendingTemplateSync.clear();
+    toSync.forEach(id => synchronizeTemplateData(id));
 }
 
 function normalizeRubricStructure(rawRubric) {
@@ -330,6 +521,10 @@ function populateStateFromPersistedData(parsedData = {}) {
                 : 1,
             statusIsManual: Boolean(activity?.statusIsManual),
             shortCode: typeof activity?.shortCode === 'string' ? activity.shortCode : '',
+            templateSourceId: typeof activity?.templateSourceId === 'string' && activity.templateSourceId
+                ? activity.templateSourceId
+                : null,
+            isTemplateSource: Boolean(activity?.isTemplateSource),
         };
         normalized.rubric = normalizeRubricStructure(activity?.rubric);
         normalized.status = calculateLearningActivityStatus(normalized);
@@ -374,6 +569,27 @@ function populateStateFromPersistedData(parsedData = {}) {
     state.evaluationSettingsFeedback = {};
 
     state.activities.forEach(activity => {
+        const isClass = activity.type === 'class';
+        const isTemplate = isClass && Boolean(activity.isTemplate);
+        activity.isTemplate = isTemplate;
+
+        if (!Array.isArray(activity.studentIds)) {
+            activity.studentIds = [];
+        }
+
+        if (isTemplate) {
+            activity.templateId = null;
+        } else if (isClass && typeof activity.templateId === 'string' && activity.templateId && activity.templateId !== activity.id) {
+            const exists = state.activities.some(candidate => (
+                candidate.id === activity.templateId
+                && candidate.type === 'class'
+                && Boolean(candidate.isTemplate)
+            ));
+            activity.templateId = exists ? activity.templateId : null;
+        } else {
+            activity.templateId = null;
+        }
+
         if (!activity.competencies) {
             activity.competencies = [];
         }
@@ -384,6 +600,10 @@ function populateStateFromPersistedData(parsedData = {}) {
             }
         });
     });
+
+    state.activities
+        .filter(isTemplateActivity)
+        .forEach(activity => synchronizeTemplateData(activity.id));
 
     state.learningActivityDraft = null;
     state.expandedLearningActivityClassIds = [];
@@ -430,6 +650,8 @@ async function loadDataFromHandle(handle) {
 
 let saveTimeout;
 export async function saveState() {
+    applyPendingTemplateSyncs();
+
     state.learningActivities.forEach(activity => {
         if (!activity || activity.statusIsManual) {
             return;
