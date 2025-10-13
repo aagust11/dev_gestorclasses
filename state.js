@@ -533,7 +533,7 @@ function buildPersistedDataPayload() {
     };
 }
 
-function populateStateFromPersistedData(parsedData = {}) {
+function populateStateFromPersistedData(parsedData = {}, { resetUIState = true } = {}) {
     state.activities = parsedData.activities || [];
     state.learningActivities = (parsedData.learningActivities || []).map(activity => {
         const normalized = {
@@ -632,17 +632,19 @@ function populateStateFromPersistedData(parsedData = {}) {
         .filter(isTemplateActivity)
         .forEach(activity => synchronizeTemplateData(activity.id));
 
-    state.learningActivityDraft = null;
-    state.expandedLearningActivityClassIds = [];
-    state.expandedCompetencyClassIds = [];
-    state.learningActivityGuideVisible = false;
-    state.learningActivityCriteriaModalOpen = false;
-    state.pendingCompetencyHighlightId = null;
-    state.activeLearningActivityRubricId = null;
-    state.learningActivityRubricTab = 'configuration';
-    state.learningActivityRubricFilter = '';
-    state.learningActivityRubricReturnView = null;
-    state.pendingEvaluationHighlightActivityId = null;
+    if (resetUIState) {
+        state.learningActivityDraft = null;
+        state.expandedLearningActivityClassIds = [];
+        state.expandedCompetencyClassIds = [];
+        state.learningActivityGuideVisible = false;
+        state.learningActivityCriteriaModalOpen = false;
+        state.pendingCompetencyHighlightId = null;
+        state.activeLearningActivityRubricId = null;
+        state.learningActivityRubricTab = 'configuration';
+        state.learningActivityRubricFilter = '';
+        state.learningActivityRubricReturnView = null;
+        state.pendingEvaluationHighlightActivityId = null;
+    }
 }
 
 async function persistDataToFile(handle) {
@@ -654,18 +656,18 @@ async function persistDataToFile(handle) {
     await writeDataToFile(handle, serialized);
 }
 
-async function loadDataFromHandle(handle) {
+async function loadDataFromHandle(handle, options = {}) {
     if (!handle) {
         throw new Error('No file handle configured');
     }
     const content = await readDataFromFile(handle);
     if (!content || content.trim().length === 0) {
-        populateStateFromPersistedData({});
+        populateStateFromPersistedData({}, options);
         return;
     }
     try {
         const parsedData = JSON.parse(content);
-        populateStateFromPersistedData(parsedData);
+        populateStateFromPersistedData(parsedData, options);
         state.dataPersistenceStatus = 'ready';
         state.dataPersistenceError = null;
     } catch (error) {
@@ -766,7 +768,7 @@ export async function refreshDataFromFile() {
             state.dataPersistenceError = null;
             return;
         }
-        await loadDataFromHandle(state.dataFileHandle);
+        await loadDataFromHandle(state.dataFileHandle, { resetUIState: false });
     } catch (error) {
         console.error('Error reloading data file', error);
         state.dataPersistenceStatus = 'error';
