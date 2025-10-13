@@ -1,6 +1,6 @@
 // main.js: El punto de entrada principal que une todo.
 
-import { state, loadState } from './state.js';
+import { state, loadState, refreshDataFromFile } from './state.js';
 import * as views from './views.js';
 import { actionHandlers } from './actions.js';
 import { initI18n, t } from './i18n.js';
@@ -76,7 +76,14 @@ function restoreStudentListState(state) {
     }
 }
 
-function render() {
+let lastRenderedView = null;
+
+async function render() {
+    const shouldRefreshData = state.activeView !== lastRenderedView;
+    if (shouldRefreshData) {
+        await refreshDataFromFile();
+    }
+
     mainContent.innerHTML = '';
     let viewContent = '';
 
@@ -129,6 +136,7 @@ function render() {
             state.pendingCompetencyHighlightId = null;
         });
     }
+    lastRenderedView = state.activeView;
 }
 
 function updateMobileHeader() {
@@ -218,11 +226,11 @@ function handleAction(action, element, event) {
                 return null;
             })();
 
-            const rerender = () => {
+            const rerender = async () => {
                 const studentListState = studentAnnotationActions.has(action)
                     ? captureStudentListState(element)
                     : null;
-                render();
+                await render();
                 if (studentListState) {
                     restoreStudentListState(studentListState);
                 }
@@ -251,9 +259,9 @@ function handleAction(action, element, event) {
             };
 
             if (!shouldForceRender && result && typeof result.then === 'function') {
-                result.then(rerender).catch(console.error);
+                result.then(() => rerender()).catch(console.error);
             } else {
-                rerender();
+                rerender().catch(console.error);
             }
         }
     }
@@ -347,25 +355,25 @@ async function init() {
     const savedTheme = localStorage.getItem('theme') || 'system';
     setTheme(savedTheme);
 
-    await initI18n(() => {
-        render();
+    await initI18n(async () => {
+        await render();
         updateNavButtons();
     });
 
     await loadState();
-    render();
+    await render();
     updateNavButtons();
     handleDeferredExampleLoad();
-    
+
     navButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
             state.activeView = btn.dataset.view;
             state.selectedActivity = null;
             state.selectedStudentId = null;
             state.learningActivityDraft = null;
             state.learningActivityGuideVisible = false;
             updateNavButtons();
-            render();
+            await render();
             if (window.innerWidth < 640) {
                 toggleSidebar(false);
             }
@@ -388,7 +396,7 @@ async function init() {
         }
     });
 
-    document.addEventListener('render', () => render());
+    document.addEventListener('render', () => { render().catch(console.error); });
     window.addEventListener('resize', () => {
         if (window.innerWidth >= 640) {
             sidebar.classList.remove('-translate-x-full');
