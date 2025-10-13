@@ -204,6 +204,34 @@ function resolveLevelFromNumericScore(numericScore, config) {
     return resolvedLevel;
 }
 
+export function computeNumericEvidence(rawScore, maxScore, config, { normalizedConfig } = {}) {
+    const normalized = normalizedConfig || normalizeEvaluationConfig(config);
+    const numericValue = Number(rawScore);
+    const numericMax = Number(maxScore);
+
+    if (!Number.isFinite(numericValue) || !Number.isFinite(numericMax) || numericMax <= 0) {
+        return {
+            levelId: '',
+            scoreOutOfFour: null,
+            normalizedScore: null,
+            clampedScore: null,
+        };
+    }
+
+    const clampedScore = Math.max(0, Math.min(numericValue, numericMax));
+    const scoreOutOfFour = (clampedScore / numericMax) * 4;
+    const aeValue = normalized.competency.levels.find(level => level.id === 'AE')?.numericValue ?? 4;
+    const normalizedScore = (aeValue / 4) * scoreOutOfFour;
+    const levelId = resolveLevelFromNumericScore(scoreOutOfFour, normalized);
+
+    return {
+        levelId,
+        scoreOutOfFour,
+        normalizedScore,
+        clampedScore,
+    };
+}
+
 function getLevelMetadata(config) {
     const normalized = normalizeEvaluationConfig(config);
     const map = new Map();
@@ -239,7 +267,11 @@ export function calculateWeightedCompetencyResult(evidences = [], config) {
             ? Number(evidence.criterionWeight)
             : 1;
         const weightProduct = Math.max(0, activityWeight) * Math.max(0, criterionWeight);
-        numerator += weightProduct * levelValue;
+        const evidenceNumericScore = Number(evidence.numericScore);
+        const numericValue = Number.isFinite(evidenceNumericScore)
+            ? Math.max(0, evidenceNumericScore)
+            : levelValue;
+        numerator += weightProduct * numericValue;
         denominatorWeight += weightProduct;
     });
 
