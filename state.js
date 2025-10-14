@@ -266,19 +266,23 @@ function synchronizeTemplateData(templateId) {
                 existing.shortCode = typeof sourceActivity.shortCode === 'string' ? sourceActivity.shortCode : '';
                 existing.description = typeof sourceActivity.description === 'string' ? sourceActivity.description : '';
                 existing.criteriaRefs = cloneCriteriaRefs(clonedCriteriaRefs);
-                existing.startDate = sourceActivity.startDate || '';
-                existing.endDate = sourceActivity.endDate || '';
                 existing.rubric = normalizeRubricStructure({
                     ...clonedRubric,
                     evaluations: existingEvaluations,
                 });
-                existing.statusIsManual = statusIsManual;
-                existing.status = statusIsManual ? status : calculateLearningActivityStatus(existing);
                 existing.weight = normalizedWeight;
                 existing.templateSourceId = sourceActivity.id;
                 existing.isTemplateSource = false;
                 if (!existing.createdAt) {
                     existing.createdAt = now;
+                }
+                const hasValidManualStatus = Boolean(
+                    existing.statusIsManual
+                    && Object.values(LEARNING_ACTIVITY_STATUS).includes(existing.status)
+                );
+                existing.statusIsManual = hasValidManualStatus;
+                if (!hasValidManualStatus) {
+                    existing.status = calculateLearningActivityStatus(existing);
                 }
                 existing.updatedAt = now;
             } else {

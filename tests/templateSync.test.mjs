@@ -151,4 +151,64 @@ function resetStateForTemplateTests() {
   assert.strictEqual(orphan, undefined, 'Child inherited activities should be removed when template source disappears');
 }
 
+// Test 3: Dates and status are only copied on creation
+{
+  resetStateForTemplateTests();
+
+  const templateId = 'tpl-3';
+  const childId = 'child-3';
+
+  state.activities = [
+    { id: templateId, name: 'Plantilla Història', type: 'class', isTemplate: true, color: '#123456', competencies: [] },
+    { id: childId, name: '2n ESO C', type: 'class', isTemplate: false, templateId, color: '#654321', competencies: [] },
+  ];
+
+  state.learningActivities = [
+    {
+      id: 'tpl-act-3',
+      classId: templateId,
+      title: 'Recerca',
+      shortCode: 'REC',
+      description: 'Treball de recerca',
+      criteriaRefs: [],
+      rubric: { items: [], evaluations: {} },
+      startDate: '2025-01-10',
+      endDate: '2025-01-24',
+      status: LEARNING_ACTIVITY_STATUS.SCHEDULED,
+      statusIsManual: false,
+      weight: 1,
+    },
+  ];
+
+  scheduleTemplateSync(templateId);
+  await saveState();
+
+  let childActivity = state.learningActivities.find(act => act.classId === childId && act.templateSourceId === 'tpl-act-3');
+  assert.ok(childActivity, 'Child activity should have been created from template');
+
+  // Manual edits on the child activity
+  childActivity.startDate = '2025-02-01';
+  childActivity.endDate = '2025-02-14';
+  childActivity.status = LEARNING_ACTIVITY_STATUS.CORRECTED;
+  childActivity.statusIsManual = true;
+
+  // Update template dates and status, they should not override the manual edits
+  const templateActivity = state.learningActivities.find(act => act.id === 'tpl-act-3');
+  templateActivity.startDate = '2025-03-05';
+  templateActivity.endDate = '2025-03-19';
+  templateActivity.status = LEARNING_ACTIVITY_STATUS.OPEN_SUBMISSIONS;
+  templateActivity.statusIsManual = false;
+  templateActivity.title = 'Recerca actualitzada';
+
+  scheduleTemplateSync(templateId);
+  await saveState();
+
+  childActivity = state.learningActivities.find(act => act.classId === childId && act.templateSourceId === 'tpl-act-3');
+  assert.strictEqual(childActivity.startDate, '2025-02-01', 'Child start date should keep manual edit');
+  assert.strictEqual(childActivity.endDate, '2025-02-14', 'Child end date should keep manual edit');
+  assert.strictEqual(childActivity.status, LEARNING_ACTIVITY_STATUS.CORRECTED, 'Child status should keep manual edit');
+  assert.strictEqual(childActivity.statusIsManual, true, 'Child manual status flag should be preserved');
+  assert.strictEqual(childActivity.title, 'Recerca actualitzada', 'Other fields should continue to sync from template');
+}
+
 console.log('All template synchronization tests passed.');
