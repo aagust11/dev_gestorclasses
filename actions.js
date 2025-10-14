@@ -1513,6 +1513,8 @@ export const actionHandlers = {
     },
     'update-learning-activity-start-date': (id, element) => {
         if (!state.learningActivityDraft) return;
+        const previousStart = state.learningActivityDraft.startDate || '';
+        const previousEnd = state.learningActivityDraft.endDate || '';
         const value = element.value;
         state.learningActivityDraft.startDate = value;
 
@@ -1527,9 +1529,14 @@ export const actionHandlers = {
         }
 
         const computedEnd = computeDefaultEndDate(value);
-        state.learningActivityDraft.endDate = computedEnd;
-        if (endInput) {
-            endInput.value = computedEnd;
+        const previousDefaultEnd = previousStart ? computeDefaultEndDate(previousStart) : '';
+        const shouldUpdateEnd = !previousEnd || previousEnd === previousDefaultEnd;
+
+        if (shouldUpdateEnd) {
+            state.learningActivityDraft.endDate = computedEnd;
+            if (endInput) {
+                endInput.value = computedEnd;
+            }
         }
     },
     'update-learning-activity-end-date': (id, element) => {
