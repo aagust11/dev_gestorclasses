@@ -62,6 +62,7 @@ export const state = {
     termGradeCalculationMode: 'dates',
     learningActivityRubricReturnView: null,
     pendingEvaluationHighlightActivityId: null,
+    pendingActivitiesRefresh: false,
     evaluationSettings: {},
     evaluationSettingsDraft: {},
     settingsEvaluationSelectedClassId: null,
@@ -326,6 +327,7 @@ function applyPendingTemplateSyncs() {
     }
     const toSync = Array.from(pendingTemplateSync);
     pendingTemplateSync.clear();
+    state.pendingActivitiesRefresh = true;
     toSync.forEach(id => synchronizeTemplateData(id));
 }
 

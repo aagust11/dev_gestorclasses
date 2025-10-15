@@ -114,6 +114,11 @@ function ensureActivityHasCriterionRef(activity, competencyId, criterionId) {
     return false;
 }
 
+function saveLearningActivitiesChange() {
+    state.pendingActivitiesRefresh = true;
+    return saveState();
+}
+
 function createEmptyTermGradeEntry() {
     return { numericScore: '', levelId: '', isManual: false, noteSymbols: [] };
 }
@@ -1351,7 +1356,7 @@ export const actionHandlers = {
                 state.learningActivities.forEach(activity => {
                     syncRubricWithActivityCriteria(activity);
                 });
-                saveState();
+                saveLearningActivitiesChange();
                 showImportSummary(data);
             } catch (error) {
                 console.error('Error loading example data:', error);
@@ -1401,7 +1406,7 @@ export const actionHandlers = {
                 if (!existing) return;
 
                 syncRubricWithActivityCriteria(existing);
-                saveState();
+                saveLearningActivitiesChange();
 
                 state.learningActivityDraft = {
                     ...existing,
@@ -1689,7 +1694,7 @@ export const actionHandlers = {
         if (isTemplateActivity(targetClass)) {
             scheduleTemplateSync(targetClass.id);
         }
-        saveState();
+        saveLearningActivitiesChange();
     },
     'delete-learning-activity': (id, element) => {
         const activityId = element?.dataset?.learningActivityId || state.learningActivityDraft?.id;
@@ -1721,7 +1726,7 @@ export const actionHandlers = {
             if (isTemplateActivity(parentClass)) {
                 scheduleTemplateSync(parentClass.id);
             }
-            saveState();
+            saveLearningActivitiesChange();
             state.activeView = 'activities';
             document.dispatchEvent(new CustomEvent('render'));
         });
@@ -1771,7 +1776,7 @@ export const actionHandlers = {
                 const previousView = state.activeView;
                 state.learningActivityRubricReturnView = previousView;
                 syncRubricWithActivityCriteria(activity);
-                saveState();
+                saveLearningActivitiesChange();
                 state.activeLearningActivityRubricId = activityId;
                 state.learningActivityRubricTab = 'assessment';
                 state.learningActivityRubricFilter = '';
@@ -1796,7 +1801,7 @@ export const actionHandlers = {
         const openAssessmentTab = previousView === 'evaluation';
         state.learningActivityRubricReturnView = previousView;
         syncRubricWithActivityCriteria(activity);
-        saveState();
+        saveLearningActivitiesChange();
         state.activeLearningActivityRubricId = activityId;
         state.learningActivityRubricTab = openAssessmentTab ? 'assessment' : 'configuration';
         state.learningActivityRubricFilter = '';
@@ -1839,7 +1844,7 @@ export const actionHandlers = {
         });
         ensureActivityHasCriterionRef(activity, competencyId, criterionId);
         select.value = '';
-        saveState();
+        saveLearningActivitiesChange();
         document.dispatchEvent(new CustomEvent('render'));
     },
     'remove-rubric-item': (id, element) => {
@@ -1861,7 +1866,7 @@ export const actionHandlers = {
                     removeCriterionRefFromActivity(activity, removed.competencyId, removed.criterionId);
                 }
             }
-            saveState();
+            saveLearningActivitiesChange();
             document.dispatchEvent(new CustomEvent('render'));
         }
     },
@@ -1878,7 +1883,7 @@ export const actionHandlers = {
         const targetIndex = direction === 'up' ? index - 1 : index + 1;
         if (targetIndex < 0 || targetIndex >= rubric.items.length) return;
         [rubric.items[index], rubric.items[targetIndex]] = [rubric.items[targetIndex], rubric.items[index]];
-        saveState();
+        saveLearningActivitiesChange();
         document.dispatchEvent(new CustomEvent('render'));
     },
     'update-rubric-item-weight': (id, element) => {
@@ -1892,7 +1897,7 @@ export const actionHandlers = {
         if (!item) return;
         const value = parseFloat(element.value);
         item.weight = Number.isFinite(value) ? value : 1;
-        saveState();
+        saveLearningActivitiesChange();
     },
     'update-rubric-item-scoring-mode': (id, element) => {
         const activityId = element?.dataset?.learningActivityId;
@@ -1915,7 +1920,7 @@ export const actionHandlers = {
         if (newMode !== previousMode) {
             cleanRubricEvaluations(rubric, [item.id]);
         }
-        saveState();
+        saveLearningActivitiesChange();
         document.dispatchEvent(new CustomEvent('render'));
     },
     'update-rubric-item-max-score': (id, element) => {
@@ -1937,7 +1942,7 @@ export const actionHandlers = {
             return;
         }
         item.scoring.maxScore = number;
-        saveState();
+        saveLearningActivitiesChange();
         document.dispatchEvent(new CustomEvent('render'));
     },
     'update-rubric-item-general-comment': (id, element) => {
@@ -1950,7 +1955,7 @@ export const actionHandlers = {
         const item = rubric.items.find(entry => entry.id === itemId);
         if (!item) return;
         item.generalComment = element.value;
-        saveState();
+        saveLearningActivitiesChange();
     },
     'update-rubric-item-comment': (id, element) => {
         const activityId = element?.dataset?.learningActivityId;
@@ -1963,7 +1968,7 @@ export const actionHandlers = {
         const item = rubric.items.find(entry => entry.id === itemId);
         if (!item) return;
         item.levelComments[level] = element.value;
-        saveState();
+        saveLearningActivitiesChange();
     },
     'set-rubric-score': (id, element) => {
         const activityId = element?.dataset?.learningActivityId;
@@ -1986,7 +1991,7 @@ export const actionHandlers = {
         } else {
             evaluation.scores[itemId] = level;
         }
-        saveState();
+        saveLearningActivitiesChange();
         document.dispatchEvent(new CustomEvent('render'));
     },
     'set-rubric-numeric-score': (id, element) => {
@@ -2006,7 +2011,7 @@ export const actionHandlers = {
         const { number, hasValue } = parseLocaleNumberInput(element.value);
         if (!hasValue) {
             delete evaluation.scores[itemId];
-            saveState();
+            saveLearningActivitiesChange();
             document.dispatchEvent(new CustomEvent('render'));
             return;
         }
@@ -2016,7 +2021,7 @@ export const actionHandlers = {
         }
         const sanitized = Math.max(0, number);
         evaluation.scores[itemId] = { mode: 'numeric', value: sanitized };
-        saveState();
+        saveLearningActivitiesChange();
         document.dispatchEvent(new CustomEvent('render'));
     },
     'update-rubric-general-comment': (id, element) => {
@@ -2029,7 +2034,7 @@ export const actionHandlers = {
         const evaluation = ensureRubricEvaluation(rubric, studentId);
         if (!evaluation) return;
         evaluation.comment = element.value;
-        saveState();
+        saveLearningActivitiesChange();
     },
     'toggle-rubric-not-presented': (id, element) => {
         const activityId = element?.dataset?.learningActivityId;
@@ -2047,7 +2052,7 @@ export const actionHandlers = {
             evaluation.flags.deliveredLate = false;
             evaluation.flags.exempt = false;
         }
-        saveState();
+        saveLearningActivitiesChange();
         document.dispatchEvent(new CustomEvent('render'));
     },
     'toggle-rubric-delivered-late': (id, element) => {
@@ -2061,7 +2066,7 @@ export const actionHandlers = {
         if (!evaluation || evaluation.flags?.exempt) return;
         const current = Boolean(evaluation.flags?.deliveredLate);
         evaluation.flags.deliveredLate = !current;
-        saveState();
+        saveLearningActivitiesChange();
         document.dispatchEvent(new CustomEvent('render'));
     },
     'toggle-rubric-exempt': (id, element) => {
@@ -2080,7 +2085,7 @@ export const actionHandlers = {
             evaluation.flags.deliveredLate = false;
             evaluation.scores = {};
         }
-        saveState();
+        saveLearningActivitiesChange();
         document.dispatchEvent(new CustomEvent('render'));
     },
     'filter-learning-activity-rubric-students': (id, element) => {
@@ -2574,7 +2579,7 @@ export const actionHandlers = {
                     state.learningActivities = state.learningActivities.filter(activity => activity.classId !== id);
                 }
             }
-            saveState();
+            saveLearningActivitiesChange();
             document.dispatchEvent(new CustomEvent('render'));
         });
     },
@@ -2635,7 +2640,7 @@ export const actionHandlers = {
                 || !learningActivity.templateSourceId
             ));
         }
-        saveState();
+        saveLearningActivitiesChange();
     },
     'change-activity-color': (id, element) => {
          const activity = state.activities.find(a => a.id === id);
@@ -3016,7 +3021,7 @@ export const actionHandlers = {
                             }
                         });
                     });
-                    await saveState();
+                    await saveLearningActivitiesChange();
                     showImportSummary(data);
                 } catch (error) {
                     alert(t('import_error_alert'));
