@@ -79,9 +79,16 @@ function restoreStudentListState(state) {
 let lastRenderedView = null;
 
 async function render() {
-    const shouldRefreshData = state.activeView !== lastRenderedView;
+    let shouldRefreshData = state.activeView !== lastRenderedView;
+    if (!shouldRefreshData && state.activeView === 'activities' && state.pendingActivitiesRefresh) {
+        shouldRefreshData = true;
+    }
+
     if (shouldRefreshData) {
         await refreshDataFromFile();
+        if (state.activeView === 'activities') {
+            state.pendingActivitiesRefresh = false;
+        }
     }
 
     mainContent.innerHTML = '';
