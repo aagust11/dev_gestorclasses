@@ -8,7 +8,11 @@ import {
   NP_TREATMENTS,
   NO_EVIDENCE_BEHAVIOR,
   computeNumericEvidence,
+  validateNumericEvaluationConfig,
+  EVALUATION_MODALITIES,
 } from '../evaluation.js';
+import { calculateTermGradesForClassTerm } from '../actions.js';
+import { state } from '../state.js';
 
 function cloneConfig(config) {
   return JSON.parse(JSON.stringify(config));
@@ -119,6 +123,98 @@ function cloneConfig(config) {
   const result = calculateWeightedCompetencyResult(evidences, config);
   assert.strictEqual(result.levelId, 'AN');
   assert.ok(Math.abs(result.numericScore - 3.4) < 1e-9);
+}
+
+// Test: numeric evaluation config validation detects missing fields
+{
+  const config = createDefaultEvaluationConfig();
+  config.modality = EVALUATION_MODALITIES.NUMERIC;
+  config.numeric.categories = [
+    { id: 'cat-1', name: '', weight: '' },
+    { id: 'cat-2', name: 'Exams', weight: 2 },
+  ];
+  const validation = validateNumericEvaluationConfig(config);
+  assert.strictEqual(validation.isValid, false);
+  assert.ok(validation.errors.categories['cat-1']);
+  assert.strictEqual(validation.errors.categories['cat-1'].name, 'missing');
+  assert.strictEqual(validation.errors.categories['cat-1'].weight, 'missing');
+}
+
+// Test: numeric term grade calculation aggregates activities by category
+{
+  state.activities = [{
+    id: 'class-1',
+    type: 'class',
+    studentIds: ['stu-1', 'stu-2'],
+    competencies: [],
+  }];
+  state.students = [
+    { id: 'stu-1', firstName: 'Anna', lastName: 'Example' },
+    { id: 'stu-2', firstName: 'Bernat', lastName: 'Example' },
+  ];
+  const config = createDefaultEvaluationConfig();
+  config.modality = EVALUATION_MODALITIES.NUMERIC;
+  config.numeric.categories = [
+    { id: 'cat-1', name: 'Exàmens', weight: 2 },
+    { id: 'cat-2', name: 'Projectes', weight: 1 },
+  ];
+  state.evaluationSettings = { 'class-1': config };
+  state.learningActivities = [
+    {
+      id: 'act-1',
+      classId: 'class-1',
+      numeric: { categoryId: 'cat-1', weight: 2 },
+      rubric: {
+        items: [
+          { id: 'item-1', scoring: { mode: 'numeric', maxScore: 20 } },
+        ],
+        evaluations: {
+          'stu-1': {
+            scores: { 'item-1': { mode: 'numeric', value: 18 } },
+            flags: { notPresented: false, exempt: false },
+          },
+          'stu-2': {
+            scores: { 'item-1': { mode: 'numeric', value: 10 } },
+            flags: { notPresented: false, exempt: false },
+          },
+        },
+      },
+    },
+    {
+      id: 'act-2',
+      classId: 'class-1',
+      numeric: { categoryId: 'cat-2', weight: 1 },
+      rubric: {
+        items: [
+          { id: 'item-2', scoring: { mode: 'numeric', maxScore: 10 } },
+        ],
+        evaluations: {
+          'stu-1': {
+            scores: { 'item-2': { mode: 'numeric', value: 8 } },
+            flags: { notPresented: false, exempt: false },
+          },
+          'stu-2': {
+            scores: { 'item-2': { mode: 'numeric', value: 0 } },
+            flags: { notPresented: true, exempt: false },
+          },
+        },
+      },
+    },
+  ];
+  state.terms = [];
+  state.termGradeRecords = {};
+
+  const termGrades = calculateTermGradesForClassTerm('class-1', 'all', 'dates');
+  const stu1 = termGrades.students['stu-1'];
+  const stu2 = termGrades.students['stu-2'];
+  assert.ok(stu1);
+  assert.ok(stu2);
+  assert.strictEqual(stu1.competencies['cat-1'].numericScore, '9.00');
+  assert.strictEqual(stu1.competencies['cat-2'].numericScore, '8.00');
+  assert.strictEqual(stu1.final.numericScore, '8.67');
+  assert.strictEqual(stu2.competencies['cat-1'].numericScore, '5.00');
+  assert.strictEqual(stu2.competencies['cat-2'].numericScore, '0.00');
+  assert.strictEqual(stu2.final.numericScore, '3.33');
 }
 
 console.log('All evaluation tests passed.');
