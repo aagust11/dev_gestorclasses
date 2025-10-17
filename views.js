@@ -415,8 +415,6 @@ export function renderActivitiesView() {
             const assignedLabelContent = assignedCount > 0
                 ? `${assignedCount} ${t('activities_assigned_criteria_label')}`
                 : `<span class="inline-flex items-center gap-1"><i data-lucide="crosshair" class="w-3 h-3"></i>${t('activities_assigned_criteria_none')}</span>`;
-            const createdDate = formatDateForDisplay(activity.createdAt);
-            const description = activity.description?.trim();
             const startDateDisplay = formatDateForDisplay(activity.startDate);
             const endDateDisplay = formatDateForDisplay(activity.endDate);
             const dateRangeHtml = (startDateDisplay || endDateDisplay)
@@ -443,9 +441,7 @@ export function renderActivitiesView() {
                             <span class="font-semibold text-gray-800 dark:text-gray-100">${activity.title?.trim() || t('activities_untitled_label')}</span>
                             <span class="text-xs text-blue-600 dark:text-blue-400">${assignedLabelContent}</span>
                         </div>
-                        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">${description || t('activities_no_description')}</p>
                         ${dateRangeHtml}
-                        ${createdDate ? `<div class="mt-3 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2"><i data-lucide="calendar" class="w-4 h-4"></i><span>${t('activities_created_on')} ${createdDate}</span></div>` : ''}
                     </div>
                     <div class="mt-3 flex items-center justify-between gap-2">
                         <div class="flex items-center gap-2">
