@@ -28,8 +28,6 @@ export const NO_EVIDENCE_BEHAVIOR = {
     SPECIFIC_LEVEL: 'specific-level',
 };
 
-const NUMERIC_CATEGORY_ID_PREFIX = 'numeric-category';
-
 function deepClone(value) {
     if (value === null || typeof value !== 'object') {
         return value;
@@ -42,22 +40,6 @@ function deepClone(value) {
         cloned[key] = deepClone(val);
     });
     return cloned;
-}
-
-function generateNumericCategoryId() {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return crypto.randomUUID();
-    }
-    const random = Math.random().toString(16).slice(2, 10);
-    return `${NUMERIC_CATEGORY_ID_PREFIX}-${Date.now()}-${random}`;
-}
-
-function createDefaultNumericCategory() {
-    return {
-        id: generateNumericCategoryId(),
-        name: '',
-        weight: 1,
-    };
 }
 
 export function createDefaultEvaluationConfig() {
@@ -86,7 +68,7 @@ export function createDefaultEvaluationConfig() {
             },
         },
         numeric: {
-            categories: [createDefaultNumericCategory()],
+            placeholder: true,
         },
     };
 }
@@ -164,37 +146,6 @@ export function normalizeEvaluationConfig(rawConfig) {
         ? calculation.npTreatment
         : base.competency.calculation.npTreatment;
 
-    const rawNumeric = config.numeric && typeof config.numeric === 'object'
-        ? config.numeric
-        : {};
-    const rawCategories = Array.isArray(rawNumeric.categories) ? rawNumeric.categories : [];
-
-    const normalizedCategories = rawCategories
-        .map((rawCategory, index) => {
-            if (!rawCategory || typeof rawCategory !== 'object') {
-                return null;
-            }
-            const id = typeof rawCategory.id === 'string' && rawCategory.id.trim()
-                ? rawCategory.id.trim()
-                : generateNumericCategoryId();
-            const name = typeof rawCategory.name === 'string' ? rawCategory.name.trim() : '';
-            const rawWeight = rawCategory.weight;
-            const normalizedWeight = Number(rawWeight);
-            const weight = Number.isFinite(normalizedWeight) && normalizedWeight >= 0
-                ? normalizedWeight
-                : 0;
-            return {
-                id,
-                name,
-                weight,
-            };
-        })
-        .filter(Boolean);
-
-    if (normalizedCategories.length === 0) {
-        normalizedCategories.push(createDefaultNumericCategory());
-    }
-
     return {
         modality,
         competency: {
@@ -208,9 +159,9 @@ export function normalizeEvaluationConfig(rawConfig) {
                 npTreatment,
             },
         },
-        numeric: {
-            categories: normalizedCategories,
-        },
+        numeric: config.numeric && typeof config.numeric === 'object'
+            ? { ...config.numeric }
+            : { ...base.numeric },
     };
 }
 
@@ -554,50 +505,6 @@ export function validateCompetencyEvaluationConfig(config) {
         && Object.values(errors.minimums).every(value => !value)
         && Object.values(errors.maxNotAchieved).every(value => !value)
         && Object.values(errors.calculation).every(value => !value);
-
-    return { isValid, errors };
-}
-
-export function validateNumericEvaluationConfig(config) {
-    const normalized = normalizeEvaluationConfig(config);
-    const rawNumeric = config && typeof config === 'object' ? config.numeric || {} : {};
-    const rawCategories = Array.isArray(rawNumeric.categories) ? rawNumeric.categories : [];
-
-    const errors = { categories: {} };
-
-    const categories = Array.isArray(normalized.numeric?.categories)
-        ? normalized.numeric.categories
-        : [];
-
-    categories.forEach(category => {
-        const rawCategory = rawCategories.find(item => item?.id === category.id) || {};
-        const rawName = typeof rawCategory.name === 'string' ? rawCategory.name : category.name;
-        const trimmedName = typeof rawName === 'string' ? rawName.trim() : '';
-        const rawWeight = typeof rawCategory.weight !== 'undefined' ? rawCategory.weight : category.weight;
-
-        const categoryErrors = {};
-        if (!trimmedName) {
-            categoryErrors.name = 'missing';
-        }
-
-        if (rawWeight === '' || rawWeight === null || typeof rawWeight === 'undefined') {
-            categoryErrors.weight = 'missing';
-        } else {
-            const numericWeight = Number(rawWeight);
-            if (Number.isNaN(numericWeight)) {
-                categoryErrors.weight = 'invalid';
-            } else if (numericWeight < 0) {
-                categoryErrors.weight = 'negative';
-            }
-        }
-
-        if (Object.keys(categoryErrors).length > 0) {
-            errors.categories[category.id] = categoryErrors;
-        }
-    });
-
-    const isValid = categories.length > 0
-        && Object.values(errors.categories).every(categoryErrors => Object.keys(categoryErrors).length === 0);
 
     return { isValid, errors };
 }
