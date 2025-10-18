@@ -3,7 +3,7 @@
 import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault, pickExistingDataFile, createDataFileWithCurrentState, reloadDataFromConfiguredFile, clearConfiguredDataFile, resetStateToDefaults, scheduleTemplateSync, isTemplateActivity } from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
-import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig, computeNumericEvidence } from './evaluation.js';
+import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, validateNumericEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig, computeNumericEvidence, createNumericCategoryTemplate } from './evaluation.js';
 
 function generateRubricItemId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -112,6 +112,19 @@ function ensureActivityHasCriterionRef(activity, competencyId, criterionId) {
     }
 
     return false;
+}
+
+function ensureDraftNumericCategories(draft) {
+    if (!draft) {
+        return [];
+    }
+    if (!draft.numeric || typeof draft.numeric !== 'object') {
+        draft.numeric = { categories: [] };
+    }
+    if (!Array.isArray(draft.numeric.categories)) {
+        draft.numeric.categories = [];
+    }
+    return draft.numeric.categories;
 }
 
 function saveLearningActivitiesChange() {
@@ -921,6 +934,11 @@ function removeRubricItemsForCriterion(rubric, competencyId, criterionId) {
 function syncRubricWithActivityCriteria(activity) {
     if (!activity) return;
 
+    const evaluationConfig = normalizeEvaluationConfig(state.evaluationSettings?.[activity.classId]);
+    if (evaluationConfig.modality === EVALUATION_MODALITIES.NUMERIC) {
+        return;
+    }
+
     const rubric = ensureLearningActivityRubric(activity);
     if (!Array.isArray(activity.criteriaRefs)) {
         activity.criteriaRefs = [];
@@ -1212,6 +1230,81 @@ export const actionHandlers = {
         clearEvaluationFeedback(classId);
     },
 
+    'add-numeric-category': (id, element) => {
+        const classId = element?.dataset?.classId;
+        if (!classId) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft) return;
+        const categories = ensureDraftNumericCategories(draft);
+        const newCategory = createNumericCategoryTemplate();
+        newCategory.name = '';
+        newCategory.weight = '';
+        categories.push(newCategory);
+        clearEvaluationFeedback(classId);
+    },
+
+    'remove-numeric-category': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const categoryId = element?.dataset?.categoryId;
+        if (!classId || !categoryId) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft) return;
+        const categories = ensureDraftNumericCategories(draft);
+        if (categories.length <= 1) {
+            return;
+        }
+        const index = categories.findIndex(category => category?.id === categoryId);
+        if (index === -1) {
+            return;
+        }
+        categories.splice(index, 1);
+        clearEvaluationFeedback(classId);
+    },
+
+    'update-numeric-category-name': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const categoryId = element?.dataset?.categoryId;
+        if (!classId || !categoryId) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft) return;
+        const categories = ensureDraftNumericCategories(draft);
+        const category = categories.find(item => item?.id === categoryId);
+        if (!category) {
+            return;
+        }
+        category.name = element.value;
+        clearEvaluationFeedback(classId);
+    },
+
+    'update-numeric-category-weight': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const categoryId = element?.dataset?.categoryId;
+        if (!classId || !categoryId) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft) return;
+        const categories = ensureDraftNumericCategories(draft);
+        const category = categories.find(item => item?.id === categoryId);
+        if (!category) {
+            return;
+        }
+        const rawValue = element.value;
+        if (rawValue === '') {
+            category.weight = '';
+        } else {
+            const parsed = Number(rawValue);
+            category.weight = Number.isFinite(parsed) ? parsed : '';
+        }
+        clearEvaluationFeedback(classId);
+    },
+
     'update-competency-level-value': (id, element) => {
         const classId = element?.dataset?.classId;
         const levelId = element?.dataset?.levelId;
@@ -1322,7 +1415,10 @@ export const actionHandlers = {
         if (!draft) {
             return;
         }
-        const validation = validateCompetencyEvaluationConfig(draft);
+        const normalizedDraft = normalizeEvaluationConfig(draft);
+        const validation = normalizedDraft.modality === EVALUATION_MODALITIES.NUMERIC
+            ? validateNumericEvaluationConfig(draft)
+            : validateCompetencyEvaluationConfig(draft);
         if (!validation.isValid) {
             setEvaluationFeedback(classId, {
                 type: 'error',
@@ -1641,6 +1737,7 @@ export const actionHandlers = {
                 syncRubricWithActivityCriteria(existing);
                 saveLearningActivitiesChange();
 
+                const numericMeta = normalizeNumericActivityMetadata(existing);
                 state.learningActivityDraft = {
                     ...existing,
                     criteriaRefs: Array.isArray(existing.criteriaRefs) ? [...existing.criteriaRefs] : [],
@@ -1654,6 +1751,10 @@ export const actionHandlers = {
                         ? existing.weight
                         : 1,
                     shortCode: typeof existing?.shortCode === 'string' ? existing.shortCode : '',
+                    numeric: {
+                        categoryId: numericMeta.categoryId || '',
+                        weight: Number.isFinite(numericMeta.weight) ? numericMeta.weight : 1,
+                    },
                 };
                 syncRubricWithActivityCriteria(state.learningActivityDraft);
             } else {
@@ -1671,6 +1772,10 @@ export const actionHandlers = {
                     statusIsManual: false,
                     weight: 1,
                     shortCode: '',
+                    numeric: {
+                        categoryId: '',
+                        weight: 1,
+                    },
                 };
                 syncRubricWithActivityCriteria(state.learningActivityDraft);
             }
@@ -1715,6 +1820,10 @@ export const actionHandlers = {
             statusIsManual: false,
             weight: 1,
             shortCode: '',
+            numeric: {
+                categoryId: '',
+                weight: 1,
+            },
         };
         syncRubricWithActivityCriteria(state.learningActivityDraft);
 
@@ -1804,6 +1913,29 @@ export const actionHandlers = {
             state.learningActivityDraft.weight = '';
         }
     },
+    'update-learning-activity-numeric-category': (id, element) => {
+        if (!state.learningActivityDraft) return;
+        if (!state.learningActivityDraft.numeric || typeof state.learningActivityDraft.numeric !== 'object') {
+            state.learningActivityDraft.numeric = { categoryId: '', weight: 1 };
+        }
+        state.learningActivityDraft.numeric.categoryId = element?.value || '';
+    },
+    'update-learning-activity-numeric-weight': (id, element) => {
+        if (!state.learningActivityDraft) return;
+        if (!state.learningActivityDraft.numeric || typeof state.learningActivityDraft.numeric !== 'object') {
+            state.learningActivityDraft.numeric = { categoryId: '', weight: 1 };
+        }
+        const { number, hasValue } = parseLocaleNumberInput(element.value ?? '');
+        if (!hasValue) {
+            state.learningActivityDraft.numeric.weight = '';
+            state.learningActivityDraft.weight = '';
+            return;
+        }
+        if (Number.isFinite(number) && number >= 0) {
+            state.learningActivityDraft.numeric.weight = number;
+            state.learningActivityDraft.weight = number;
+        }
+    },
     'toggle-learning-activity-criterion': (id, element) => {
         if (!state.learningActivityDraft) return;
         const { competencyId, criterionId } = element.dataset;
@@ -1862,11 +1994,35 @@ export const actionHandlers = {
             return;
         }
 
+        const evaluationConfig = normalizeEvaluationConfig(state.evaluationSettings?.[draft.classId]);
+        const isNumericClass = evaluationConfig.modality === EVALUATION_MODALITIES.NUMERIC;
+
         const now = new Date().toISOString();
         syncRubricWithActivityCriteria(draft);
         const normalizedRubric = normalizeRubric(draft.rubric);
         const weightValue = Number.parseFloat(draft.weight);
-        const normalizedWeight = Number.isFinite(weightValue) && weightValue >= 0 ? weightValue : 1;
+        let normalizedWeight = Number.isFinite(weightValue) && weightValue >= 0 ? weightValue : 1;
+        const numericCategoryId = typeof draft.numeric?.categoryId === 'string'
+            ? draft.numeric.categoryId.trim()
+            : '';
+        const numericWeightProvided = typeof draft.numeric?.weight === 'number' && draft.numeric.weight >= 0;
+        const numericWeight = numericWeightProvided ? draft.numeric.weight : normalizedWeight;
+
+        if (isNumericClass) {
+            if (!numericCategoryId) {
+                alert(t('activities_numeric_category_required'));
+                return;
+            }
+            if (!numericWeightProvided) {
+                alert(t('activities_numeric_weight_required'));
+                return;
+            }
+            normalizedWeight = numericWeight;
+        }
+
+        const numericPayload = isNumericClass
+            ? { categoryId: numericCategoryId, weight: numericWeight }
+            : { categoryId: '', weight: normalizedWeight };
         let persistedStatus;
         if (draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)) {
             persistedStatus = draft.status;
@@ -1894,6 +2050,7 @@ export const actionHandlers = {
                 status: persistedStatus,
                 statusIsManual: Boolean(draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)),
                 weight: normalizedWeight,
+                numeric: numericPayload,
             });
         } else {
             const index = state.learningActivities.findIndex(act => act.id === draft.id);
@@ -1912,6 +2069,7 @@ export const actionHandlers = {
                 status: persistedStatus,
                 statusIsManual: Boolean(draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)),
                 weight: normalizedWeight,
+                numeric: numericPayload,
             };
             if (index === -1) {
                 state.learningActivities.push(persisted);

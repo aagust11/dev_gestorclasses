@@ -60,6 +60,10 @@ function createDefaultNumericCategory() {
     };
 }
 
+export function createNumericCategoryTemplate() {
+    return createDefaultNumericCategory();
+}
+
 export function createDefaultEvaluationConfig() {
     return {
         modality: EVALUATION_MODALITIES.COMPETENCY,
