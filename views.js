@@ -3,7 +3,7 @@
 import { state, LEARNING_ACTIVITY_STATUS, RUBRIC_LEVELS, calculateLearningActivityStatus, ensureEvaluationDraft } from './state.js';
 import { darkenColor, getWeekStartDate, getWeekDateRange, formatDate, isSameDate, findNextSession, findPreviousSession, DAY_KEYS, findNextClassSession, getCurrentTermDateRange, getWeeksForCourse, isHoliday, normalizeStudentAnnotation, STUDENT_ATTENDANCE_STATUS, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
-import { COMPETENCY_LEVEL_IDS, EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, validateCompetencyEvaluationConfig, validateNumericEvaluationConfig, normalizeEvaluationConfig, computeNumericEvidence, formatValidationErrorMessage } from './evaluation.js';
+import { COMPETENCY_LEVEL_IDS, EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, validateCompetencyEvaluationConfig, normalizeEvaluationConfig, computeNumericEvidence } from './evaluation.js';
 
 const sortStudentsByName = (studentA, studentB) => studentA.name.localeCompare(studentB.name);
 
@@ -410,36 +410,11 @@ export function renderActivitiesView() {
             }
         };
 
-        const locale = document.documentElement.lang || 'ca';
         const activitiesHtml = visibleActivities.map(activity => {
-            const classEvaluationConfig = normalizeEvaluationConfig(state.evaluationSettings?.[c.id]);
-            const classIsNumeric = classEvaluationConfig.modality === EVALUATION_MODALITIES.NUMERIC;
-            const numericCategories = Array.isArray(classEvaluationConfig.numeric?.categories)
-                ? classEvaluationConfig.numeric.categories
-                : [];
             const assignedCount = Array.isArray(activity.criteriaRefs) ? activity.criteriaRefs.length : 0;
-            let assignedLabelContent;
-            if (classIsNumeric) {
-                const categoryId = activity.numeric?.categoryId || '';
-                const categoryIndex = numericCategories.findIndex(cat => cat.id === categoryId);
-                const category = categoryIndex >= 0 ? numericCategories[categoryIndex] : null;
-                const categoryLabel = category
-                    ? (category.name || t('evaluation_numeric_category_default_name', { index: categoryIndex + 1 }))
-                    : t('activities_numeric_no_category_assigned');
-                const rawWeight = typeof activity.numeric?.weight === 'number'
-                    ? activity.numeric.weight
-                    : Number(activity.weight);
-                const formattedWeight = Number.isFinite(rawWeight)
-                    ? formatDecimal(rawWeight, locale, { maximumFractionDigits: 2, minimumFractionDigits: 0, useGrouping: false })
-                    : '';
-                assignedLabelContent = formattedWeight
-                    ? t('activities_numeric_assignment_label', { category: categoryLabel, weight: formattedWeight })
-                    : t('activities_numeric_assignment_label_simple', { category: categoryLabel });
-            } else {
-                assignedLabelContent = assignedCount > 0
-                    ? `${assignedCount} ${t('activities_assigned_criteria_label')}`
-                    : `<span class="inline-flex items-center gap-1"><i data-lucide="crosshair" class="w-3 h-3"></i>${t('activities_assigned_criteria_none')}</span>`;
-            }
+            const assignedLabelContent = assignedCount > 0
+                ? `${assignedCount} ${t('activities_assigned_criteria_label')}`
+                : `<span class="inline-flex items-center gap-1"><i data-lucide="crosshair" class="w-3 h-3"></i>${t('activities_assigned_criteria_none')}</span>`;
             const startDateDisplay = formatDateForDisplay(activity.startDate);
             const endDateDisplay = formatDateForDisplay(activity.endDate);
             const dateRangeHtml = (startDateDisplay || endDateDisplay)
@@ -1077,12 +1052,6 @@ function renderEvaluationGradesTab(classes) {
                             const formattedNormalized = Number.isFinite(numericResult?.scoreOutOfFour)
                                 ? formatDecimal(numericResult.scoreOutOfFour, locale, { maximumFractionDigits: 2, useGrouping: false })
                                 : '';
-                            const scoreOutOfTenValue = hasValidMax
-                                ? (numericValue / maxScore) * 10
-                                : NaN;
-                            const formattedOutOfTen = Number.isFinite(scoreOutOfTenValue)
-                                ? formatDecimal(scoreOutOfTenValue, locale, { maximumFractionDigits: 2, useGrouping: false })
-                                : '';
                             const ratioTemplate = t('rubric_numeric_ratio');
                             const ratioText = ratioTemplate.startsWith('[')
                                 ? `${formattedValue} / ${formattedMax}`
@@ -1090,12 +1059,11 @@ function renderEvaluationGradesTab(classes) {
                             const equivalenceTemplate = t('rubric_numeric_equivalence');
                             const equivalenceText = levelId && formattedNormalized
                                 ? (equivalenceTemplate.startsWith('[')
-                                    ? `${levelId} (${formattedNormalized}/4 · ${formattedOutOfTen}/10)`
+                                    ? `${levelId} (${formattedNormalized}/4)`
                                     : equivalenceTemplate
                                         .replace('{{level}}', levelId)
                                         .replace('{{level_label}}', levelLabel.startsWith('[') ? levelId : levelLabel)
-                                        .replace('{{score}}', formattedNormalized)
-                                        .replace('{{score_ten}}', formattedOutOfTen))
+                                        .replace('{{score}}', formattedNormalized))
                                 : '';
                             const summary = equivalenceText ? `${ratioText} · ${equivalenceText}` : ratioText;
                             textClasses = 'text-gray-800 dark:text-gray-100 font-medium';
@@ -1606,12 +1574,6 @@ export function renderLearningActivityEditorView() {
         `;
     }
 
-    const evaluationConfig = normalizeEvaluationConfig(state.evaluationSettings?.[targetClass.id]);
-    const isNumericClass = evaluationConfig.modality === EVALUATION_MODALITIES.NUMERIC;
-    const numericClassCategories = Array.isArray(evaluationConfig.numeric?.categories)
-        ? evaluationConfig.numeric.categories
-        : [];
-
     const mobileActions = [
         ...(draft.isNew ? [] : [
             { action: 'go-to-evaluation-for-learning-activity', label: t('activities_go_to_evaluation'), icon: 'check-circle-2' },
@@ -1626,17 +1588,15 @@ export function renderLearningActivityEditorView() {
     const competencies = Array.isArray(targetClass.competencies) ? targetClass.competencies : [];
     const selectedRefs = Array.isArray(draft.criteriaRefs) ? draft.criteriaRefs : [];
 
-    const selectedCriteria = isNumericClass
-        ? []
-        : selectedRefs.map(ref => {
-            const competency = competencies.find(c => c.id === ref.competencyId);
-            const criterion = competency?.criteria?.find(cr => cr.id === ref.criterionId);
-            if (!criterion) return null;
-            return {
-                competency,
-                criterion,
-            };
-        }).filter(Boolean);
+    const selectedCriteria = selectedRefs.map(ref => {
+        const competency = competencies.find(c => c.id === ref.competencyId);
+        const criterion = competency?.criteria?.find(cr => cr.id === ref.criterionId);
+        if (!criterion) return null;
+        return {
+            competency,
+            criterion,
+        };
+    }).filter(Boolean);
 
     const startDateValue = draft.startDate || '';
     const endDateValue = draft.endDate || '';
@@ -1664,17 +1624,8 @@ export function renderLearningActivityEditorView() {
     const statusSelectOptions = statusOptions.map(option => `
         <option value="${option.value}" ${option.value === currentStatusValue ? 'selected' : ''}>${escapeHtml(option.label)}</option>
     `).join('');
-    const weightInputValue = (() => {
-        if (isNumericClass) {
-            const numericWeight = draft.numeric?.weight;
-            if (numericWeight === '' || typeof numericWeight === 'undefined') {
-                return '';
-            }
-            return String(numericWeight);
-        }
-        const weightValue = draft.weight === '' ? '' : draft.weight;
-        return weightValue === '' ? '' : String(weightValue);
-    })();
+    const weightValue = draft.weight === '' ? '' : draft.weight;
+    const weightInputValue = weightValue === '' ? '' : String(weightValue);
     const statusHelpText = (() => {
         const raw = t('activities_form_status_help');
         if (!raw || raw.startsWith('[')) {
@@ -1683,13 +1634,6 @@ export function renderLearningActivityEditorView() {
         return raw.replace('{{status}}', automaticStatusLabel);
     })();
     const weightHelpText = (() => {
-        if (isNumericClass) {
-            const raw = t('activities_numeric_weight_help');
-            if (!raw || raw.startsWith('[')) {
-                return '';
-            }
-            return raw;
-        }
         const raw = t('activities_form_weight_help');
         if (!raw || raw.startsWith('[')) {
             return '';
@@ -1709,7 +1653,7 @@ export function renderLearningActivityEditorView() {
     const guideToggleIcon = state.learningActivityGuideVisible ? 'book-x' : 'book-open';
     const guideToggleLabel = state.learningActivityGuideVisible ? t('activities_hide_guide') : t('activities_show_guide');
 
-    const competencyGuideHtml = !isNumericClass && state.learningActivityGuideVisible
+    const competencyGuideHtml = state.learningActivityGuideVisible
         ? `
             <div class="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3 bg-white dark:bg-gray-800">
                 ${competencies.length > 0 ? competencies.map(comp => {
@@ -1763,66 +1707,8 @@ export function renderLearningActivityEditorView() {
         }).join('<hr class="my-4 border-gray-200 dark:border-gray-700">')
         : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_no_competencies_help')}</p>`;
 
-    const selectedNumericCategoryId = typeof draft.numeric?.categoryId === 'string'
-        ? draft.numeric.categoryId
-        : '';
-    const numericCategoryOptions = numericClassCategories.map((category, index) => {
-        const label = category.name || t('evaluation_numeric_category_default_name', { index: index + 1 });
-        const selectedAttr = category.id === selectedNumericCategoryId ? 'selected' : '';
-        return `<option value="${category.id}" ${selectedAttr}>${escapeHtml(label)}</option>`;
-    }).join('');
-    const hasNumericCategories = numericClassCategories.length > 0;
-    const numericCategorySelectHtml = hasNumericCategories
-        ? `<select data-action="update-learning-activity-numeric-category" data-class-id="${targetClass.id}" class="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm">${numericCategoryOptions}</select>`
-        : `<div class="mt-1 p-2 border border-amber-200 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/30 text-sm text-amber-800 dark:text-amber-200 rounded-md">${t('activities_numeric_no_categories')}</div>`;
-
-    const numericAssignmentHtml = `
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
-            <div>
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">${t('activities_numeric_assignment_title')}</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_numeric_assignment_help')}</p>
-            </div>
-            <div class="grid gap-4 sm:grid-cols-2">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('activities_numeric_category_label')}</label>
-                    ${numericCategorySelectHtml}
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${t('activities_numeric_category_help')}</p>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="learning-activity-weight">${t('activities_numeric_weight_label')}</label>
-                    <input id="learning-activity-weight" type="text" inputmode="decimal" pattern="[0-9]*[,.]?[0-9]*" value="${escapeAttribute(weightInputValue || '')}" data-event="change" data-action="update-learning-activity-numeric-weight" class="mt-1 w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
-                    ${weightHelpText ? `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(weightHelpText)}</p>` : ''}
-                </div>
-            </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400">${t('activities_numeric_category_hint')}</p>
-        </div>
-    `;
-
-    const competencyAssignmentHtml = `
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">${t('activities_selected_criteria_label')}</h3>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_selected_criteria_help')}</p>
-                </div>
-                <button type="button" data-action="open-learning-activity-criteria" class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-blue-400/60">
-                    <i data-lucide="list-checks" class="w-4 h-4"></i>
-                    <span><span class="font-semibold">${selectedCount}</span> ${t('activities_selected_count_label')}</span>
-                </button>
-            </div>
-            ${selectedCriteriaHtml}
-            <button data-action="toggle-competency-guide" class="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">
-                <i data-lucide="${guideToggleIcon}" class="w-4 h-4"></i>
-                <span>${guideToggleLabel}</span>
-            </button>
-            ${competencyGuideHtml}
-        </div>
-    `;
-
-    const evaluationAssignmentCard = isNumericClass ? numericAssignmentHtml : competencyAssignmentHtml;
-
-    const selectedCount = isNumericClass ? 0 : selectedCriteria.length;
-    const isCriteriaModalOpen = !isNumericClass && state.learningActivityCriteriaModalOpen;
+    const selectedCount = selectedCriteria.length;
+    const isCriteriaModalOpen = state.learningActivityCriteriaModalOpen;
     const shortcutButtonsHtml = draft.isNew ? '' : `
         <button
             type="button"
@@ -1856,7 +1742,7 @@ export function renderLearningActivityEditorView() {
             <i data-lucide="trash-2" class="w-4 h-4"></i>
         </button>
     `;
-    const criteriaModalHtml = (!isCriteriaModalOpen || isNumericClass) ? '' : `
+    const criteriaModalHtml = !isCriteriaModalOpen ? '' : `
         <div class="fixed inset-0 z-40 flex items-center justify-center px-4 py-6">
             <div class="absolute inset-0 bg-gray-900/50 dark:bg-gray-900/70" data-action="close-learning-activity-criteria"></div>
             <div class="relative max-w-3xl w-full bg-white dark:bg-gray-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-6">
@@ -1937,17 +1823,32 @@ export function renderLearningActivityEditorView() {
                             <select data-action="update-learning-activity-status" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">${statusSelectOptions}</select>
                             ${statusHelpText ? `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(statusHelpText)}</p>` : ''}
                         </div>
-                        ${isNumericClass ? '' : `
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_weight_label')}</label>
-                                <input type="number" min="0" step="0.1" value="${escapeHtml(weightInputValue)}" data-action="update-learning-activity-weight" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
-                                ${weightHelpText ? `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(weightHelpText)}</p>` : ''}
-                            </div>
-                        `}
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_weight_label')}</label>
+                            <input type="number" min="0" step="0.1" value="${escapeHtml(weightInputValue)}" data-action="update-learning-activity-weight" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                            ${weightHelpText ? `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(weightHelpText)}</p>` : ''}
+                        </div>
                     </div>
                     </div>
 
-                    ${evaluationAssignmentCard}
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">${t('activities_selected_criteria_label')}</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_selected_criteria_help')}</p>
+                            </div>
+                            <button type="button" data-action="open-learning-activity-criteria" class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-blue-400/60">
+                                <i data-lucide="list-checks" class="w-4 h-4"></i>
+                                <span><span class="font-semibold">${selectedCount}</span> ${t('activities_selected_count_label')}</span>
+                            </button>
+                        </div>
+                        ${selectedCriteriaHtml}
+                        <button data-action="toggle-competency-guide" class="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                            <i data-lucide="${guideToggleIcon}" class="w-4 h-4"></i>
+                            <span>${guideToggleLabel}</span>
+                        </button>
+                        ${competencyGuideHtml}
+                    </div>
 
                 </div>
             </div>
@@ -2882,10 +2783,7 @@ export function renderSettingsView() {
 
         const draft = ensureEvaluationDraft(selectedClassId);
         const normalizedDraft = normalizeEvaluationConfig(draft || {});
-        const modality = normalizedDraft.modality;
-        const validation = modality === EVALUATION_MODALITIES.NUMERIC
-            ? validateNumericEvaluationConfig(draft || {})
-            : validateCompetencyEvaluationConfig(draft || {});
+        const validation = validateCompetencyEvaluationConfig(draft || {});
         const feedback = state.evaluationSettingsFeedback?.[selectedClassId] || null;
         const saveDisabled = !validation.isValid;
 
@@ -2907,7 +2805,7 @@ export function renderSettingsView() {
         };
 
         const validationSummaryItems = [];
-        if (modality === EVALUATION_MODALITIES.COMPETENCY && draft && draft.competency) {
+        if (draft && draft.competency) {
             COMPETENCY_LEVEL_IDS.forEach(levelId => {
                 const code = validation.errors.levels[levelId];
                 if (code) {
@@ -2932,23 +2830,6 @@ export function renderSettingsView() {
             if (validation.errors.calculation.noEvidenceLevelId) {
                 validationSummaryItems.push(`${t('evaluation_no_evidence_level_label')} — ${t(errorTranslationKey[validation.errors.calculation.noEvidenceLevelId])}`);
             }
-        }
-        if (modality === EVALUATION_MODALITIES.NUMERIC) {
-            const categories = Array.isArray(normalizedDraft.numeric?.categories)
-                ? normalizedDraft.numeric.categories
-                : [];
-            const categoryErrors = validation.errors?.categories || {};
-            categories.forEach((category, index) => {
-                const errors = categoryErrors[category.id];
-                if (!errors) {
-                    return;
-                }
-                const displayName = category.name || t('evaluation_numeric_category_default_name', { index: index + 1 });
-                Object.entries(errors).forEach(([field, code]) => {
-                    const message = formatValidationErrorMessage(code, { field: field === 'weight' ? t('evaluation_numeric_category_weight_label') : t('evaluation_numeric_category_name_label') });
-                    validationSummaryItems.push(`${escapeHtml(displayName)} — ${escapeHtml(message)}`);
-                });
-            });
         }
 
         const validationSummaryHtml = validationSummaryItems.length > 0
@@ -2975,6 +2856,8 @@ export function renderSettingsView() {
                 </div>
             `
             : '';
+
+        const modality = draft?.modality || EVALUATION_MODALITIES.COMPETENCY;
 
         const levelRowsHtml = normalizedDraft.competency.levels.map(level => {
             const rawLevel = draft?.competency?.levels?.find(l => l.id === level.id) || level;
@@ -3168,66 +3051,6 @@ export function renderSettingsView() {
         ], normalizedDraft);
         const majorityText = `${t('evaluation_help_example_majority_prefix')} ${levelLabelMap.AS}, ${levelLabelMap.AS}, ${levelLabelMap.AE} → ${levelLabelMap[majorityExample.levelId] || majorityExample.levelId}`;
 
-        const numericCategories = Array.isArray(normalizedDraft.numeric?.categories)
-            ? normalizedDraft.numeric.categories
-            : [];
-        const rawNumericCategories = Array.isArray(draft?.numeric?.categories)
-            ? draft.numeric.categories
-            : [];
-        const numericCategoryErrors = modality === EVALUATION_MODALITIES.NUMERIC
-            ? validation.errors?.categories || {}
-            : {};
-        const locale = document.documentElement.lang || 'ca';
-        const numericCategoriesHtml = numericCategories.map((category, index) => {
-            const rawCategory = rawNumericCategories.find(item => item?.id === category.id) || {};
-            const nameValue = typeof rawCategory.name === 'string' ? rawCategory.name : (category.name || '');
-            const weightRaw = rawCategory.weight;
-            const resolvedWeight = typeof weightRaw === 'number' || typeof weightRaw === 'string'
-                ? weightRaw
-                : category.weight;
-            const weightValue = resolvedWeight === '' || typeof resolvedWeight === 'undefined'
-                ? ''
-                : resolvedWeight;
-            const errors = numericCategoryErrors[category.id] || {};
-            const nameError = errors.name
-                ? formatValidationErrorMessage(errors.name, { field: t('evaluation_numeric_category_name_label') })
-                : '';
-            const weightError = errors.weight
-                ? formatValidationErrorMessage(errors.weight, { field: t('evaluation_numeric_category_weight_label') })
-                : '';
-            const fallbackName = nameValue || t('evaluation_numeric_category_default_name', { index: index + 1 });
-            const removeButton = numericCategories.length > 1
-                ? `<button type="button" data-action="remove-numeric-category" data-class-id="${selectedClassId}" data-category-id="${category.id}" class="inline-flex items-center gap-1 px-3 py-2 text-sm rounded-md border border-red-200 dark:border-red-700 text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30"><i data-lucide="trash-2" class="w-4 h-4"></i>${t('evaluation_numeric_category_remove')}</button>`
-                : '';
-            return `
-                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900">
-                    <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="numeric-category-name-${category.id}">${t('evaluation_numeric_category_name_label')}</label>
-                            <input id="numeric-category-name-${category.id}" type="text" value="${escapeAttribute(nameValue || '')}" data-action="update-numeric-category-name" data-class-id="${selectedClassId}" data-category-id="${category.id}" placeholder="${escapeAttribute(t('evaluation_numeric_category_name_placeholder'))}" class="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm">
-                            ${nameError ? `<p class="mt-1 text-xs text-red-600 dark:text-red-300">${escapeHtml(nameError)}</p>` : `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(fallbackName)}</p>`}
-                        </div>
-                        <div class="flex flex-col sm:flex-row sm:items-end sm:gap-3">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="numeric-category-weight-${category.id}">${t('evaluation_numeric_category_weight_label')}</label>
-                                <input id="numeric-category-weight-${category.id}" type="text" inputmode="decimal" pattern="[0-9]*[,.]?[0-9]*" value="${weightValue === '' ? '' : escapeAttribute(String(weightValue))}" data-event="change" data-action="update-numeric-category-weight" data-class-id="${selectedClassId}" data-category-id="${category.id}" placeholder="${escapeAttribute(t('evaluation_numeric_category_weight_placeholder'))}" class="mt-1 w-32 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm text-right">
-                                ${weightError ? `<p class="mt-1 text-xs text-red-600 dark:text-red-300">${escapeHtml(weightError)}</p>` : `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${t('evaluation_numeric_weight_help')}</p>`}
-                            </div>
-                            ${removeButton}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-        const numericTotalWeight = numericCategories.reduce((sum, category) => {
-            const rawCategory = rawNumericCategories.find(item => item?.id === category.id);
-            const candidate = rawCategory && typeof rawCategory.weight === 'number'
-                ? rawCategory.weight
-                : Number(rawCategory?.weight ?? category.weight);
-            return sum + (Number.isFinite(candidate) ? candidate : 0);
-        }, 0);
-        const numericTotalWeightText = formatDecimal(numericTotalWeight, locale, { minimumFractionDigits: 0, maximumFractionDigits: 2, useGrouping: true }) || '0';
-
         const competencyContentHtml = modality === EVALUATION_MODALITIES.COMPETENCY
             ? `
                 <div class="mt-6 space-y-6">
@@ -3276,21 +3099,10 @@ export function renderSettingsView() {
                 </div>
             `
             : `
-                <div class="mt-6 space-y-6">
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div>
-                            <h4 class="text-base font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_numeric_categories_title')}</h4>
-                            <p class="text-sm text-gray-500 dark:text-gray-400">${t('evaluation_numeric_categories_help')}</p>
-                        </div>
-                        <button type="button" data-action="add-numeric-category" data-class-id="${selectedClassId}" class="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700">
-                            <i data-lucide="plus" class="w-4 h-4"></i>
-                            ${t('evaluation_numeric_add_category')}
-                        </button>
+                <div class="mt-6">
+                    <div class="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-6 text-sm text-gray-600 dark:text-gray-300">
+                        ${t('evaluation_numeric_placeholder')}
                     </div>
-                    <div class="space-y-4">
-                        ${numericCategoriesHtml || `<p class="text-sm text-gray-500 dark:text-gray-400">${t('evaluation_numeric_no_categories')}</p>`}
-                    </div>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">${t('evaluation_numeric_total_weight', { total: numericTotalWeightText })}</p>
                 </div>
             `;
 
@@ -3805,12 +3617,6 @@ export function renderLearningActivityRubricView() {
                         const formattedNormalized = Number.isFinite(normalizedScore)
                             ? formatDecimal(normalizedScore, locale, { maximumFractionDigits: 2, useGrouping: false })
                             : '';
-                        const scoreOutOfTenValue = hasValidMax && hasNumericValue
-                            ? (numericValue / maxScore) * 10
-                            : NaN;
-                        const formattedOutOfTen = Number.isFinite(scoreOutOfTenValue)
-                            ? formatDecimal(scoreOutOfTenValue, locale, { maximumFractionDigits: 2, useGrouping: false })
-                            : '';
                         const ratioTemplate = t('rubric_numeric_ratio');
                         const maxHintTemplate = t('rubric_numeric_max_hint');
                         const missingMaxTemplate = t('rubric_numeric_missing_max');
@@ -3831,12 +3637,11 @@ export function renderLearningActivityRubricView() {
 
                         const equivalenceText = Number.isFinite(normalizedScore) && derivedLevelId
                             ? (equivalenceTemplate.startsWith('[')
-                                ? `${derivedLevelId} (${formattedNormalized}/4 · ${formattedOutOfTen}/10)`
+                                ? `${derivedLevelId} (${formattedNormalized}/4)`
                                 : equivalenceTemplate
                                     .replace('{{level}}', derivedLevelId)
                                     .replace('{{level_label}}', levelLabel.startsWith('[') ? derivedLevelId : levelLabel)
-                                    .replace('{{score}}', formattedNormalized)
-                                    .replace('{{score_ten}}', formattedOutOfTen))
+                                    .replace('{{score}}', formattedNormalized))
                             : '';
 
                         const helperText = !hasNumericValue && hasValidMax
