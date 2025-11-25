@@ -1598,7 +1598,10 @@ export function renderLearningActivityEditorView() {
     renderMobileHeaderActions(mobileActions);
 
     const evaluationConfig = normalizeEvaluationConfig(state.evaluationSettings[targetClass.id]);
-    const usesNumericEvaluation = evaluationConfig.modality === EVALUATION_MODALITIES.NUMERIC;
+    const resolvedModality = Object.values(EVALUATION_MODALITIES).includes(draft.evaluationModality)
+        ? draft.evaluationModality
+        : evaluationConfig.modality;
+    const usesNumericEvaluation = resolvedModality === EVALUATION_MODALITIES.NUMERIC;
     const numericDraft = normalizeLearningActivityNumeric(draft.numeric);
     const numericWeightValue = numericDraft.weight === '' ? '' : String(numericDraft.weight);
     const numericCategories = Array.isArray(evaluationConfig.numeric?.categories)
@@ -1788,6 +1791,13 @@ export function renderLearningActivityEditorView() {
         }
         return raw;
     })();
+    const modalityHelpText = (() => {
+        const raw = t('activities_form_modality_help');
+        if (!raw || raw.startsWith('[')) {
+            return '';
+        }
+        return raw;
+    })();
     const numericWeightHelp = (() => {
         const raw = t('activities_form_numeric_weight_help');
         if (!raw || raw.startsWith('[')) {
@@ -1886,6 +1896,20 @@ export function renderLearningActivityEditorView() {
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_description_label')}</label>
                             <textarea data-action="update-learning-activity-description" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md h-36" placeholder="${t('activities_form_description_placeholder')}">${draft.description || ''}</textarea>
+                        </div>
+                        <div>
+                            <p class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_modality_label')}</p>
+                            ${modalityHelpText ? `<p class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(modalityHelpText)}</p>` : ''}
+                            <div class="flex flex-wrap gap-3 mt-2">
+                                <label class="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                                    <input type="radio" name="learning-activity-modality" value="${EVALUATION_MODALITIES.COMPETENCY}" data-action="update-learning-activity-modality" ${resolvedModality === EVALUATION_MODALITIES.COMPETENCY ? 'checked' : ''} class="text-blue-600 border-gray-300 focus:ring-blue-500">
+                                    <span class="text-sm text-gray-700 dark:text-gray-200">${t('activities_form_modality_competency')}</span>
+                                </label>
+                                <label class="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                                    <input type="radio" name="learning-activity-modality" value="${EVALUATION_MODALITIES.NUMERIC}" data-action="update-learning-activity-modality" ${resolvedModality === EVALUATION_MODALITIES.NUMERIC ? 'checked' : ''} class="text-blue-600 border-gray-300 focus:ring-blue-500">
+                                    <span class="text-sm text-gray-700 dark:text-gray-200">${t('activities_form_modality_numeric')}</span>
+                                </label>
+                            </div>
                         </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div>
