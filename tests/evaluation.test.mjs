@@ -12,7 +12,7 @@ import {
   EVALUATION_MODALITIES,
 } from '../evaluation.js';
 import { calculateTermGradesForClassTerm } from '../actions.js';
-import { state } from '../state.js';
+import { state, rehydrateStateFromData, ensureEvaluationDraft } from '../state.js';
 
 function cloneConfig(config) {
   return JSON.parse(JSON.stringify(config));
@@ -217,6 +217,35 @@ function cloneConfig(config) {
   assert.strictEqual(stu2.competencies['cat-1'].numericScore, '5.00');
   assert.strictEqual(stu2.competencies['cat-2'].numericScore, '0.00');
   assert.strictEqual(stu2.final.numericScore, '3.33');
+}
+
+// Test: evaluation drafts are persisted and restored with unsaved numeric fields
+{
+  const baseConfig = createDefaultEvaluationConfig();
+  const draftConfig = {
+    modality: EVALUATION_MODALITIES.NUMERIC,
+    numeric: {
+      weightBasis: 50,
+      categories: [
+        { id: 'draft-cat-1', name: 'Exàmens', weight: 30 },
+        { id: 'draft-cat-2', name: 'Projectes', weight: '' },
+      ],
+    },
+  };
+
+  rehydrateStateFromData({
+    activities: [],
+    evaluationSettings: { 'class-draft': baseConfig },
+    evaluationSettingsDraft: { 'class-draft': draftConfig },
+  }, { resetUIState: true });
+
+  const restoredDraft = ensureEvaluationDraft('class-draft');
+  assert.strictEqual(restoredDraft.modality, EVALUATION_MODALITIES.NUMERIC);
+  assert.strictEqual(restoredDraft.numeric.weightBasis, 50);
+  assert.deepStrictEqual(
+    restoredDraft.numeric.categories.map(cat => ({ id: cat.id, name: cat.name, weight: cat.weight })),
+    draftConfig.numeric.categories,
+  );
 }
 
 console.log('All evaluation tests passed.');
