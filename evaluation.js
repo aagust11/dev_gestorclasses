@@ -87,6 +87,7 @@ export function createDefaultEvaluationConfig() {
         },
         numeric: {
             categories: [createDefaultNumericCategory()],
+            weightBasis: 100,
         },
     };
 }
@@ -195,6 +196,11 @@ export function normalizeEvaluationConfig(rawConfig) {
         normalizedCategories.push(createDefaultNumericCategory());
     }
 
+    const weightBasis = normalizeNumber(rawNumeric.weightBasis, base.numeric.weightBasis, {
+        allowEmpty: false,
+        min: 0,
+    });
+
     return {
         modality,
         competency: {
@@ -210,6 +216,7 @@ export function normalizeEvaluationConfig(rawConfig) {
         },
         numeric: {
             categories: normalizedCategories,
+            weightBasis,
         },
     };
 }
@@ -563,11 +570,21 @@ export function validateNumericEvaluationConfig(config) {
     const rawNumeric = config && typeof config === 'object' ? config.numeric || {} : {};
     const rawCategories = Array.isArray(rawNumeric.categories) ? rawNumeric.categories : [];
 
-    const errors = { categories: {} };
+    const errors = { categories: {}, weightBasis: null, general: [] };
 
     const categories = Array.isArray(normalized.numeric?.categories)
         ? normalized.numeric.categories
         : [];
+
+    const weightBasisRaw = rawNumeric.weightBasis;
+    const weightBasis = Number(weightBasisRaw);
+    if (weightBasisRaw === '' || typeof weightBasisRaw === 'undefined' || weightBasisRaw === null) {
+        errors.weightBasis = 'missing';
+    } else if (Number.isNaN(weightBasis)) {
+        errors.weightBasis = 'invalid';
+    } else if (weightBasis < 0) {
+        errors.weightBasis = 'negative';
+    }
 
     categories.forEach(category => {
         const rawCategory = rawCategories.find(item => item?.id === category.id) || {};
@@ -596,7 +613,21 @@ export function validateNumericEvaluationConfig(config) {
         }
     });
 
+    const hasCategoryErrors = Object.values(errors.categories).some(categoryErrors => Object.keys(categoryErrors).length > 0);
+    if (!hasCategoryErrors && !errors.weightBasis) {
+        const targetWeight = Number.isFinite(weightBasis) ? weightBasis : 0;
+        const totalWeight = categories.reduce((sum, category) => {
+            const weight = Number(category.weight);
+            return sum + (Number.isFinite(weight) ? weight : 0);
+        }, 0);
+        if (targetWeight > 0 && Math.abs(totalWeight - targetWeight) > 1e-2) {
+            errors.general.push('total_mismatch');
+        }
+    }
+
     const isValid = categories.length > 0
+        && !errors.weightBasis
+        && errors.general.length === 0
         && Object.values(errors.categories).every(categoryErrors => Object.keys(categoryErrors).length === 0);
 
     return { isValid, errors };

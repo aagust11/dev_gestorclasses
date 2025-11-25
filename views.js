@@ -3,7 +3,7 @@
 import { state, LEARNING_ACTIVITY_STATUS, RUBRIC_LEVELS, calculateLearningActivityStatus, ensureEvaluationDraft } from './state.js';
 import { darkenColor, getWeekStartDate, getWeekDateRange, formatDate, isSameDate, findNextSession, findPreviousSession, DAY_KEYS, findNextClassSession, getCurrentTermDateRange, getWeeksForCourse, isHoliday, normalizeStudentAnnotation, STUDENT_ATTENDANCE_STATUS, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
-import { COMPETENCY_LEVEL_IDS, EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, validateCompetencyEvaluationConfig, normalizeEvaluationConfig, computeNumericEvidence } from './evaluation.js';
+import { COMPETENCY_LEVEL_IDS, EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, validateCompetencyEvaluationConfig, validateNumericEvaluationConfig, normalizeEvaluationConfig, computeNumericEvidence } from './evaluation.js';
 
 const sortStudentsByName = (studentA, studentB) => studentA.name.localeCompare(studentB.name);
 
@@ -2783,7 +2783,10 @@ export function renderSettingsView() {
 
         const draft = ensureEvaluationDraft(selectedClassId);
         const normalizedDraft = normalizeEvaluationConfig(draft || {});
-        const validation = validateCompetencyEvaluationConfig(draft || {});
+        const modality = draft?.modality || EVALUATION_MODALITIES.COMPETENCY;
+        const validation = modality === EVALUATION_MODALITIES.NUMERIC
+            ? validateNumericEvaluationConfig(draft || {})
+            : validateCompetencyEvaluationConfig(draft || {});
         const feedback = state.evaluationSettingsFeedback?.[selectedClassId] || null;
         const saveDisabled = !validation.isValid;
 
@@ -2804,8 +2807,13 @@ export function renderSettingsView() {
             invalid: 'evaluation_error_invalid',
         };
 
+        const numericErrorTranslationKey = {
+            ...errorTranslationKey,
+            total_mismatch: 'evaluation_error_total_mismatch',
+        };
+
         const validationSummaryItems = [];
-        if (draft && draft.competency) {
+        if (modality === EVALUATION_MODALITIES.COMPETENCY && draft && draft.competency) {
             COMPETENCY_LEVEL_IDS.forEach(levelId => {
                 const code = validation.errors.levels[levelId];
                 if (code) {
@@ -2830,6 +2838,36 @@ export function renderSettingsView() {
             if (validation.errors.calculation.noEvidenceLevelId) {
                 validationSummaryItems.push(`${t('evaluation_no_evidence_level_label')} — ${t(errorTranslationKey[validation.errors.calculation.noEvidenceLevelId])}`);
             }
+        } else if (modality === EVALUATION_MODALITIES.NUMERIC && draft && draft.numeric) {
+            const rawNumeric = draft.numeric || {};
+            const rawCategories = Array.isArray(rawNumeric.categories) ? rawNumeric.categories : [];
+            const categoryErrors = validation?.errors?.categories || {};
+            const weightBasisError = validation?.errors?.weightBasis;
+
+            normalizedDraft.numeric.categories.forEach((category, index) => {
+                const rawCategory = rawCategories.find(item => item?.id === category.id) || category;
+                const displayName = (typeof rawCategory.name === 'string' && rawCategory.name.trim())
+                    ? rawCategory.name.trim()
+                    : t('evaluation_numeric_category_fallback', { index: index + 1 });
+                const errors = categoryErrors[category.id] || {};
+                if (errors.name) {
+                    validationSummaryItems.push(`${escapeHtml(displayName)} — ${t(errorTranslationKey[errors.name])}`);
+                }
+                if (errors.weight) {
+                    validationSummaryItems.push(`${escapeHtml(displayName)} — ${t(errorTranslationKey[errors.weight])}`);
+                }
+            });
+
+            if (weightBasisError) {
+                validationSummaryItems.push(`${t('evaluation_numeric_weight_basis_label')} — ${t(errorTranslationKey[weightBasisError])}`);
+            }
+
+            (validation?.errors?.general || []).forEach(code => {
+                const translationKey = numericErrorTranslationKey[code];
+                if (translationKey) {
+                    validationSummaryItems.push(t(translationKey));
+                }
+            });
         }
 
         const validationSummaryHtml = validationSummaryItems.length > 0
@@ -2856,8 +2894,6 @@ export function renderSettingsView() {
                 </div>
             `
             : '';
-
-        const modality = draft?.modality || EVALUATION_MODALITIES.COMPETENCY;
 
         const levelRowsHtml = normalizedDraft.competency.levels.map(level => {
             const rawLevel = draft?.competency?.levels?.find(l => l.id === level.id) || level;
@@ -3051,6 +3087,127 @@ export function renderSettingsView() {
         ], normalizedDraft);
         const majorityText = `${t('evaluation_help_example_majority_prefix')} ${levelLabelMap.AS}, ${levelLabelMap.AS}, ${levelLabelMap.AE} → ${levelLabelMap[majorityExample.levelId] || majorityExample.levelId}`;
 
+        const rawNumeric = draft?.numeric || {};
+        const rawNumericCategories = Array.isArray(rawNumeric.categories) ? rawNumeric.categories : [];
+        const numericCategoryErrors = validation?.errors?.categories || {};
+        const weightBasisError = validation?.errors?.weightBasis;
+        const numericCategories = normalizedDraft.numeric.categories;
+        const basisRaw = typeof rawNumeric.weightBasis !== 'undefined' ? rawNumeric.weightBasis : normalizedDraft.numeric.weightBasis;
+        const basisValue = basisRaw === '' || typeof basisRaw === 'undefined' ? '' : basisRaw;
+        const numericBasis = Number(basisValue);
+        const hasBasis = basisValue !== '' && !Number.isNaN(numericBasis);
+        const totalWeight = numericCategories.reduce((sum, category) => {
+            const rawCategory = rawNumericCategories.find(item => item?.id === category.id) || category;
+            const weightValue = typeof rawCategory.weight !== 'undefined' ? rawCategory.weight : category.weight;
+            const numericWeight = Number(weightValue);
+            return sum + (Number.isFinite(numericWeight) ? numericWeight : 0);
+        }, 0);
+        const weightTotalDisplay = Number.isFinite(totalWeight) ? totalWeight.toFixed(2) : '0.00';
+        const basisDisplay = hasBasis && Number.isFinite(numericBasis) ? numericBasis.toFixed(2) : '—';
+        const weightsMatch = hasBasis && Number.isFinite(numericBasis)
+            ? Math.abs(totalWeight - numericBasis) <= 1e-2
+            : false;
+        const totalStatusClass = weightsMatch
+            ? 'text-emerald-700 dark:text-emerald-300'
+            : 'text-amber-700 dark:text-amber-300';
+
+        const numericCategoriesHtml = numericCategories.map((category, index) => {
+            const rawCategory = rawNumericCategories.find(item => item?.id === category.id) || category;
+            const nameValue = typeof rawCategory.name === 'string' ? rawCategory.name : category.name;
+            const weightValue = typeof rawCategory.weight !== 'undefined' ? rawCategory.weight : category.weight;
+            const errors = numericCategoryErrors[category.id] || {};
+            const hasNameError = Boolean(errors.name);
+            const hasWeightError = Boolean(errors.weight);
+            const nameClasses = `mt-1 w-full p-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600 ${hasNameError ? 'border-red-400 focus:ring-red-300 dark:border-red-600 dark:focus:ring-red-600' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'}`;
+            const weightClasses = `mt-1 w-full p-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600 ${hasWeightError ? 'border-red-400 focus:ring-red-300 dark:border-red-600 dark:focus:ring-red-600' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'}`;
+            const removeDisabled = numericCategories.length <= 1;
+            const removeButtonClasses = removeDisabled
+                ? 'text-sm text-gray-400 cursor-not-allowed'
+                : 'text-sm text-gray-500 hover:text-red-600 dark:hover:text-red-400';
+            const removeButtonAttrs = removeDisabled ? 'disabled aria-disabled="true"' : '';
+            return `
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 space-y-3">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="flex-1 space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="numeric-name-${category.id}">${t('evaluation_numeric_category_name_label')}</label>
+                            <input
+                                id="numeric-name-${category.id}"
+                                type="text"
+                                value="${typeof nameValue === 'undefined' ? '' : escapeAttribute(nameValue)}"
+                                data-action="update-numeric-category-name"
+                                data-class-id="${selectedClassId}"
+                                data-category-id="${category.id}"
+                                class="${nameClasses}"
+                            />
+                            ${hasNameError ? `<p class="text-xs text-red-600 dark:text-red-300">${escapeHtml(t(errorTranslationKey[errors.name]))}</p>` : ''}
+                        </div>
+                        <div class="w-36 space-y-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="numeric-weight-${category.id}">${t('evaluation_numeric_category_weight_label')}</label>
+                            <input
+                                id="numeric-weight-${category.id}"
+                                type="number"
+                                inputmode="decimal"
+                                min="0"
+                                step="0.01"
+                                value="${typeof weightValue === 'undefined' || weightValue === '' ? '' : escapeAttribute(weightValue)}"
+                                data-action="update-numeric-category-weight"
+                                data-class-id="${selectedClassId}"
+                                data-category-id="${category.id}"
+                                class="${weightClasses}"
+                            />
+                            ${hasWeightError ? `<p class="text-xs text-red-600 dark:text-red-300">${escapeHtml(t(errorTranslationKey[errors.weight]))}</p>` : ''}
+                        </div>
+                        <div>
+                            <button type="button" class="${removeButtonClasses}" data-action="remove-numeric-category" data-class-id="${selectedClassId}" data-category-id="${category.id}" ${removeButtonAttrs}>
+                                <i data-lucide="trash" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        const numericContentHtml = `
+            <div class="mt-6 space-y-4">
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 items-end">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="numeric-weight-basis">${t('evaluation_numeric_weight_basis_label')}</label>
+                        <input
+                            id="numeric-weight-basis"
+                            type="number"
+                            inputmode="decimal"
+                            min="0"
+                            step="0.01"
+                            value="${basisValue === '' ? '' : escapeAttribute(basisValue)}"
+                            data-action="update-numeric-weight-basis"
+                            data-class-id="${selectedClassId}"
+                            class="mt-1 w-full p-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600 ${weightBasisError ? 'border-red-400 focus:ring-red-300 dark:border-red-600 dark:focus:ring-red-600' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'}"
+                        />
+                        ${weightBasisError
+                            ? `<p class="mt-1 text-xs text-red-600 dark:text-red-300">${escapeHtml(t(errorTranslationKey[weightBasisError]))}</p>`
+                            : `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${t('evaluation_numeric_weight_basis_help')}</p>`
+                        }
+                    </div>
+                    <div class="sm:col-span-2">
+                        <p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_numeric_description')}</p>
+                    </div>
+                </div>
+                <div class="space-y-3">
+                    ${numericCategoriesHtml}
+                    <div class="flex items-center justify-between rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-3">
+                        <div class="${totalStatusClass}">
+                            <p class="text-sm font-medium">${t('evaluation_numeric_total_label')}</p>
+                            <p class="text-xs">${weightTotalDisplay}${hasBasis ? ` / ${basisDisplay}` : ''}</p>
+                        </div>
+                        <button type="button" data-action="add-numeric-category" data-class-id="${selectedClassId}" class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                            ${t('evaluation_numeric_add_category')}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
         const competencyContentHtml = modality === EVALUATION_MODALITIES.COMPETENCY
             ? `
                 <div class="mt-6 space-y-6">
@@ -3098,13 +3255,7 @@ export function renderSettingsView() {
                     </div>
                 </div>
             `
-            : `
-                <div class="mt-6">
-                    <div class="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-6 text-sm text-gray-600 dark:text-gray-300">
-                        ${t('evaluation_numeric_placeholder')}
-                    </div>
-                </div>
-            `;
+            : numericContentHtml;
 
         const helpHtml = `
             <div class="rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 p-5 space-y-3">

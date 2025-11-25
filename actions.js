@@ -3,7 +3,7 @@
 import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault, pickExistingDataFile, createDataFileWithCurrentState, reloadDataFromConfiguredFile, clearConfiguredDataFile, resetStateToDefaults, scheduleTemplateSync, isTemplateActivity } from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
-import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig, computeNumericEvidence } from './evaluation.js';
+import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, validateNumericEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig, computeNumericEvidence } from './evaluation.js';
 
 function generateRubricItemId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -1313,6 +1313,98 @@ export const actionHandlers = {
         clearEvaluationFeedback(classId);
     },
 
+    'add-numeric-category': (id, element) => {
+        const classId = element?.dataset?.classId;
+        if (!classId) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft || !draft.numeric) return;
+        draft.numeric.categories = Array.isArray(draft.numeric.categories)
+            ? draft.numeric.categories
+            : [];
+        draft.numeric.categories.push({
+            id: crypto.randomUUID(),
+            name: '',
+            weight: '',
+        });
+        clearEvaluationFeedback(classId);
+    },
+
+    'remove-numeric-category': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const categoryId = element?.dataset?.categoryId;
+        if (!classId || !categoryId) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft || !Array.isArray(draft.numeric?.categories)) {
+            return;
+        }
+        draft.numeric.categories = draft.numeric.categories.filter(category => category?.id !== categoryId);
+        if (draft.numeric.categories.length === 0) {
+            draft.numeric.categories.push({ id: crypto.randomUUID(), name: '', weight: '' });
+        }
+        clearEvaluationFeedback(classId);
+    },
+
+    'update-numeric-category-name': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const categoryId = element?.dataset?.categoryId;
+        if (!classId || !categoryId) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft || !Array.isArray(draft.numeric?.categories)) {
+            return;
+        }
+        const target = draft.numeric.categories.find(category => category?.id === categoryId);
+        if (!target) {
+            return;
+        }
+        target.name = element.value;
+        clearEvaluationFeedback(classId);
+    },
+
+    'update-numeric-category-weight': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const categoryId = element?.dataset?.categoryId;
+        if (!classId || !categoryId) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft || !Array.isArray(draft.numeric?.categories)) {
+            return;
+        }
+        const target = draft.numeric.categories.find(category => category?.id === categoryId);
+        if (!target) {
+            return;
+        }
+        const value = element.value;
+        target.weight = value === '' ? '' : Number(value);
+        if (Number.isNaN(target.weight)) {
+            target.weight = '';
+        }
+        clearEvaluationFeedback(classId);
+    },
+
+    'update-numeric-weight-basis': (id, element) => {
+        const classId = element?.dataset?.classId;
+        if (!classId) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft || !draft.numeric) {
+            return;
+        }
+        const value = element.value;
+        draft.numeric.weightBasis = value === '' ? '' : Number(value);
+        if (Number.isNaN(draft.numeric.weightBasis)) {
+            draft.numeric.weightBasis = '';
+        }
+        clearEvaluationFeedback(classId);
+    },
+
     'save-evaluation-config': (id, element) => {
         const classId = element?.dataset?.classId;
         if (!classId) {
@@ -1322,7 +1414,9 @@ export const actionHandlers = {
         if (!draft) {
             return;
         }
-        const validation = validateCompetencyEvaluationConfig(draft);
+        const validation = draft.modality === EVALUATION_MODALITIES.NUMERIC
+            ? validateNumericEvaluationConfig(draft)
+            : validateCompetencyEvaluationConfig(draft);
         if (!validation.isValid) {
             setEvaluationFeedback(classId, {
                 type: 'error',
@@ -1331,7 +1425,7 @@ export const actionHandlers = {
             });
             return;
         }
-        persistEvaluationDraft(classId);
+        const normalized = persistEvaluationDraft(classId);
         const targetClass = state.activities.find(a => a.id === classId);
         if (isTemplateActivity(targetClass)) {
             scheduleTemplateSync(classId);
