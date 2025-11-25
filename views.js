@@ -2834,6 +2834,7 @@ export function renderSettingsView() {
 
         const draft = ensureEvaluationDraft(selectedClassId);
         const normalizedDraft = normalizeEvaluationConfig(draft || {});
+        const fallbackNumericConfig = normalizeEvaluationConfig({}).numeric;
         const modality = draft?.modality || EVALUATION_MODALITIES.COMPETENCY;
         const validation = modality === EVALUATION_MODALITIES.NUMERIC
             ? validateNumericEvaluationConfig(draft || {})
@@ -3138,12 +3139,19 @@ export function renderSettingsView() {
         ], normalizedDraft);
         const majorityText = `${t('evaluation_help_example_majority_prefix')} ${levelLabelMap.AS}, ${levelLabelMap.AS}, ${levelLabelMap.AE} → ${levelLabelMap[majorityExample.levelId] || majorityExample.levelId}`;
 
-        const rawNumeric = draft?.numeric || {};
+        const rawNumeric = draft?.numeric && typeof draft.numeric === 'object' ? draft.numeric : {};
         const rawNumericCategories = Array.isArray(rawNumeric.categories) ? rawNumeric.categories : [];
         const numericCategoryErrors = validation?.errors?.categories || {};
         const weightBasisError = validation?.errors?.weightBasis;
-        const numericCategories = normalizedDraft.numeric.categories;
-        const basisRaw = typeof rawNumeric.weightBasis !== 'undefined' ? rawNumeric.weightBasis : normalizedDraft.numeric.weightBasis;
+        const normalizedNumeric = normalizedDraft?.numeric && Array.isArray(normalizedDraft.numeric.categories)
+            ? normalizedDraft.numeric
+            : fallbackNumericConfig;
+        const numericCategories = Array.isArray(normalizedNumeric.categories) && normalizedNumeric.categories.length > 0
+            ? normalizedNumeric.categories
+            : fallbackNumericConfig.categories;
+        const basisRaw = typeof rawNumeric.weightBasis !== 'undefined'
+            ? rawNumeric.weightBasis
+            : normalizedNumeric.weightBasis;
         const basisValue = basisRaw === '' || typeof basisRaw === 'undefined' ? '' : basisRaw;
         const numericBasis = Number(basisValue);
         const hasBasis = basisValue !== '' && !Number.isNaN(numericBasis);
