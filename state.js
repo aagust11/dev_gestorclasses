@@ -1,6 +1,6 @@
 // state.js: Gestiona el estado global y la persistencia de datos.
 
-import { createDefaultEvaluationConfig, normalizeEvaluationConfig, cloneEvaluationConfig } from './evaluation.js';
+import { createDefaultEvaluationConfig, normalizeEvaluationConfig, cloneEvaluationConfig, EVALUATION_MODALITIES } from './evaluation.js';
 import {
     isFilePersistenceSupported,
     getSavedFileHandle,
@@ -231,6 +231,9 @@ function synchronizeTemplateData(templateId) {
         activity.criteriaRefs = cloneCriteriaRefs(activity.criteriaRefs);
         activity.rubric = normalizeRubricStructure(activity.rubric);
         activity.numeric = normalizeLearningActivityNumeric(activity.numeric);
+        activity.evaluationModality = Object.values(EVALUATION_MODALITIES).includes(activity.evaluationModality)
+            ? activity.evaluationModality
+            : null;
         const weightValue = Number.parseFloat(activity.weight);
         activity.weight = Number.isFinite(weightValue) && weightValue >= 0 ? weightValue : 1;
         const isValidStatus = Object.values(LEARNING_ACTIVITY_STATUS).includes(activity.status);
@@ -277,6 +280,9 @@ function synchronizeTemplateData(templateId) {
         const clonedCriteriaRefs = cloneCriteriaRefs(sourceActivity.criteriaRefs);
         const clonedRubric = normalizeRubricStructure(sourceActivity.rubric);
         const normalizedNumeric = normalizeLearningActivityNumeric(sourceActivity.numeric);
+        const normalizedEvaluationModality = Object.values(EVALUATION_MODALITIES).includes(sourceActivity.evaluationModality)
+            ? sourceActivity.evaluationModality
+            : null;
         const statusIsManual = Boolean(sourceActivity.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(sourceActivity.status));
         const status = statusIsManual
             ? sourceActivity.status
@@ -302,6 +308,7 @@ function synchronizeTemplateData(templateId) {
                     evaluations: existingEvaluations,
                 });
                 existing.numeric = normalizeLearningActivityNumeric({ ...normalizedNumeric });
+                existing.evaluationModality = normalizedEvaluationModality;
                 existing.weight = normalizedWeight;
                 existing.templateSourceId = sourceActivity.id;
                 existing.isTemplateSource = false;
@@ -337,6 +344,7 @@ function synchronizeTemplateData(templateId) {
                     }),
                     statusIsManual: statusIsManual,
                     numeric: normalizeLearningActivityNumeric(normalizedNumeric),
+                    evaluationModality: normalizedEvaluationModality,
                     weight: normalizedWeight,
                     templateSourceId: sourceActivity.id,
                     isTemplateSource: false,
@@ -598,6 +606,9 @@ function populateStateFromPersistedData(parsedData = {}, { resetUIState = true }
                 ? activity.templateSourceId
                 : null,
             isTemplateSource: Boolean(activity?.isTemplateSource),
+            evaluationModality: Object.values(EVALUATION_MODALITIES).includes(activity?.evaluationModality)
+                ? activity.evaluationModality
+                : null,
         };
         normalized.numeric = normalizeLearningActivityNumeric(activity?.numeric);
         normalized.rubric = normalizeRubricStructure(activity?.rubric);
