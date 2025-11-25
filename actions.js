@@ -330,8 +330,8 @@ function computeStudentNumericScoreForActivity(activity, studentId) {
         return null;
     }
 
-    let totalScore = 0;
-    let totalMax = 0;
+    let rawScoreTotal = 0;
+    let rawMaxTotal = 0;
     let weightedScore = 0;
     let weightedMaxScore = 0;
     let hasValues = false;
@@ -350,16 +350,18 @@ function computeStudentNumericScoreForActivity(activity, studentId) {
         if (contribution === null) {
             return;
         }
-        totalScore += contribution;
-        totalMax += maxScore;
-        weightedScore += contribution * weight;
-        weightedMaxScore += maxScore * weight;
+        rawScoreTotal += contribution;
+        rawMaxTotal += maxScore;
+        const weightedContribution = contribution * weight;
+        const weightedMaximum = maxScore * weight;
+        weightedScore += weightedContribution;
+        weightedMaxScore += weightedMaximum;
         hasValues = true;
     });
 
-    if (!hasValues || weightedMaxScore <= 0 || totalMax <= 0) {
+    if (!hasValues || weightedMaxScore <= 0 || rawMaxTotal <= 0) {
         return Boolean(flags.notPresented)
-            ? { score: 0, maxScore: 0, weightedScore: 0, weightedMaxScore: 0, scoreOutOfTen: 0 }
+            ? { score: 0, maxScore: 0, weightedScore: 0, weightedMaxScore: 0, scoreOutOfTen: 0, rawScore: 0, rawMaxScore: 0 }
             : null;
     }
 
@@ -367,11 +369,13 @@ function computeStudentNumericScoreForActivity(activity, studentId) {
     const scoreOutOfTen = weightedMaxScore > 0 ? (normalizedScore / weightedMaxScore) * 10 : null;
 
     return {
-        score: totalScore,
-        maxScore: totalMax,
+        score: weightedScore,
+        maxScore: weightedMaxScore,
         weightedScore,
         weightedMaxScore,
         scoreOutOfTen,
+        rawScore: rawScoreTotal,
+        rawMaxScore: rawMaxTotal,
         notPresented: Boolean(flags.notPresented)
     };
 }
