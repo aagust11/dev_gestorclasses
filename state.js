@@ -104,6 +104,26 @@ function ensureSavedEvaluationConfig(classId) {
     return created;
 }
 
+function clonePersistedDraft(config) {
+    if (!config || typeof config !== 'object') {
+        return null;
+    }
+
+    try {
+        if (typeof structuredClone === 'function') {
+            return structuredClone(config);
+        }
+    } catch (error) {
+        // Fallback to JSON cloning when structuredClone is unavailable
+    }
+
+    try {
+        return JSON.parse(JSON.stringify(config));
+    } catch (error) {
+        return null;
+    }
+}
+
 export function ensureEvaluationDraft(classId) {
     if (!classId) {
         return null;
@@ -552,6 +572,7 @@ function buildPersistedDataPayload() {
         evaluationSelectedTermId: state.evaluationSelectedTermId,
         termGradeCalculationMode: state.termGradeCalculationMode,
         evaluationSettings: state.evaluationSettings,
+        evaluationSettingsDraft: state.evaluationSettingsDraft,
         settingsEvaluationSelectedClassId: state.settingsEvaluationSelectedClassId,
         termGradeRecords: state.termGradeRecords,
         termGradeExpandedCompetencies: state.termGradeExpandedCompetencies,
@@ -608,9 +629,33 @@ function populateStateFromPersistedData(parsedData = {}, { resetUIState = true }
         if (!classId) return;
         state.evaluationSettings[classId] = normalizeEvaluationConfig(config);
     });
+    const rawEvaluationDrafts = parsedData.evaluationSettingsDraft && typeof parsedData.evaluationSettingsDraft === 'object'
+        ? parsedData.evaluationSettingsDraft
+        : {};
+
     state.evaluationSettingsDraft = {};
     Object.entries(state.evaluationSettings).forEach(([classId, config]) => {
         state.evaluationSettingsDraft[classId] = cloneEvaluationConfig(config);
+    });
+
+    Object.entries(rawEvaluationDrafts).forEach(([classId, draft]) => {
+        if (!classId) return;
+        const clonedDraft = clonePersistedDraft(draft);
+        if (clonedDraft) {
+            state.evaluationSettingsDraft[classId] = clonedDraft;
+        } else if (!state.evaluationSettingsDraft[classId]) {
+            state.evaluationSettingsDraft[classId] = cloneEvaluationConfig(
+                state.evaluationSettings[classId] || createDefaultEvaluationConfig(),
+            );
+        }
+    });
+
+    Object.keys(state.evaluationSettings).forEach(classId => {
+        if (!state.evaluationSettingsDraft[classId]) {
+            state.evaluationSettingsDraft[classId] = cloneEvaluationConfig(
+                state.evaluationSettings[classId] || createDefaultEvaluationConfig(),
+            );
+        }
     });
     state.settingsEvaluationSelectedClassId = parsedData.settingsEvaluationSelectedClassId || null;
     state.termGradeRecords = parsedData.termGradeRecords && typeof parsedData.termGradeRecords === 'object'
@@ -671,6 +716,10 @@ function populateStateFromPersistedData(parsedData = {}, { resetUIState = true }
         state.learningActivityRubricReturnView = null;
         state.pendingEvaluationHighlightActivityId = null;
     }
+}
+
+export function rehydrateStateFromData(parsedData = {}, options = {}) {
+    populateStateFromPersistedData(parsedData, options);
 }
 
 async function persistDataToFile(handle) {
