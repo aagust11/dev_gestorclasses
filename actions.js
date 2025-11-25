@@ -917,6 +917,11 @@ function ensureRubricHasItemForCriterion(rubric, competencyId, criterionId) {
     return newItem;
 }
 
+function usesNumericEvaluationForClass(classId) {
+    const evaluationConfig = normalizeEvaluationConfig(state.evaluationSettings?.[classId]);
+    return evaluationConfig.modality === EVALUATION_MODALITIES.NUMERIC;
+}
+
 function removeRubricItemsForCriterion(rubric, competencyId, criterionId) {
     if (!rubric || !Array.isArray(rubric.items)) {
         return [];
@@ -1744,13 +1749,17 @@ export const actionHandlers = {
         const targetClass = state.activities.find(a => a.id === classId);
         if (!targetClass) return;
 
+        const usesNumericEvaluation = usesNumericEvaluationForClass(classId);
+
         const activityId = element.dataset.learningActivityId;
             if (activityId) {
                 const existing = state.learningActivities.find(act => act.id === activityId);
                 if (!existing) return;
 
-                syncRubricWithActivityCriteria(existing);
-                saveLearningActivitiesChange();
+                if (!usesNumericEvaluation) {
+                    syncRubricWithActivityCriteria(existing);
+                    saveLearningActivitiesChange();
+                }
 
                 state.learningActivityDraft = {
                     ...existing,
@@ -1767,7 +1776,9 @@ export const actionHandlers = {
                     shortCode: typeof existing?.shortCode === 'string' ? existing.shortCode : '',
                     numeric: normalizeLearningActivityNumeric(existing?.numeric),
                 };
-                syncRubricWithActivityCriteria(state.learningActivityDraft);
+                if (!usesNumericEvaluation) {
+                    syncRubricWithActivityCriteria(state.learningActivityDraft);
+                }
             } else {
                 state.learningActivityDraft = {
                     id: crypto.randomUUID(),
@@ -1785,7 +1796,9 @@ export const actionHandlers = {
                     shortCode: '',
                     numeric: normalizeLearningActivityNumeric(null),
                 };
-                syncRubricWithActivityCriteria(state.learningActivityDraft);
+                if (!usesNumericEvaluation) {
+                    syncRubricWithActivityCriteria(state.learningActivityDraft);
+                }
             }
 
         const todayString = formatDate(new Date());
@@ -1814,6 +1827,8 @@ export const actionHandlers = {
         const targetClass = state.activities.find(a => a.id === classId);
         if (!targetClass) return;
 
+        const usesNumericEvaluation = usesNumericEvaluationForClass(classId);
+
         state.learningActivityDraft = {
             id: crypto.randomUUID(),
             classId,
@@ -1830,7 +1845,9 @@ export const actionHandlers = {
             shortCode: '',
             numeric: normalizeLearningActivityNumeric(null),
         };
-        syncRubricWithActivityCriteria(state.learningActivityDraft);
+        if (!usesNumericEvaluation) {
+            syncRubricWithActivityCriteria(state.learningActivityDraft);
+        }
 
         const todayString = formatDate(new Date());
         state.learningActivityDraft.startDate = todayString;
@@ -1983,6 +2000,8 @@ export const actionHandlers = {
         const draft = state.learningActivityDraft;
         if (!draft) return;
 
+        const usesNumericEvaluation = usesNumericEvaluationForClass(draft.classId);
+
         const title = draft.title?.trim() || '';
         if (!title) {
             alert(t('activities_title_required'));
@@ -1996,11 +2015,20 @@ export const actionHandlers = {
         }
 
         const now = new Date().toISOString();
-        syncRubricWithActivityCriteria(draft);
+        if (!usesNumericEvaluation) {
+            syncRubricWithActivityCriteria(draft);
+        }
         const normalizedRubric = normalizeRubric(draft.rubric);
         const weightValue = Number.parseFloat(draft.weight);
         const normalizedWeight = Number.isFinite(weightValue) && weightValue >= 0 ? weightValue : 1;
-        const normalizedNumeric = normalizeLearningActivityNumeric(draft.numeric);
+        const normalizedNumeric = usesNumericEvaluation
+            ? normalizeLearningActivityNumeric(draft.numeric)
+            : normalizeLearningActivityNumeric(null);
+        const persistedCriteriaRefs = usesNumericEvaluation
+            ? []
+            : Array.isArray(draft.criteriaRefs)
+                ? [...draft.criteriaRefs]
+                : [];
         let persistedStatus;
         if (draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)) {
             persistedStatus = draft.status;
@@ -2019,7 +2047,7 @@ export const actionHandlers = {
                 title,
                 shortCode,
                 description: draft.description?.trim() || '',
-                criteriaRefs: Array.isArray(draft.criteriaRefs) ? [...draft.criteriaRefs] : [],
+                criteriaRefs: persistedCriteriaRefs,
                 createdAt: now,
                 updatedAt: now,
                 startDate: draft.startDate || '',
@@ -2038,7 +2066,7 @@ export const actionHandlers = {
                 title,
                 shortCode,
                 description: draft.description?.trim() || '',
-                criteriaRefs: Array.isArray(draft.criteriaRefs) ? [...draft.criteriaRefs] : [],
+                criteriaRefs: persistedCriteriaRefs,
                 createdAt: draft.createdAt || now,
                 updatedAt: now,
                 startDate: draft.startDate || '',

@@ -1614,16 +1614,137 @@ export function renderLearningActivityEditorView() {
 
     const competencies = Array.isArray(targetClass.competencies) ? targetClass.competencies : [];
     const selectedRefs = Array.isArray(draft.criteriaRefs) ? draft.criteriaRefs : [];
+    const showCompetencyInputs = !usesNumericEvaluation;
 
-    const selectedCriteria = selectedRefs.map(ref => {
-        const competency = competencies.find(c => c.id === ref.competencyId);
-        const criterion = competency?.criteria?.find(cr => cr.id === ref.criterionId);
-        if (!criterion) return null;
-        return {
-            competency,
-            criterion,
-        };
-    }).filter(Boolean);
+    let competencySectionsHtml = '';
+    let criteriaModalHtml = '';
+
+    if (showCompetencyInputs) {
+        const selectedCriteria = selectedRefs.map(ref => {
+            const competency = competencies.find(c => c.id === ref.competencyId);
+            const criterion = competency?.criteria?.find(cr => cr.id === ref.criterionId);
+            if (!criterion) return null;
+            return {
+                competency,
+                criterion,
+            };
+        }).filter(Boolean);
+
+        const selectedCriteriaHtml = selectedCriteria.length > 0
+            ? `<ul class="space-y-2">${selectedCriteria.map(item => `
+                    <li class="px-3 py-2 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-gray-700 dark:text-gray-200">
+                        <span class="font-semibold">${item.criterion.code || t('criterion_without_code')}</span>
+                        <span class="text-gray-500 dark:text-gray-400">— ${item.criterion.description || t('criterion_without_description')}</span>
+                    </li>
+                `).join('')}</ul>`
+            : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_no_criteria_selected')}</p>`;
+
+        const guideToggleIcon = state.learningActivityGuideVisible ? 'book-x' : 'book-open';
+        const guideToggleLabel = state.learningActivityGuideVisible ? t('activities_hide_guide') : t('activities_show_guide');
+
+        const competencyGuideHtml = state.learningActivityGuideVisible
+            ? `
+                <div class="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3 bg-white dark:bg-gray-800">
+                    ${competencies.length > 0 ? competencies.map(comp => {
+                        const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
+                        return `
+                            <div class="space-y-2">
+                                <p class="font-semibold text-gray-800 dark:text-gray-100">${comp.code || t('competency_without_code')} · <span class="font-normal text-sm text-gray-600 dark:text-gray-300">${comp.description || t('competency_without_description')}</span></p>
+                                ${criteria.length > 0 ? `<ul class="space-y-1 text-sm text-gray-600 dark:text-gray-300 list-disc list-inside">${criteria.map(cr => `<li><span class=\"font-medium\">${cr.code || t('criterion_without_code')}</span> — ${cr.description || t('criterion_without_description')}</li>`).join('')}</ul>` : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_no_criteria_for_competency')}</p>`}
+                            </div>
+                        `;
+                    }).join('') : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_no_competencies_help')}</p>`}
+                </div>
+            `
+            : '';
+
+        const availableCriteriaHtml = competencies.length > 0
+            ? competencies.map(comp => {
+                const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
+                if (criteria.length === 0) {
+                    return `
+                        <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                            <p class="font-semibold text-gray-700 dark:text-gray-200">${comp.code || t('competency_without_code')}</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">${comp.description || t('competency_without_description')}</p>
+                            <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${t('activities_no_criteria_for_competency')}</p>
+                        </div>
+                    `;
+                }
+
+                const criteriaItems = criteria.map(criterion => {
+                    const isChecked = selectedRefs.some(ref => ref.competencyId === comp.id && ref.criterionId === criterion.id);
+                    return `
+                        <label class="flex items-start gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg ${isChecked ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700' : 'bg-white dark:bg-gray-800'}">
+                            <input type="checkbox" class="mt-1" data-action="toggle-learning-activity-criterion" data-competency-id="${comp.id}" data-criterion-id="${criterion.id}" ${isChecked ? 'checked' : ''}>
+                            <div>
+                                <p class="font-semibold text-gray-800 dark:text-gray-100">${criterion.code || t('criterion_without_code')}</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-300">${criterion.description || t('criterion_without_description')}</p>
+                            </div>
+                        </label>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="space-y-2">
+                        <p class="font-semibold text-gray-700 dark:text-gray-200">${comp.code || t('competency_without_code')}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">${comp.description || t('competency_without_description')}</p>
+                        <div class="space-y-2">
+                            ${criteriaItems}
+                        </div>
+                    </div>
+                `;
+            }).join('<hr class="my-4 border-gray-200 dark:border-gray-700">')
+            : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_no_competencies_help')}</p>`;
+
+        const selectedCount = selectedCriteria.length;
+        const isCriteriaModalOpen = state.learningActivityCriteriaModalOpen;
+        competencySectionsHtml = `
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">${t('activities_selected_criteria_label')}</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_selected_criteria_help')}</p>
+                    </div>
+                    <button type="button" data-action="open-learning-activity-criteria" class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-blue-400/60">
+                        <i data-lucide="list-checks" class="w-4 h-4"></i>
+                        <span><span class="font-semibold">${selectedCount}</span> ${t('activities_selected_count_label')}</span>
+                    </button>
+                </div>
+                ${selectedCriteriaHtml}
+                <button data-action="toggle-competency-guide" class="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                    <i data-lucide="${guideToggleIcon}" class="w-4 h-4"></i>
+                    <span>${guideToggleLabel}</span>
+                </button>
+                ${competencyGuideHtml}
+            </div>
+        `;
+
+        criteriaModalHtml = !isCriteriaModalOpen ? '' : `
+            <div class="fixed inset-0 z-40 flex items-center justify-center px-4 py-6">
+                <div class="absolute inset-0 bg-gray-900/50 dark:bg-gray-900/70" data-action="close-learning-activity-criteria"></div>
+                <div class="relative max-w-3xl w-full bg-white dark:bg-gray-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-6">
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">${t('activities_available_criteria_title')}</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_selected_criteria_help')}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button type="button" data-action="go-to-competency-settings" data-class-id="${targetClass.id}" class="inline-flex items-center gap-2 px-3 py-2 text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 rounded-md border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40">
+                                <i data-lucide="target" class="w-4 h-4"></i>
+                                <span>${t('activities_go_to_competency_settings')}</span>
+                            </button>
+                            <button type="button" data-action="close-learning-activity-criteria" class="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+                                <i data-lucide="x" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-6 max-h-[60vh] overflow-y-auto pr-1 space-y-4">
+                        ${availableCriteriaHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
 
     const startDateValue = draft.startDate || '';
     const endDateValue = draft.endDate || '';
@@ -1691,74 +1812,6 @@ export function renderLearningActivityEditorView() {
         </div>
     ` : '';
 
-    const selectedCriteriaHtml = selectedCriteria.length > 0
-        ? `<ul class="space-y-2">${selectedCriteria.map(item => `
-                <li class="px-3 py-2 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-sm text-gray-700 dark:text-gray-200">
-                    <span class="font-semibold">${item.criterion.code || t('criterion_without_code')}</span>
-                    <span class="text-gray-500 dark:text-gray-400">— ${item.criterion.description || t('criterion_without_description')}</span>
-                </li>
-            `).join('')}</ul>`
-        : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_no_criteria_selected')}</p>`;
-
-    const guideToggleIcon = state.learningActivityGuideVisible ? 'book-x' : 'book-open';
-    const guideToggleLabel = state.learningActivityGuideVisible ? t('activities_hide_guide') : t('activities_show_guide');
-
-    const competencyGuideHtml = state.learningActivityGuideVisible
-        ? `
-            <div class="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3 bg-white dark:bg-gray-800">
-                ${competencies.length > 0 ? competencies.map(comp => {
-                    const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
-                    return `
-                        <div class="space-y-2">
-                            <p class="font-semibold text-gray-800 dark:text-gray-100">${comp.code || t('competency_without_code')} · <span class="font-normal text-sm text-gray-600 dark:text-gray-300">${comp.description || t('competency_without_description')}</span></p>
-                            ${criteria.length > 0 ? `<ul class="space-y-1 text-sm text-gray-600 dark:text-gray-300 list-disc list-inside">${criteria.map(cr => `<li><span class="font-medium">${cr.code || t('criterion_without_code')}</span> — ${cr.description || t('criterion_without_description')}</li>`).join('')}</ul>` : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_no_criteria_for_competency')}</p>`}
-                        </div>
-                    `;
-                }).join('') : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_no_competencies_help')}</p>`}
-            </div>
-        `
-        : '';
-
-    const availableCriteriaHtml = competencies.length > 0
-        ? competencies.map(comp => {
-            const criteria = Array.isArray(comp.criteria) ? comp.criteria : [];
-            if (criteria.length === 0) {
-                return `
-                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-                        <p class="font-semibold text-gray-700 dark:text-gray-200">${comp.code || t('competency_without_code')}</p>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">${comp.description || t('competency_without_description')}</p>
-                        <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">${t('activities_no_criteria_for_competency')}</p>
-                    </div>
-                `;
-            }
-
-            const criteriaItems = criteria.map(criterion => {
-                const isChecked = selectedRefs.some(ref => ref.competencyId === comp.id && ref.criterionId === criterion.id);
-                return `
-                    <label class="flex items-start gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg ${isChecked ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700' : 'bg-white dark:bg-gray-800'}">
-                        <input type="checkbox" class="mt-1" data-action="toggle-learning-activity-criterion" data-competency-id="${comp.id}" data-criterion-id="${criterion.id}" ${isChecked ? 'checked' : ''}>
-                        <div>
-                            <p class="font-semibold text-gray-800 dark:text-gray-100">${criterion.code || t('criterion_without_code')}</p>
-                            <p class="text-sm text-gray-600 dark:text-gray-300">${criterion.description || t('criterion_without_description')}</p>
-                        </div>
-                    </label>
-                `;
-            }).join('');
-
-            return `
-                <div class="space-y-2">
-                    <p class="font-semibold text-gray-700 dark:text-gray-200">${comp.code || t('competency_without_code')}</p>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">${comp.description || t('competency_without_description')}</p>
-                    <div class="space-y-2">
-                        ${criteriaItems}
-                    </div>
-                </div>
-            `;
-        }).join('<hr class="my-4 border-gray-200 dark:border-gray-700">')
-        : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_no_competencies_help')}</p>`;
-
-    const selectedCount = selectedCriteria.length;
-    const isCriteriaModalOpen = state.learningActivityCriteriaModalOpen;
     const shortcutButtonsHtml = draft.isNew ? '' : `
         <button
             type="button"
@@ -1791,31 +1844,6 @@ export function renderLearningActivityEditorView() {
         >
             <i data-lucide="trash-2" class="w-4 h-4"></i>
         </button>
-    `;
-    const criteriaModalHtml = !isCriteriaModalOpen ? '' : `
-        <div class="fixed inset-0 z-40 flex items-center justify-center px-4 py-6">
-            <div class="absolute inset-0 bg-gray-900/50 dark:bg-gray-900/70" data-action="close-learning-activity-criteria"></div>
-            <div class="relative max-w-3xl w-full bg-white dark:bg-gray-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-6">
-                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                    <div>
-                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">${t('activities_available_criteria_title')}</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_selected_criteria_help')}</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button type="button" data-action="go-to-competency-settings" data-class-id="${targetClass.id}" class="inline-flex items-center gap-2 px-3 py-2 text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 rounded-md border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40">
-                            <i data-lucide="target" class="w-4 h-4"></i>
-                            <span>${t('activities_go_to_competency_settings')}</span>
-                        </button>
-                        <button type="button" data-action="close-learning-activity-criteria" class="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
-                            <i data-lucide="x" class="w-5 h-5"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="mt-4 space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-                    ${availableCriteriaHtml}
-                </div>
-            </div>
-        </div>
     `;
 
     return `
@@ -1876,30 +1904,12 @@ export function renderLearningActivityEditorView() {
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_weight_label')}</label>
                             <input type="number" min="0" step="0.1" value="${escapeHtml(weightInputValue)}" data-action="update-learning-activity-weight" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
-                            ${weightHelpText ? `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(weightHelpText)}</p>` : ''}
+                    ${weightHelpText ? `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(weightHelpText)}</p>` : ''}
                         </div>
                     </div>
                     ${numericControlsHtml}
                     </div>
-
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
-                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                            <div>
-                                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">${t('activities_selected_criteria_label')}</h3>
-                                <p class="text-sm text-gray-500 dark:text-gray-400">${t('activities_selected_criteria_help')}</p>
-                            </div>
-                            <button type="button" data-action="open-learning-activity-criteria" class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-2 focus:ring-blue-400/60">
-                                <i data-lucide="list-checks" class="w-4 h-4"></i>
-                                <span><span class="font-semibold">${selectedCount}</span> ${t('activities_selected_count_label')}</span>
-                            </button>
-                        </div>
-                        ${selectedCriteriaHtml}
-                        <button data-action="toggle-competency-guide" class="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">
-                            <i data-lucide="${guideToggleIcon}" class="w-4 h-4"></i>
-                            <span>${guideToggleLabel}</span>
-                        </button>
-                        ${competencyGuideHtml}
-                    </div>
+                    ${competencySectionsHtml}
 
                 </div>
             </div>
