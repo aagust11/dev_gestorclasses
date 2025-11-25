@@ -1,6 +1,6 @@
 // views.js: Contiene todas las funciones que generan el HTML de las vistas.
 
-import { state, LEARNING_ACTIVITY_STATUS, RUBRIC_LEVELS, calculateLearningActivityStatus, ensureEvaluationDraft } from './state.js';
+import { state, LEARNING_ACTIVITY_STATUS, RUBRIC_LEVELS, calculateLearningActivityStatus, ensureEvaluationDraft, normalizeLearningActivityNumeric } from './state.js';
 import { darkenColor, getWeekStartDate, getWeekDateRange, formatDate, isSameDate, findNextSession, findPreviousSession, DAY_KEYS, findNextClassSession, getCurrentTermDateRange, getWeeksForCourse, isHoliday, normalizeStudentAnnotation, STUDENT_ATTENDANCE_STATUS, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
 import { COMPETENCY_LEVEL_IDS, EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, validateCompetencyEvaluationConfig, validateNumericEvaluationConfig, normalizeEvaluationConfig, computeNumericEvidence } from './evaluation.js';
@@ -1585,6 +1585,21 @@ export function renderLearningActivityEditorView() {
 
     renderMobileHeaderActions(mobileActions);
 
+    const evaluationConfig = normalizeEvaluationConfig(state.evaluationSettings[targetClass.id]);
+    const usesNumericEvaluation = evaluationConfig.modality === EVALUATION_MODALITIES.NUMERIC;
+    const numericDraft = normalizeLearningActivityNumeric(draft.numeric);
+    const numericWeightValue = numericDraft.weight === '' ? '' : String(numericDraft.weight);
+    const numericCategories = Array.isArray(evaluationConfig.numeric?.categories)
+        ? evaluationConfig.numeric.categories
+        : [];
+    const numericCategoryOptions = numericCategories.map((category, index) => {
+        const label = category.name?.trim()
+            ? category.name.trim()
+            : t('evaluation_numeric_category_fallback', { index: index + 1 });
+        const isSelected = category.id === numericDraft.categoryId;
+        return `<option value="${category.id}" ${isSelected ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+    }).join('');
+
     const competencies = Array.isArray(targetClass.competencies) ? targetClass.competencies : [];
     const selectedRefs = Array.isArray(draft.criteriaRefs) ? draft.criteriaRefs : [];
 
@@ -1640,6 +1655,29 @@ export function renderLearningActivityEditorView() {
         }
         return raw;
     })();
+    const numericWeightHelp = (() => {
+        const raw = t('activities_form_numeric_weight_help');
+        if (!raw || raw.startsWith('[')) {
+            return '';
+        }
+        return raw;
+    })();
+    const numericControlsHtml = usesNumericEvaluation ? `
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_numeric_category_label')}</label>
+                <select data-action="update-learning-activity-numeric-category" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                    <option value="">${t('activities_form_numeric_category_placeholder')}</option>
+                    ${numericCategoryOptions}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_numeric_weight_label')}</label>
+                <input type="number" min="0" step="0.1" value="${escapeHtml(numericWeightValue)}" data-action="update-learning-activity-numeric-weight" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                ${numericWeightHelp ? `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(numericWeightHelp)}</p>` : ''}
+            </div>
+        </div>
+    ` : '';
 
     const selectedCriteriaHtml = selectedCriteria.length > 0
         ? `<ul class="space-y-2">${selectedCriteria.map(item => `
@@ -1829,6 +1867,7 @@ export function renderLearningActivityEditorView() {
                             ${weightHelpText ? `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${escapeHtml(weightHelpText)}</p>` : ''}
                         </div>
                     </div>
+                    ${numericControlsHtml}
                     </div>
 
                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">

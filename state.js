@@ -170,6 +170,14 @@ function cloneCriteriaRefs(criteriaRefs = []) {
     }));
 }
 
+export function normalizeLearningActivityNumeric(rawNumeric) {
+    const numeric = rawNumeric && typeof rawNumeric === 'object' ? rawNumeric : {};
+    const categoryId = typeof numeric.categoryId === 'string' ? numeric.categoryId.trim() : '';
+    const parsedWeight = Number(numeric.weight);
+    const weight = Number.isFinite(parsedWeight) && parsedWeight > 0 ? parsedWeight : '';
+    return { categoryId, weight };
+}
+
 function synchronizeTemplateData(templateId) {
     const template = state.activities.find(activity => activity.id === templateId);
     if (!isTemplateActivity(template)) {
@@ -202,6 +210,7 @@ function synchronizeTemplateData(templateId) {
         }
         activity.criteriaRefs = cloneCriteriaRefs(activity.criteriaRefs);
         activity.rubric = normalizeRubricStructure(activity.rubric);
+        activity.numeric = normalizeLearningActivityNumeric(activity.numeric);
         const weightValue = Number.parseFloat(activity.weight);
         activity.weight = Number.isFinite(weightValue) && weightValue >= 0 ? weightValue : 1;
         const isValidStatus = Object.values(LEARNING_ACTIVITY_STATUS).includes(activity.status);
@@ -247,6 +256,7 @@ function synchronizeTemplateData(templateId) {
         const normalizedWeight = Number.isFinite(weightValue) && weightValue >= 0 ? weightValue : 1;
         const clonedCriteriaRefs = cloneCriteriaRefs(sourceActivity.criteriaRefs);
         const clonedRubric = normalizeRubricStructure(sourceActivity.rubric);
+        const normalizedNumeric = normalizeLearningActivityNumeric(sourceActivity.numeric);
         const statusIsManual = Boolean(sourceActivity.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(sourceActivity.status));
         const status = statusIsManual
             ? sourceActivity.status
@@ -271,6 +281,7 @@ function synchronizeTemplateData(templateId) {
                     ...clonedRubric,
                     evaluations: existingEvaluations,
                 });
+                existing.numeric = normalizeLearningActivityNumeric({ ...normalizedNumeric });
                 existing.weight = normalizedWeight;
                 existing.templateSourceId = sourceActivity.id;
                 existing.isTemplateSource = false;
@@ -305,6 +316,7 @@ function synchronizeTemplateData(templateId) {
                         status,
                     }),
                     statusIsManual: statusIsManual,
+                    numeric: normalizeLearningActivityNumeric(normalizedNumeric),
                     weight: normalizedWeight,
                     templateSourceId: sourceActivity.id,
                     isTemplateSource: false,
@@ -566,6 +578,7 @@ function populateStateFromPersistedData(parsedData = {}, { resetUIState = true }
                 : null,
             isTemplateSource: Boolean(activity?.isTemplateSource),
         };
+        normalized.numeric = normalizeLearningActivityNumeric(activity?.numeric);
         normalized.rubric = normalizeRubricStructure(activity?.rubric);
         normalized.status = calculateLearningActivityStatus(normalized);
         return normalized;

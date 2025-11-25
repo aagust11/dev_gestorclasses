@@ -205,6 +205,7 @@ function handleAction(action, element, event) {
         'toggle-competency-list',
         'toggle-learning-activity-criterion', 'open-learning-activity-criteria',
         'close-learning-activity-criteria', 'go-to-competency-settings',
+        'update-learning-activity-numeric-category', 'update-learning-activity-numeric-weight',
         'open-learning-activity-rubric', 'close-learning-activity-rubric', 'set-learning-activity-rubric-tab',
         'add-rubric-item', 'remove-rubric-item', 'move-rubric-item', 'set-rubric-score',
         'update-rubric-item-scoring-mode', 'update-rubric-item-max-score', 'set-rubric-numeric-score',
