@@ -3,7 +3,7 @@
 import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault, pickExistingDataFile, createDataFileWithCurrentState, reloadDataFromConfiguredFile, clearConfiguredDataFile, resetStateToDefaults, scheduleTemplateSync, isTemplateActivity, normalizeLearningActivityNumeric } from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
-import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, validateNumericEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig, computeNumericEvidence } from './evaluation.js';
+import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, validateNumericEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig, computeNumericEvidence, generateNumericCategoryId } from './evaluation.js';
 
 function generateRubricItemId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -1341,7 +1341,7 @@ export const actionHandlers = {
             ? draft.numeric.categories
             : [];
         draft.numeric.categories.push({
-            id: crypto.randomUUID(),
+            id: generateNumericCategoryId(),
             name: '',
             weight: '',
         });
@@ -1360,7 +1360,7 @@ export const actionHandlers = {
         }
         draft.numeric.categories = draft.numeric.categories.filter(category => category?.id !== categoryId);
         if (draft.numeric.categories.length === 0) {
-            draft.numeric.categories.push({ id: crypto.randomUUID(), name: '', weight: '' });
+            draft.numeric.categories.push({ id: generateNumericCategoryId(), name: '', weight: '' });
         }
         clearEvaluationFeedback(classId);
     },
