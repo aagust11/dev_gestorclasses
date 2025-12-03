@@ -3800,51 +3800,32 @@ export function renderLearningActivityRubricView() {
             const numericTotals = computeStudentNumericScoreForActivity(activity, student.id);
             const showNumericTotals = numericTotals && !numericTotals.exempt && Number.isFinite(numericTotals?.weightedMaxScore) && numericTotals.weightedMaxScore > 0;
             const formattedRawScore = showNumericTotals
-                ? formatDecimal(numericTotals.rawScore ?? numericTotals.score ?? 0, locale, { maximumFractionDigits: 2, useGrouping: false })
+                ? formatDecimal(numericTotals.score || 0, locale, { maximumFractionDigits: 2, useGrouping: false })
                 : '';
             const formattedRawMax = showNumericTotals
-                ? formatDecimal(numericTotals.rawMaxScore ?? numericTotals.maxScore ?? 0, locale, { maximumFractionDigits: 2, useGrouping: false })
+                ? formatDecimal(numericTotals.maxScore || 0, locale, { maximumFractionDigits: 2, useGrouping: false })
                 : '';
             const formattedWeightedScore = showNumericTotals
-                ? formatDecimal(numericTotals.weightedScore ?? numericTotals.score ?? 0, locale, { maximumFractionDigits: 2, useGrouping: false })
+                ? formatDecimal(numericTotals.weightedScore || 0, locale, { maximumFractionDigits: 2, useGrouping: false })
                 : '';
             const formattedWeightedMax = showNumericTotals
-                ? formatDecimal(numericTotals.weightedMaxScore ?? numericTotals.maxScore ?? 0, locale, { maximumFractionDigits: 2, useGrouping: false })
+                ? formatDecimal(numericTotals.weightedMaxScore || 0, locale, { maximumFractionDigits: 2, useGrouping: false })
                 : '';
-            const calculatedScoreOutOfTen = showNumericTotals
-                ? (() => {
-                    if (Number.isFinite(numericTotals.scoreOutOfTen)) {
-                        return numericTotals.scoreOutOfTen;
-                    }
-                    if (Number.isFinite(numericTotals.maxScore) && Number.isFinite(numericTotals.score) && numericTotals.maxScore > 0) {
-                        const cappedScore = Math.max(0, Math.min(numericTotals.score, numericTotals.maxScore));
-                        return (cappedScore / numericTotals.maxScore) * 10;
-                    }
-                    return null;
-                })()
-                : null;
-            const formattedScoreOutOfTen = Number.isFinite(calculatedScoreOutOfTen)
-                ? formatDecimal(calculatedScoreOutOfTen, locale, { maximumFractionDigits: 2, useGrouping: false })
+            const formattedScoreOutOfTen = showNumericTotals && Number.isFinite(numericTotals.scoreOutOfTen)
+                ? formatDecimal(numericTotals.scoreOutOfTen, locale, { maximumFractionDigits: 2, useGrouping: false })
                 : '';
             const rawTotalTemplate = t('rubric_numeric_total');
             const weightedTotalTemplate = t('rubric_numeric_weighted_total');
             const normalizedTemplate = t('rubric_numeric_grade_out_of_ten');
             const formulaTemplate = t('rubric_numeric_formula_hint');
-            const hasDistinctRawTotals = showNumericTotals
-                && Number.isFinite(numericTotals.rawScore)
-                && Number.isFinite(numericTotals.rawMaxScore)
-                && (Math.abs((numericTotals.rawScore || 0) - (numericTotals.score || 0)) > 1e-6
-                    || Math.abs((numericTotals.rawMaxScore || 0) - (numericTotals.maxScore || 0)) > 1e-6);
             const numericSummaryLines = showNumericTotals
                 ? [
                     rawTotalTemplate.startsWith('[')
+                        ? `${formattedRawScore} / ${formattedRawMax}`
+                        : rawTotalTemplate.replace('{{score}}', formattedRawScore).replace('{{max}}', formattedRawMax),
+                    weightedTotalTemplate.startsWith('[')
                         ? `${formattedWeightedScore} / ${formattedWeightedMax}`
-                        : rawTotalTemplate.replace('{{score}}', formattedWeightedScore).replace('{{max}}', formattedWeightedMax),
-                    hasDistinctRawTotals
-                        ? (weightedTotalTemplate.startsWith('[')
-                            ? `${formattedRawScore} / ${formattedRawMax}`
-                            : weightedTotalTemplate.replace('{{score}}', formattedRawScore).replace('{{max}}', formattedRawMax))
-                        : '',
+                        : weightedTotalTemplate.replace('{{score}}', formattedWeightedScore).replace('{{max}}', formattedWeightedMax),
                     formattedScoreOutOfTen
                         ? (normalizedTemplate.startsWith('[')
                             ? `${formattedScoreOutOfTen}/10`
@@ -3964,7 +3945,7 @@ export function renderLearningActivityRubricView() {
                         return `<td colspan="${RUBRIC_LEVELS.length}" class="px-2 py-2 align-top">
                             <div class="flex flex-col gap-1">
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <input type="text" inputmode="decimal" pattern="[0-9]*[,.]?[0-9]*" data-event="input" data-action="set-rubric-numeric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" value="${escapeAttribute(formattedInputValue)}" placeholder="${escapeAttribute(placeholder)}" class="w-28 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm${numericDisabledClass}"${numericDisabledAttr}>
+                                    <input type="text" inputmode="decimal" pattern="[0-9]*[,.]?[0-9]*" data-event="change" data-action="set-rubric-numeric-score" data-learning-activity-id="${activity.id}" data-item-id="${item.id}" data-student-id="${student.id}" value="${escapeAttribute(formattedInputValue)}" placeholder="${escapeAttribute(placeholder)}" class="w-28 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm${numericDisabledClass}"${numericDisabledAttr}>
                                     ${badgeHtml}
                                 </div>
                                 ${summaryHtml}
