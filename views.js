@@ -919,11 +919,6 @@ function renderEvaluationGradesTab(classes) {
         let scoringInfoHtml = '';
         if (scoringMode === 'numeric') {
             const maxScore = Number(item.scoring?.maxScore);
-            const weight = Number(item.weight);
-            const hasWeight = Number.isFinite(weight) && weight > 0;
-            const formattedWeight = hasWeight
-                ? formatDecimal(weight, locale, { maximumFractionDigits: 2, useGrouping: false })
-                : '';
             if (Number.isFinite(maxScore) && maxScore > 0) {
                 const formattedMax = formatDecimal(maxScore, locale, { maximumFractionDigits: 2, useGrouping: false });
                 const suffixTemplate = t('rubric_numeric_header_suffix');
@@ -931,13 +926,6 @@ function renderEvaluationGradesTab(classes) {
                     ? formattedMax
                     : suffixTemplate.replace('{{max}}', formattedMax);
                 scoringInfoHtml = `<div class="text-[11px] text-gray-500 dark:text-gray-400 font-normal">${escapeHtml(suffixText)}</div>`;
-            }
-            if (hasWeight) {
-                const weightTemplate = t('rubric_numeric_weight_hint');
-                const weightText = weightTemplate.startsWith('[')
-                    ? formattedWeight
-                    : weightTemplate.replace('{{weight}}', formattedWeight);
-                scoringInfoHtml += `<div class="text-[11px] text-gray-500 dark:text-gray-400 font-normal">${escapeHtml(weightText)}</div>`;
             }
         }
         return `
@@ -3779,44 +3767,6 @@ export function renderLearningActivityRubricView() {
             const isDeliveredLate = Boolean(flags.deliveredLate);
             const evaluationDisabled = isNotPresented || isExempt;
 
-            const numericTotals = computeStudentNumericScoreForActivity(activity, student.id);
-            const showNumericTotals = numericTotals && !numericTotals.exempt && Number.isFinite(numericTotals?.weightedMaxScore) && numericTotals.weightedMaxScore > 0;
-            const formattedRawScore = showNumericTotals
-                ? formatDecimal(numericTotals.score || 0, locale, { maximumFractionDigits: 2, useGrouping: false })
-                : '';
-            const formattedRawMax = showNumericTotals
-                ? formatDecimal(numericTotals.maxScore || 0, locale, { maximumFractionDigits: 2, useGrouping: false })
-                : '';
-            const formattedWeightedScore = showNumericTotals
-                ? formatDecimal(numericTotals.weightedScore || 0, locale, { maximumFractionDigits: 2, useGrouping: false })
-                : '';
-            const formattedWeightedMax = showNumericTotals
-                ? formatDecimal(numericTotals.weightedMaxScore || 0, locale, { maximumFractionDigits: 2, useGrouping: false })
-                : '';
-            const formattedScoreOutOfTen = showNumericTotals && Number.isFinite(numericTotals.scoreOutOfTen)
-                ? formatDecimal(numericTotals.scoreOutOfTen, locale, { maximumFractionDigits: 2, useGrouping: false })
-                : '';
-            const rawTotalTemplate = t('rubric_numeric_total');
-            const weightedTotalTemplate = t('rubric_numeric_weighted_total');
-            const normalizedTemplate = t('rubric_numeric_grade_out_of_ten');
-            const formulaTemplate = t('rubric_numeric_formula_hint');
-            const numericSummaryLines = showNumericTotals
-                ? [
-                    rawTotalTemplate.startsWith('[')
-                        ? `${formattedRawScore} / ${formattedRawMax}`
-                        : rawTotalTemplate.replace('{{score}}', formattedRawScore).replace('{{max}}', formattedRawMax),
-                    weightedTotalTemplate.startsWith('[')
-                        ? `${formattedWeightedScore} / ${formattedWeightedMax}`
-                        : weightedTotalTemplate.replace('{{score}}', formattedWeightedScore).replace('{{max}}', formattedWeightedMax),
-                    formattedScoreOutOfTen
-                        ? (normalizedTemplate.startsWith('[')
-                            ? `${formattedScoreOutOfTen}/10`
-                            : normalizedTemplate.replace('{{score}}', formattedScoreOutOfTen))
-                        : '',
-                    formulaTemplate.startsWith('[') ? '' : formulaTemplate
-                ].filter(Boolean)
-                : [];
-
             const studentRows = rubricItems.map((item, index) => {
                 const competency = competencies.find(comp => comp.id === item.competencyId);
                 const fallbackCriterion = availableCriteria.find(opt => opt.criterion?.id === item.criterionId)?.criterion || null;
@@ -3875,18 +3825,6 @@ export function renderLearningActivityRubricView() {
                                     ? ''
                                     : missingMaxTemplate);
 
-                        const weight = Number(item.weight);
-                        const hasWeight = Number.isFinite(weight) && weight > 0;
-                        const formattedWeight = hasWeight
-                            ? formatDecimal(weight, locale, { maximumFractionDigits: 2, useGrouping: false })
-                            : '';
-                        const weightTemplate = t('rubric_numeric_weight_hint');
-                        const weightText = hasWeight
-                            ? (weightTemplate.startsWith('[')
-                                ? formattedWeight
-                                : weightTemplate.replace('{{weight}}', formattedWeight))
-                            : '';
-
                         const equivalenceText = Number.isFinite(normalizedScore) && derivedLevelId
                             ? (equivalenceTemplate.startsWith('[')
                                 ? `${derivedLevelId} (${formattedNormalized}/4)`
@@ -3905,9 +3843,6 @@ export function renderLearningActivityRubricView() {
                         const summaryParts = [];
                         if (ratioText) {
                             summaryParts.push(ratioText);
-                        }
-                        if (weightText) {
-                            summaryParts.push(weightText);
                         }
                         if (equivalenceText) {
                             summaryParts.push(equivalenceText);
@@ -3983,18 +3918,11 @@ export function renderLearningActivityRubricView() {
                     </div>
                 `;
 
-                const numericSummaryHtml = numericSummaryLines.length > 0
-                    ? `<div class="mt-3 p-2 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] leading-snug text-gray-700 dark:text-gray-200">
-                            ${numericSummaryLines.map(line => `<div>${escapeHtml(line)}</div>`).join('')}
-                        </div>`
-                    : '';
-
                 const nameCell = index === 0
                     ? `<th scope="row" rowspan="${rubricItems.length}" class="px-3 py-3 text-sm font-semibold text-gray-700 dark:text-gray-200 align-top min-w-[10rem]">
                             <div>
                                 <div>${escapeHtml(student.name)}</div>
                                 ${flagButtonsHtml}
-                                ${numericSummaryHtml}
                             </div>
                         </th>`
                     : '';
