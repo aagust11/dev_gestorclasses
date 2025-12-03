@@ -133,7 +133,6 @@ function cloneConfig(config) {
     { id: 'cat-1', name: '', weight: '' },
     { id: 'cat-2', name: 'Exams', weight: 2 },
   ];
-  config.numeric.weightBasis = 3;
   const validation = validateNumericEvaluationConfig(config);
   assert.strictEqual(validation.isValid, false);
   assert.ok(validation.errors.categories['cat-1']);
@@ -159,7 +158,6 @@ function cloneConfig(config) {
     { id: 'cat-1', name: 'Exàmens', weight: 2 },
     { id: 'cat-2', name: 'Projectes', weight: 1 },
   ];
-  config.numeric.weightBasis = 3;
   state.evaluationSettings = { 'class-1': config };
   state.learningActivities = [
     {
