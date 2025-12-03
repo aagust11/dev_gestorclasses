@@ -45,14 +45,9 @@ function deepClone(value) {
 }
 
 export function generateNumericCategoryId() {
-    try {
-        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-            return crypto.randomUUID();
-        }
-    } catch (error) {
-        // Si l'entorn no permet generar UUIDs de forma segura, fem servir un generador simple
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
     }
-
     const random = Math.random().toString(16).slice(2, 10);
     return `${NUMERIC_CATEGORY_ID_PREFIX}-${Date.now()}-${random}`;
 }
