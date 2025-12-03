@@ -332,8 +332,6 @@ function computeStudentNumericScoreForActivity(activity, studentId) {
 
     let totalScore = 0;
     let totalMax = 0;
-    let weightedScore = 0;
-    let weightedMaxScore = 0;
     let hasValues = false;
 
     numericItems.forEach(item => {
@@ -343,7 +341,6 @@ function computeStudentNumericScoreForActivity(activity, studentId) {
         }
         const rawScore = scores[item.id];
         const parsed = parseRubricNumericScore(rawScore);
-        const weight = Number.isFinite(Number(item.weight)) && Number(item.weight) > 0 ? Number(item.weight) : 1;
         const contribution = Boolean(flags.notPresented)
             ? 0
             : (Number.isFinite(parsed) ? Math.max(0, Math.min(parsed, maxScore)) : null);
@@ -352,28 +349,14 @@ function computeStudentNumericScoreForActivity(activity, studentId) {
         }
         totalScore += contribution;
         totalMax += maxScore;
-        weightedScore += contribution * weight;
-        weightedMaxScore += maxScore * weight;
         hasValues = true;
     });
 
-    if (!hasValues || weightedMaxScore <= 0 || totalMax <= 0) {
-        return Boolean(flags.notPresented)
-            ? { score: 0, maxScore: 0, weightedScore: 0, weightedMaxScore: 0, scoreOutOfTen: 0 }
-            : null;
+    if (!hasValues || totalMax <= 0) {
+        return Boolean(flags.notPresented) ? { score: 0, maxScore: 0 } : null;
     }
 
-    const normalizedScore = Math.max(0, Math.min(weightedScore, weightedMaxScore));
-    const scoreOutOfTen = weightedMaxScore > 0 ? (normalizedScore / weightedMaxScore) * 10 : null;
-
-    return {
-        score: totalScore,
-        maxScore: totalMax,
-        weightedScore,
-        weightedMaxScore,
-        scoreOutOfTen,
-        notPresented: Boolean(flags.notPresented)
-    };
+    return { score: totalScore, maxScore: totalMax, notPresented: Boolean(flags.notPresented) };
 }
 
 function calculateNumericTermGrades(targetClass, normalizedConfig, termId, mode = 'dates', existingRecord = null) {
@@ -444,11 +427,11 @@ function calculateNumericTermGrades(targetClass, normalizedConfig, termId, mode 
             }
             const totals = categoryTotals.get(metadata.categoryId);
 
-            const totalMaxScore = evaluation.weightedMaxScore ?? evaluation.maxScore;
-            const totalScore = evaluation.weightedScore ?? evaluation.score;
-            const scoreOutOfTen = Number.isFinite(totalMaxScore) && totalMaxScore > 0
-                ? Math.max(0, Math.min(totalScore || 0, totalMaxScore)) / totalMaxScore * 10
-                : 0;
+            let scoreOutOfTen = 0;
+            if (evaluation.maxScore > 0) {
+                const normalizedScore = Math.max(0, Math.min(evaluation.score || 0, evaluation.maxScore));
+                scoreOutOfTen = (normalizedScore / evaluation.maxScore) * 10;
+            }
 
             totals.weightedScore += scoreOutOfTen * activityWeight;
             totals.totalWeight += activityWeight;
