@@ -44,7 +44,7 @@ function deepClone(value) {
     return cloned;
 }
 
-export function generateNumericCategoryId() {
+function generateNumericCategoryId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return crypto.randomUUID();
     }
