@@ -921,17 +921,9 @@ function ensureRubricHasItemForCriterion(rubric, competencyId, criterionId) {
     return newItem;
 }
 
-function resolveLearningActivityModality(classId, activity) {
-    const classConfig = normalizeEvaluationConfig(state.evaluationSettings?.[classId]);
-    const explicitModality = activity?.evaluationModality;
-    if (Object.values(EVALUATION_MODALITIES).includes(explicitModality)) {
-        return explicitModality;
-    }
-    return classConfig.modality;
-}
-
-function usesNumericEvaluationForActivity(classId, activity) {
-    return resolveLearningActivityModality(classId, activity) === EVALUATION_MODALITIES.NUMERIC;
+function usesNumericEvaluationForClass(classId) {
+    const evaluationConfig = normalizeEvaluationConfig(state.evaluationSettings?.[classId]);
+    return evaluationConfig.modality === EVALUATION_MODALITIES.NUMERIC;
 }
 
 function removeRubricItemsForCriterion(rubric, competencyId, criterionId) {
@@ -1761,13 +1753,13 @@ export const actionHandlers = {
         const targetClass = state.activities.find(a => a.id === classId);
         if (!targetClass) return;
 
+        const usesNumericEvaluation = usesNumericEvaluationForClass(classId);
+
         const activityId = element.dataset.learningActivityId;
             if (activityId) {
                 const existing = state.learningActivities.find(act => act.id === activityId);
                 if (!existing) return;
 
-                const resolvedModality = resolveLearningActivityModality(classId, existing);
-                const usesNumericEvaluation = resolvedModality === EVALUATION_MODALITIES.NUMERIC;
                 if (!usesNumericEvaluation) {
                     syncRubricWithActivityCriteria(existing);
                     saveLearningActivitiesChange();
@@ -1787,14 +1779,11 @@ export const actionHandlers = {
                         : 1,
                     shortCode: typeof existing?.shortCode === 'string' ? existing.shortCode : '',
                     numeric: normalizeLearningActivityNumeric(existing?.numeric),
-                    evaluationModality: resolvedModality,
                 };
                 if (!usesNumericEvaluation) {
                     syncRubricWithActivityCriteria(state.learningActivityDraft);
                 }
             } else {
-                const resolvedModality = resolveLearningActivityModality(classId, null);
-                const usesNumericEvaluation = resolvedModality === EVALUATION_MODALITIES.NUMERIC;
                 state.learningActivityDraft = {
                     id: crypto.randomUUID(),
                     classId,
@@ -1810,7 +1799,6 @@ export const actionHandlers = {
                     weight: 1,
                     shortCode: '',
                     numeric: normalizeLearningActivityNumeric(null),
-                    evaluationModality: resolvedModality,
                 };
                 if (!usesNumericEvaluation) {
                     syncRubricWithActivityCriteria(state.learningActivityDraft);
@@ -1843,8 +1831,7 @@ export const actionHandlers = {
         const targetClass = state.activities.find(a => a.id === classId);
         if (!targetClass) return;
 
-        const resolvedModality = resolveLearningActivityModality(classId, null);
-        const usesNumericEvaluation = resolvedModality === EVALUATION_MODALITIES.NUMERIC;
+        const usesNumericEvaluation = usesNumericEvaluationForClass(classId);
 
         state.learningActivityDraft = {
             id: crypto.randomUUID(),
@@ -1861,7 +1848,6 @@ export const actionHandlers = {
             weight: 1,
             shortCode: '',
             numeric: normalizeLearningActivityNumeric(null),
-            evaluationModality: resolvedModality,
         };
         if (!usesNumericEvaluation) {
             syncRubricWithActivityCriteria(state.learningActivityDraft);
@@ -1944,24 +1930,6 @@ export const actionHandlers = {
             state.learningActivityDraft.status = value;
         }
     },
-    'update-learning-activity-modality': (id, element) => {
-        if (!state.learningActivityDraft) return;
-        const selected = element.value;
-        if (!Object.values(EVALUATION_MODALITIES).includes(selected)) {
-            state.learningActivityDraft.evaluationModality = null;
-            return;
-        }
-
-        const previousModality = resolveLearningActivityModality(
-            state.learningActivityDraft.classId,
-            state.learningActivityDraft
-        );
-        state.learningActivityDraft.evaluationModality = selected;
-
-        if (previousModality !== EVALUATION_MODALITIES.COMPETENCY && selected === EVALUATION_MODALITIES.COMPETENCY) {
-            syncRubricWithActivityCriteria(state.learningActivityDraft);
-        }
-    },
     'update-learning-activity-weight': (id, element) => {
         if (!state.learningActivityDraft) return;
         const parsed = Number.parseFloat(element.value);
@@ -2036,8 +2004,7 @@ export const actionHandlers = {
         const draft = state.learningActivityDraft;
         if (!draft) return;
 
-        const resolvedModality = resolveLearningActivityModality(draft.classId, draft);
-        const usesNumericEvaluation = resolvedModality === EVALUATION_MODALITIES.NUMERIC;
+        const usesNumericEvaluation = usesNumericEvaluationForClass(draft.classId);
 
         const title = draft.title?.trim() || '';
         if (!title) {
@@ -2093,7 +2060,6 @@ export const actionHandlers = {
                 status: persistedStatus,
                 statusIsManual: Boolean(draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)),
                 numeric: normalizedNumeric,
-                evaluationModality: resolvedModality,
                 weight: normalizedWeight,
             });
         } else {
@@ -2113,7 +2079,6 @@ export const actionHandlers = {
                 status: persistedStatus,
                 statusIsManual: Boolean(draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)),
                 numeric: normalizedNumeric,
-                evaluationModality: resolvedModality,
                 weight: normalizedWeight,
             };
             if (index === -1) {
@@ -2236,11 +2201,8 @@ export const actionHandlers = {
         const previousView = state.activeView;
         const openAssessmentTab = previousView === 'evaluation';
         state.learningActivityRubricReturnView = previousView;
-        const usesNumericEvaluation = resolveLearningActivityModality(activity.classId, activity) === EVALUATION_MODALITIES.NUMERIC;
-        if (!usesNumericEvaluation) {
-            syncRubricWithActivityCriteria(activity);
-            saveLearningActivitiesChange();
-        }
+        syncRubricWithActivityCriteria(activity);
+        saveLearningActivitiesChange();
         state.activeLearningActivityRubricId = activityId;
         state.learningActivityRubricTab = openAssessmentTab ? 'assessment' : 'configuration';
         state.learningActivityRubricFilter = '';
