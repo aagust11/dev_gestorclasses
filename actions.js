@@ -1,6 +1,6 @@
 // actions.js: Define toda la lógica de las acciones del usuario.
 
-import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault, pickExistingDataFile, createDataFileWithCurrentState, reloadDataFromConfiguredFile, clearConfiguredDataFile, resetStateToDefaults, scheduleTemplateSync, isTemplateActivity, normalizeLearningActivityNumeric } from './state.js';
+import { state, saveState, getRandomPastelColor, LEARNING_ACTIVITY_STATUS, calculateLearningActivityStatus, createEmptyRubric, normalizeRubric, RUBRIC_LEVELS, ensureEvaluationDraft, persistEvaluationDraft, resetEvaluationDraftToDefault, pickExistingDataFile, createDataFileWithCurrentState, reloadDataFromConfiguredFile, clearConfiguredDataFile, resetStateToDefaults, scheduleTemplateSync, isTemplateActivity } from './state.js';
 import { showModal, showInfoModal, findNextClassSession, getCurrentTermDateRange, STUDENT_ATTENDANCE_STATUS, createEmptyStudentAnnotation, normalizeStudentAnnotation, showTextInputModal, formatDate, getTermDateRangeById } from './utils.js';
 import { t } from './i18n.js';
 import { EVALUATION_MODALITIES, COMPETENCY_AGGREGATIONS, NP_TREATMENTS, NO_EVIDENCE_BEHAVIOR, validateCompetencyEvaluationConfig, validateNumericEvaluationConfig, calculateWeightedCompetencyResult, calculateMajorityCompetencyResult, qualitativeToNumeric, normalizeEvaluationConfig, computeNumericEvidence } from './evaluation.js';
@@ -1748,7 +1748,6 @@ export const actionHandlers = {
                         ? existing.weight
                         : 1,
                     shortCode: typeof existing?.shortCode === 'string' ? existing.shortCode : '',
-                    numeric: normalizeLearningActivityNumeric(existing?.numeric),
                 };
                 syncRubricWithActivityCriteria(state.learningActivityDraft);
             } else {
@@ -1766,7 +1765,6 @@ export const actionHandlers = {
                     statusIsManual: false,
                     weight: 1,
                     shortCode: '',
-                    numeric: normalizeLearningActivityNumeric(null),
                 };
                 syncRubricWithActivityCriteria(state.learningActivityDraft);
             }
@@ -1811,7 +1809,6 @@ export const actionHandlers = {
             statusIsManual: false,
             weight: 1,
             shortCode: '',
-            numeric: normalizeLearningActivityNumeric(null),
         };
         syncRubricWithActivityCriteria(state.learningActivityDraft);
 
@@ -1901,25 +1898,6 @@ export const actionHandlers = {
             state.learningActivityDraft.weight = '';
         }
     },
-    'update-learning-activity-numeric-category': (id, element) => {
-        if (!state.learningActivityDraft) return;
-        if (!state.learningActivityDraft.numeric || typeof state.learningActivityDraft.numeric !== 'object') {
-            state.learningActivityDraft.numeric = normalizeLearningActivityNumeric(null);
-        }
-        state.learningActivityDraft.numeric.categoryId = element.value || '';
-    },
-    'update-learning-activity-numeric-weight': (id, element) => {
-        if (!state.learningActivityDraft) return;
-        if (!state.learningActivityDraft.numeric || typeof state.learningActivityDraft.numeric !== 'object') {
-            state.learningActivityDraft.numeric = normalizeLearningActivityNumeric(null);
-        }
-        const parsed = Number.parseFloat(element.value);
-        if (Number.isFinite(parsed) && parsed > 0) {
-            state.learningActivityDraft.numeric.weight = parsed;
-        } else {
-            state.learningActivityDraft.numeric.weight = '';
-        }
-    },
     'toggle-learning-activity-criterion': (id, element) => {
         if (!state.learningActivityDraft) return;
         const { competencyId, criterionId } = element.dataset;
@@ -1983,7 +1961,6 @@ export const actionHandlers = {
         const normalizedRubric = normalizeRubric(draft.rubric);
         const weightValue = Number.parseFloat(draft.weight);
         const normalizedWeight = Number.isFinite(weightValue) && weightValue >= 0 ? weightValue : 1;
-        const normalizedNumeric = normalizeLearningActivityNumeric(draft.numeric);
         let persistedStatus;
         if (draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)) {
             persistedStatus = draft.status;
@@ -2010,7 +1987,6 @@ export const actionHandlers = {
                 rubric: normalizedRubric,
                 status: persistedStatus,
                 statusIsManual: Boolean(draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)),
-                numeric: normalizedNumeric,
                 weight: normalizedWeight,
             });
         } else {
@@ -2029,7 +2005,6 @@ export const actionHandlers = {
                 rubric: normalizedRubric,
                 status: persistedStatus,
                 statusIsManual: Boolean(draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)),
-                numeric: normalizedNumeric,
                 weight: normalizedWeight,
             };
             if (index === -1) {
