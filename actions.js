@@ -641,7 +641,7 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
     });
 
     const aggregation = normalizedConfig.competency.aggregation;
-    const failLevels = new Set(['NP', 'NA']);
+    const failLevels = new Set(['NA']);
     const maxNotAchieved = normalizedConfig.competency.maxNotAchieved || {};
     const limitValue = termId === 'all'
         ? maxNotAchieved.course
