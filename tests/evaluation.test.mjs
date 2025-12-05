@@ -217,4 +217,47 @@ function cloneConfig(config) {
   assert.strictEqual(stu2.final.numericScore, '3.33');
 }
 
+// Test: competencies without evidence are ignored and locked
+{
+  state.activities = [{
+    id: 'class-competency',
+    type: 'class',
+    name: 'Competency Class',
+    studentIds: ['stu-1'],
+    competencies: [
+      { id: 'comp-1', code: 'C1', criteria: [{ id: 'crit-1', code: 'CR1' }] },
+      { id: 'comp-2', code: 'C2', criteria: [{ id: 'crit-2', code: 'CR2' }] },
+    ],
+  }];
+  state.learningActivities = [{
+    id: 'act-competency',
+    classId: 'class-competency',
+    rubric: {
+      items: [
+        { id: 'item-1', competencyId: 'comp-1', criterionId: 'crit-1', scoring: { mode: 'competency' }, weight: 1 },
+      ],
+      evaluations: {
+        'stu-1': {
+          scores: { 'item-1': 'AE' },
+          flags: { notPresented: false, exempt: false },
+        },
+      },
+    },
+  }];
+  state.students = [{ id: 'stu-1', firstName: 'Anna', lastName: 'Example' }];
+  state.evaluationSettings = { 'class-competency': createDefaultEvaluationConfig() };
+  state.terms = [];
+  state.termGradeRecords = {};
+
+  const termGrades = calculateTermGradesForClassTerm('class-competency', 'all', 'dates');
+  const student = termGrades.students['stu-1'];
+  assert.ok(student);
+  assert.strictEqual(student.competencies['comp-1'].numericScore, '4.00');
+  assert.strictEqual(student.competencies['comp-1'].isLocked, false);
+  assert.strictEqual(student.competencies['comp-2'].numericScore, '');
+  assert.strictEqual(student.competencies['comp-2'].levelId, '');
+  assert.strictEqual(student.competencies['comp-2'].isLocked, true);
+  assert.strictEqual(student.final.numericScore, '4.00');
+}
+
 console.log('All evaluation tests passed.');

@@ -1446,17 +1446,17 @@ function renderEvaluationTermGradesTab(classes) {
 
 function getTermGradeEntry(record, studentId, scope, targetId) {
     if (!record || !record.students || !record.students[studentId]) {
-        return { numericScore: '', levelId: '', noteSymbols: [] };
+        return { numericScore: '', levelId: '', noteSymbols: [], isLocked: false };
     }
     const studentRecord = record.students[studentId];
     if (scope === 'final') {
-        return studentRecord.final || { numericScore: '', levelId: '', noteSymbols: [] };
+        return studentRecord.final || { numericScore: '', levelId: '', noteSymbols: [], isLocked: false };
     }
     const container = scope === 'competencies' ? studentRecord.competencies : studentRecord.criteria;
     if (!container || typeof container !== 'object') {
-        return { numericScore: '', levelId: '', noteSymbols: [] };
+        return { numericScore: '', levelId: '', noteSymbols: [], isLocked: false };
     }
-    return container[targetId] || { numericScore: '', levelId: '', noteSymbols: [] };
+    return container[targetId] || { numericScore: '', levelId: '', noteSymbols: [], isLocked: false };
 }
 
 function renderTermGradeCell(entry, meta) {
@@ -1476,6 +1476,7 @@ function renderTermGradeCell(entry, meta) {
         : (Number.isFinite(entry?.numericScore) ? String(entry.numericScore) : '');
     const levelValue = entry?.levelId || '';
     const noteSymbols = Array.isArray(entry?.noteSymbols) ? entry.noteSymbols.filter(Boolean) : [];
+    const isLocked = Boolean(entry?.isLocked);
     const footnoteHtml = noteSymbols.length > 0
         ? `<span class="term-grade-footnote text-xs text-gray-500 dark:text-gray-400">${escapeHtml(noteSymbols.join(''))}</span>`
         : '';
@@ -1498,7 +1499,13 @@ function renderTermGradeCell(entry, meta) {
     if (extraCellClasses) {
         cellClassNames.push(extraCellClasses);
     }
+    if (isLocked) {
+        cellClassNames.push('term-grade-cell--locked');
+    }
     const selectedLevelAttr = escapeAttribute(levelValue || 'none');
+    const disabledAttr = isLocked ? 'disabled aria-disabled="true" data-locked="true"' : 'data-locked="false"';
+    const lockedInputClasses = isLocked ? 'term-grade-input--locked' : '';
+    const lockedSelectClasses = isLocked ? 'term-grade-select--locked' : '';
 
     return `
         <td class="${cellClassNames.join(' ')}">
@@ -1514,8 +1521,9 @@ function renderTermGradeCell(entry, meta) {
                     data-scope="${scope}"
                     data-target-id="${dataTargetId}"
                     value="${escapeAttribute(numericValue || '')}"
-                    class="term-grade-score-input border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-xs text-gray-800 dark:text-gray-100 text-right"
+                    class="term-grade-score-input border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-xs text-gray-800 dark:text-gray-100 text-right ${lockedInputClasses}"
                     aria-label="${escapeAttribute(ariaLabel)}"
+                    ${disabledAttr}
                 >
                 <select
                     data-action="update-term-grade-level"
@@ -1525,9 +1533,10 @@ function renderTermGradeCell(entry, meta) {
                     data-student-id="${studentId}"
                     data-scope="${scope}"
                     data-target-id="${dataTargetId}"
-                    class="term-grade-level-select border border-gray-300 dark:border-gray-600 rounded-md text-xs text-gray-700 dark:text-gray-200"
+                    class="term-grade-level-select border border-gray-300 dark:border-gray-600 rounded-md text-xs text-gray-700 dark:text-gray-200 ${lockedSelectClasses}"
                     aria-label="${escapeAttribute(ariaLabel)}"
                     data-selected-level="${selectedLevelAttr}"
+                    ${disabledAttr}
                 >
                     ${levelOptionsHtml}
                 </select>
