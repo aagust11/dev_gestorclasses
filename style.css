@@ -159,6 +159,22 @@ html.dark .term-grade-cell--final {
     box-shadow: inset 0 0 0 9999px rgba(124, 58, 237, 0.22);
 }
 
+.term-grade-cell--locked {
+    box-shadow: inset 0 0 0 9999px rgba(148, 163, 184, 0.25);
+}
+
+html.dark .term-grade-cell--locked {
+    box-shadow: inset 0 0 0 9999px rgba(75, 85, 99, 0.35);
+}
+
+.term-grade-cell--locked .term-grade-cell-content {
+    color: #94a3b8;
+}
+
+html.dark .term-grade-cell--locked .term-grade-cell-content {
+    color: #cbd5e1;
+}
+
 .term-grade-cell-content {
     display: flex;
     align-items: center;
@@ -172,6 +188,17 @@ html.dark .term-grade-cell--final {
     font-size: 0.75rem;
 }
 
+.term-grade-input--locked {
+    background-color: #e5e7eb;
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
+html.dark .term-grade-input--locked {
+    background-color: #475569;
+    color: #e2e8f0;
+}
+
 .term-grade-level-select {
     min-width: 4.25rem;
     padding: 0.25rem 0.5rem;
@@ -180,6 +207,17 @@ html.dark .term-grade-cell--final {
     background-color: #f1f5f9;
     color: #334155;
     border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.term-grade-select--locked {
+    background-color: #e5e7eb;
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
+html.dark .term-grade-select--locked {
+    background-color: #475569;
+    color: #e2e8f0;
 }
 
 .term-grade-level-select[data-selected-level="none"],

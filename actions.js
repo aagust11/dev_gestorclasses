@@ -120,7 +120,7 @@ function saveLearningActivitiesChange() {
 }
 
 function createEmptyTermGradeEntry() {
-    return { numericScore: '', levelId: '', isManual: false, noteSymbols: [] };
+    return { numericScore: '', levelId: '', isManual: false, noteSymbols: [], isLocked: false };
 }
 
 function ensureTermGradeRecordStructure(classId, termId) {
@@ -486,6 +486,7 @@ function calculateNumericTermGrades(targetClass, normalizedConfig, termId, mode 
                 noteSymbols: Array.isArray(previousEntry?.noteSymbols)
                     ? previousEntry.noteSymbols.filter(Boolean)
                     : [],
+                isLocked: false,
             };
         });
 
@@ -504,6 +505,7 @@ function calculateNumericTermGrades(targetClass, normalizedConfig, termId, mode 
             noteSymbols: Array.isArray(previousFinal?.noteSymbols)
                 ? previousFinal.noteSymbols.filter(Boolean)
                 : [],
+            isLocked: false,
         };
 
         result.students[studentId] = computedStudent;
@@ -673,6 +675,28 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
         competencies.forEach(comp => {
             const compId = comp.id;
             const competencyEvidences = studentRecord.competencies.get(compId) || [];
+            const previousCompEntry = previousStudentRecord?.competencies?.[compId];
+            const hasPreviousQualification = previousCompEntry
+                && ((previousCompEntry.numericScore && String(previousCompEntry.numericScore).trim() !== '')
+                    || (previousCompEntry.levelId && String(previousCompEntry.levelId).trim() !== ''));
+            const hasQualification = competencyEvidences.length > 0 || hasPreviousQualification;
+
+            if (!hasQualification) {
+                computedStudent.competencies[compId] = {
+                    ...createEmptyTermGradeEntry(),
+                    isLocked: true,
+                };
+
+                const criterionIds = criterionOrderByCompetency.get(compId) || [];
+                criterionIds.forEach(criterionId => {
+                    computedStudent.criteria[criterionId] = {
+                        ...createEmptyTermGradeEntry(),
+                        isLocked: true,
+                    };
+                });
+                return;
+            }
+
             const compResult = aggregation === COMPETENCY_AGGREGATIONS.MAJORITY
                 ? calculateMajorityCompetencyResult(competencyEvidences, normalizedConfig)
                 : calculateWeightedCompetencyResult(competencyEvidences, normalizedConfig);
@@ -680,7 +704,6 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
             if (aggregation === COMPETENCY_AGGREGATIONS.MAJORITY && compResult.tieBreak && !compResult.tieBreak.resolved) {
                 computedCompNotes.push('*');
             }
-            const previousCompEntry = previousStudentRecord?.competencies?.[compId];
             const compManual = Boolean(previousCompEntry?.isManual);
             const manualCompNotes = Array.isArray(previousCompEntry?.noteSymbols)
                 ? previousCompEntry.noteSymbols.filter(Boolean)
@@ -704,6 +727,7 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
                 levelId: compLevelId,
                 isManual: compManual,
                 noteSymbols: compNotes,
+                isLocked: false,
             };
 
             const levelForAggregation = validLevelIds.has(compLevelId) ? compLevelId : '';
@@ -756,6 +780,7 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
                     levelId: criterionLevelId,
                     isManual: criterionManual,
                     noteSymbols: criterionNotes,
+                    isLocked: false,
                 };
 
                 const levelForTie = validLevelIds.has(criterionLevelId) ? criterionLevelId : '';
@@ -771,6 +796,12 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
         const finalNotes = [];
         let finalLevel = '';
         let finalNumeric = '';
+
+        if (ceEvidencesForFinal.length === 0) {
+            computedStudent.final = createEmptyTermGradeEntry();
+            result.students[studentId] = computedStudent;
+            return;
+        }
 
         if (caFails > failLimit || ceFails > failLimit) {
             finalLevel = 'NA';
@@ -807,6 +838,7 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
             levelId: finalLevel,
             isManual: false,
             noteSymbols: finalNotes,
+            isLocked: false,
         };
 
         result.students[studentId] = computedStudent;
@@ -1441,6 +1473,7 @@ export const actionHandlers = {
                 levelId: finalEntry.levelId,
                 isManual: false,
                 noteSymbols: Array.isArray(finalEntry.noteSymbols) ? [...finalEntry.noteSymbols] : [],
+                isLocked: Boolean(finalEntry.isLocked),
             };
         });
 
@@ -1470,7 +1503,7 @@ export const actionHandlers = {
         const studentId = element?.dataset?.studentId;
         const scope = element?.dataset?.scope;
         const targetId = element?.dataset?.targetId;
-        if (!classId || !studentId || !scope) {
+        if (!classId || !studentId || !scope || element?.dataset?.locked === 'true') {
             return;
         }
         const termId = element?.dataset?.termId || 'all';
@@ -1487,7 +1520,7 @@ export const actionHandlers = {
         const studentId = element?.dataset?.studentId;
         const scope = element?.dataset?.scope;
         const targetId = element?.dataset?.targetId;
-        if (!classId || !studentId || !scope) {
+        if (!classId || !studentId || !scope || element?.dataset?.locked === 'true') {
             return;
         }
         const termId = element?.dataset?.termId || 'all';
