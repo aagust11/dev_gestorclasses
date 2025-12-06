@@ -141,6 +141,7 @@
   "evaluation_grades_no_activities": "Aquesta assignatura encara no té activitats d'avaluació.",
   "evaluation_grades_no_criteria": "Sense criteris",
   "evaluation_grades_student_column": "Alumnat",
+  "evaluation_grades_np_column": "NP",
   "evaluation_term_grades_calculate_button": "Càlcul",
   "evaluation_term_grades_recalculate_final_button": "Recalcula nota global",
   "evaluation_term_grades_clear_button": "Esborra qualificacions",
