@@ -260,4 +260,122 @@ function cloneConfig(config) {
   assert.strictEqual(student.final.numericScore, '4.00');
 }
 
+// Test: final grade honours NA limit but still weights competencies with evidence
+{
+  state.activities = [{
+    id: 'class-weighted',
+    type: 'class',
+    name: 'Weighted Competencies',
+    studentIds: ['stu-1'],
+    competencies: [
+      { id: 'comp-weight-1', code: 'C1', criteria: [{ id: 'crit-weight-1', code: 'CR1' }] },
+      { id: 'comp-weight-2', code: 'C2', criteria: [{ id: 'crit-weight-2', code: 'CR2' }] },
+      { id: 'comp-weight-3', code: 'C3', criteria: [{ id: 'crit-weight-3', code: 'CR3' }] },
+    ],
+  }];
+  state.learningActivities = [
+    {
+      id: 'act-weight-1',
+      classId: 'class-weighted',
+      rubric: {
+        items: [
+          { id: 'item-weight-1', competencyId: 'comp-weight-1', criterionId: 'crit-weight-1', scoring: { mode: 'competency' }, weight: 2 },
+        ],
+        evaluations: {
+          'stu-1': {
+            scores: { 'item-weight-1': 'NA' },
+            flags: { notPresented: false, exempt: false },
+          },
+        },
+      },
+    },
+    {
+      id: 'act-weight-2',
+      classId: 'class-weighted',
+      rubric: {
+        items: [
+          { id: 'item-weight-2', competencyId: 'comp-weight-2', criterionId: 'crit-weight-2', scoring: { mode: 'competency' }, weight: 1 },
+        ],
+        evaluations: {
+          'stu-1': {
+            scores: { 'item-weight-2': 'AE' },
+            flags: { notPresented: false, exempt: false },
+          },
+        },
+      },
+    },
+  ];
+  state.students = [{ id: 'stu-1', firstName: 'Anna', lastName: 'Example' }];
+  const config = createDefaultEvaluationConfig();
+  config.competency.maxNotAchieved.term = 1;
+  state.evaluationSettings = { 'class-weighted': config };
+  state.terms = [];
+  state.termGradeRecords = {};
+
+  const termGrades = calculateTermGradesForClassTerm('class-weighted', 'all', 'dates');
+  const student = termGrades.students['stu-1'];
+  assert.ok(student);
+  assert.strictEqual(student.final.levelId, 'AS');
+  assert.strictEqual(student.final.numericScore, '2.00');
+  assert.strictEqual(student.competencies['comp-weight-3'].isLocked, true);
+}
+
+// Test: exceeding NA limit forces final NA even with weights
+{
+  state.activities = [{
+    id: 'class-limit',
+    type: 'class',
+    name: 'Limit NA',
+    studentIds: ['stu-1'],
+    competencies: [
+      { id: 'comp-limit-1', code: 'C1', criteria: [{ id: 'crit-limit-1', code: 'CR1' }] },
+      { id: 'comp-limit-2', code: 'C2', criteria: [{ id: 'crit-limit-2', code: 'CR2' }] },
+    ],
+  }];
+  state.learningActivities = [
+    {
+      id: 'act-limit-1',
+      classId: 'class-limit',
+      rubric: {
+        items: [
+          { id: 'item-limit-1', competencyId: 'comp-limit-1', criterionId: 'crit-limit-1', scoring: { mode: 'competency' }, weight: 1 },
+        ],
+        evaluations: {
+          'stu-1': {
+            scores: { 'item-limit-1': 'NA' },
+            flags: { notPresented: false, exempt: false },
+          },
+        },
+      },
+    },
+    {
+      id: 'act-limit-2',
+      classId: 'class-limit',
+      rubric: {
+        items: [
+          { id: 'item-limit-2', competencyId: 'comp-limit-2', criterionId: 'crit-limit-2', scoring: { mode: 'competency' }, weight: 3 },
+        ],
+        evaluations: {
+          'stu-1': {
+            scores: { 'item-limit-2': 'NA' },
+            flags: { notPresented: false, exempt: false },
+          },
+        },
+      },
+    },
+  ];
+  state.students = [{ id: 'stu-1', firstName: 'Anna', lastName: 'Example' }];
+  const config = createDefaultEvaluationConfig();
+  config.competency.maxNotAchieved.term = 1;
+  state.evaluationSettings = { 'class-limit': config };
+  state.terms = [];
+  state.termGradeRecords = {};
+
+  const termGrades = calculateTermGradesForClassTerm('class-limit', 'all', 'dates');
+  const student = termGrades.students['stu-1'];
+  assert.ok(student);
+  assert.strictEqual(student.final.levelId, 'NA');
+  assert.strictEqual(student.final.numericScore, '1.00');
+}
+
 console.log('All evaluation tests passed.');
