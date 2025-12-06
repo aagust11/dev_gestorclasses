@@ -850,12 +850,6 @@ function renderEvaluationGradesTab(classes) {
     const { termFilterHtml, termRange } = buildEvaluationTermFilter(selectedTermId);
     const locale = document.documentElement.lang || 'ca';
     const classEvaluationConfig = normalizeEvaluationConfig(state.evaluationSettings?.[selectedClass?.id]);
-    const levelColorClasses = {
-        NA: 'text-red-600 dark:text-red-300 font-semibold',
-        AS: 'text-amber-600 dark:text-amber-300 font-semibold',
-        AN: 'text-blue-600 dark:text-blue-300 font-semibold',
-        AE: 'text-emerald-600 dark:text-emerald-300 font-semibold',
-    };
 
     const filterBySelectedTerm = (activity) => {
         if (!termRange) {
@@ -968,8 +962,6 @@ function renderEvaluationGradesTab(classes) {
         }).join('');
 
         const rowsHtml = students.map(student => {
-            let evaluatedActivities = 0;
-            let notPresentedCount = 0;
             const activityCells = learningActivities.map(activity => {
                 const rubric = activity.rubric || {};
                 const rubricItems = Array.isArray(rubric.items) ? rubric.items : [];
@@ -981,8 +973,6 @@ function renderEvaluationGradesTab(classes) {
                 const isExempt = Boolean(flags.exempt);
                 const isNotPresented = Boolean(flags.notPresented);
                 const isDeliveredLate = Boolean(flags.deliveredLate);
-                let activityHasEvaluation = false;
-                let activityHasNP = false;
                 const statusTooltipParts = [];
                 if (isExempt) {
                     statusTooltipParts.push(t('rubric_flag_exempt'));
@@ -1012,11 +1002,6 @@ function renderEvaluationGradesTab(classes) {
                             : isDeliveredLate
                                 ? t('rubric_flag_delivered_late_short')
                                 : '—';
-                    const hasEvaluation = isExempt || isNotPresented || isDeliveredLate || Boolean(evaluation);
-                    if (hasEvaluation) {
-                        activityHasEvaluation = true;
-                        activityHasNP = isNotPresented;
-                    }
                     const deliveredLateIcon = '<i data-lucide="file-clock" class="w-3.5 h-3.5 inline-block align-text-top ml-1 text-amber-500 dark:text-amber-300"></i>';
                     const exemptIcon = '<i data-lucide="book-dashed" class="w-3.5 h-3.5 inline-block align-text-top ml-1 text-emerald-500 dark:text-emerald-300"></i>';
                     const statusIcon = isExempt
@@ -1026,16 +1011,10 @@ function renderEvaluationGradesTab(classes) {
                             : isDeliveredLate
                                 ? deliveredLateIcon
                                 : '';
-                    if (activityHasEvaluation) {
-                        evaluatedActivities += 1;
-                        if (activityHasNP) {
-                            notPresentedCount += 1;
-                        }
-                    }
                     return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><span class="${textClasses}">${escapeHtml(label)}</span>${statusIcon}</td>`;
                 }
 
-                const rubricCells = rubricItems.map(item => {
+                return rubricItems.map(item => {
                     const scoringMode = item.scoring?.mode === 'numeric' ? 'numeric' : 'competency';
                     const rawScore = scores[item.id];
                     const scoreLevel = scoringMode === 'numeric' ? '' : (rawScore || '');
@@ -1087,7 +1066,7 @@ function renderEvaluationGradesTab(classes) {
                                         .replace('{{score}}', formattedNormalized))
                                 : '';
                             const summary = equivalenceText ? `${ratioText} · ${equivalenceText}` : ratioText;
-                            textClasses = levelColorClasses[levelId] || 'text-gray-800 dark:text-gray-100 font-medium';
+                            textClasses = 'text-gray-800 dark:text-gray-100 font-medium';
                             const srOnlyLabel = levelLabel && !levelLabel.startsWith('[')
                                 ? `<span class="sr-only"> (${escapeHtml(levelLabel)})</span>`
                                 : '';
@@ -1114,7 +1093,7 @@ function renderEvaluationGradesTab(classes) {
                     } else if (scoreLevel) {
                         const key = `rubric_level_${scoreLevel}_label`;
                         const translated = t(key);
-                        textClasses = levelColorClasses[scoreLevel] || 'text-gray-800 dark:text-gray-100 font-medium';
+                        textClasses = 'text-gray-800 dark:text-gray-100 font-medium';
                         const srOnlyLabel = translated !== `[${key}]`
                             ? `<span class="sr-only"> (${escapeHtml(translated)})</span>`
                             : '';
@@ -1136,33 +1115,11 @@ function renderEvaluationGradesTab(classes) {
                             : isDeliveredLate
                                 ? deliveredLateIcon
                                 : '';
-                    const hasEvaluation = (scoreLevel && !isDeliveredLate)
-                        || (scoringMode === 'numeric' && hasNumericValue)
-                        || isExempt
-                        || isNotPresented
-                        || isDeliveredLate;
-                    if (hasEvaluation) {
-                        activityHasEvaluation = true;
-                        activityHasNP = activityHasNP || isNotPresented;
-                    }
                     return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}>${labelHtml}${statusIcon}</td>`;
                 }).join('');
-
-                if (activityHasEvaluation) {
-                    evaluatedActivities += 1;
-                    if (activityHasNP) {
-                        notPresentedCount += 1;
-                    }
-                }
-                return rubricCells;
             }).join('');
 
-            const evaluatedTotal = Math.max(evaluatedActivities, 0);
-            const npSummary = `${notPresentedCount}/${evaluatedTotal}`;
-            const npPercentage = evaluatedTotal > 0 ? Math.round((notPresentedCount / evaluatedTotal) * 100) : 0;
-            const npContent = `${npSummary} · ${npPercentage}%`;
-
-            return `<tr class="border-b border-gray-100 dark:border-gray-800"><th scope="row" class="px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 text-left min-w-[12rem]">${escapeHtml(student.name)}</th><td class="px-3 py-2 text-sm text-center text-gray-800 dark:text-gray-100 align-middle">${npContent}</td>${activityCells}</tr>`;
+            return `<tr class="border-b border-gray-100 dark:border-gray-800"><th scope="row" class="px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 text-left min-w-[12rem]">${escapeHtml(student.name)}</th>${activityCells}</tr>`;
         }).join('');
 
         contentHtml = `
@@ -1171,7 +1128,6 @@ function renderEvaluationGradesTab(classes) {
                     <thead class="bg-white dark:bg-gray-800">
                         <tr>
                             <th scope="col" rowspan="2" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[12rem]">${t('evaluation_grades_student_column')}</th>
-                            <th scope="col" rowspan="2" class="px-3 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">${t('evaluation_grades_np_column')}</th>
                             ${headerRow1}
                         </tr>
                         <tr>
