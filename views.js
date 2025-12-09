@@ -891,6 +891,43 @@ function renderEvaluationGradesTab(classes) {
         .filter(filterBySelectedTerm)
         .sort((a, b) => getActivitySortOrder(a) - getActivitySortOrder(b));
 
+    const levelColorClasses = {
+        AE: 'text-emerald-700 dark:text-emerald-300 font-semibold',
+        AN: 'text-blue-700 dark:text-blue-300 font-semibold',
+        AS: 'text-amber-700 dark:text-amber-300 font-semibold',
+        NA: 'text-red-600 dark:text-red-300 font-semibold',
+        NP: 'text-red-600 dark:text-red-300 font-semibold',
+    };
+
+    const studentNpSummaries = new Map();
+    students.forEach(student => studentNpSummaries.set(student.id, { np: 0, total: 0 }));
+
+    learningActivities.forEach(activity => {
+        const evaluations = activity?.rubric?.evaluations && typeof activity.rubric.evaluations === 'object'
+            ? activity.rubric.evaluations
+            : {};
+
+        students.forEach(student => {
+            const evaluation = evaluations[student.id];
+            if (!evaluation || typeof evaluation !== 'object') {
+                return;
+            }
+            const flags = evaluation.flags && typeof evaluation.flags === 'object' ? evaluation.flags : {};
+            if (flags.exempt) {
+                return;
+            }
+
+            const summary = studentNpSummaries.get(student.id);
+            if (!summary) {
+                return;
+            }
+            summary.total += 1;
+            if (flags.notPresented) {
+                summary.np += 1;
+            }
+        });
+    });
+
     const competencies = Array.isArray(selectedClass.competencies) ? selectedClass.competencies : [];
     const criterionIndex = new Map();
     competencies.forEach(competency => {
@@ -1047,6 +1084,7 @@ function renderEvaluationGradesTab(classes) {
                             const numericResult = computeNumericEvidence(numericValue, maxScore, null, { normalizedConfig: classEvaluationConfig });
                             const levelId = numericResult?.levelId || '';
                             const levelLabel = levelId ? t(`rubric_level_${levelId}_label`) : '';
+                            const colorClass = levelColorClasses[levelId] || 'text-gray-800 dark:text-gray-100 font-medium';
                             const formattedValue = formatDecimal(numericValue, locale, { maximumFractionDigits: 2, useGrouping: false });
                             const formattedMax = formatDecimal(maxScore, locale, { maximumFractionDigits: 2, useGrouping: false });
                             const formattedNormalized = Number.isFinite(numericResult?.scoreOutOfFour)
@@ -1066,7 +1104,7 @@ function renderEvaluationGradesTab(classes) {
                                         .replace('{{score}}', formattedNormalized))
                                 : '';
                             const summary = equivalenceText ? `${ratioText} · ${equivalenceText}` : ratioText;
-                            textClasses = 'text-gray-800 dark:text-gray-100 font-medium';
+                            textClasses = colorClass;
                             const srOnlyLabel = levelLabel && !levelLabel.startsWith('[')
                                 ? `<span class="sr-only"> (${escapeHtml(levelLabel)})</span>`
                                 : '';
@@ -1093,7 +1131,7 @@ function renderEvaluationGradesTab(classes) {
                     } else if (scoreLevel) {
                         const key = `rubric_level_${scoreLevel}_label`;
                         const translated = t(key);
-                        textClasses = 'text-gray-800 dark:text-gray-100 font-medium';
+                        textClasses = levelColorClasses[scoreLevel] || 'text-gray-800 dark:text-gray-100 font-medium';
                         const srOnlyLabel = translated !== `[${key}]`
                             ? `<span class="sr-only"> (${escapeHtml(translated)})</span>`
                             : '';
@@ -1119,7 +1157,11 @@ function renderEvaluationGradesTab(classes) {
                 }).join('');
             }).join('');
 
-            return `<tr class="border-b border-gray-100 dark:border-gray-800"><th scope="row" class="px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 text-left min-w-[12rem]">${escapeHtml(student.name)}</th>${activityCells}</tr>`;
+            const summary = studentNpSummaries.get(student.id) || { np: 0, total: 0 };
+            const percentage = summary.total > 0 ? Math.round((summary.np / summary.total) * 100) : 0;
+            const npValue = `${summary.np}/${summary.total} · ${percentage}%`;
+
+            return `<tr class="border-b border-gray-100 dark:border-gray-800"><th scope="row" class="px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 text-left min-w-[12rem]">${escapeHtml(student.name)}</th><td class="px-3 py-2 text-sm text-center align-middle">${escapeHtml(npValue)}</td>${activityCells}</tr>`;
         }).join('');
 
         contentHtml = `
@@ -1128,6 +1170,7 @@ function renderEvaluationGradesTab(classes) {
                     <thead class="bg-white dark:bg-gray-800">
                         <tr>
                             <th scope="col" rowspan="2" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[12rem]">${t('evaluation_grades_student_column')}</th>
+                            <th scope="col" rowspan="2" class="px-3 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">${t('evaluation_term_grades_np_column')}</th>
                             ${headerRow1}
                         </tr>
                         <tr>

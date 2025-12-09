@@ -591,12 +591,31 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
     relevantActivities.forEach(activity => {
         const rubric = activity?.rubric;
         const rubricItems = Array.isArray(rubric?.items) ? rubric.items : [];
-        if (rubricItems.length === 0) {
-            return;
-        }
         const evaluations = rubric?.evaluations && typeof rubric.evaluations === 'object'
             ? rubric.evaluations
             : {};
+
+        Object.entries(evaluations).forEach(([studentId, evaluation]) => {
+            if (!studentSet.has(studentId)) {
+                return;
+            }
+            const flags = evaluation?.flags && typeof evaluation.flags === 'object' ? evaluation.flags : {};
+            if (flags.exempt) {
+                return;
+            }
+
+            const stats = studentNpStats.get(studentId);
+            if (stats) {
+                stats.total += 1;
+                if (flags.notPresented) {
+                    stats.np += 1;
+                }
+            }
+        });
+
+        if (rubricItems.length === 0) {
+            return;
+        }
         const activityWeight = Number.isFinite(Number(activity?.weight))
             ? Number(activity.weight)
             : 1;
