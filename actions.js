@@ -123,6 +123,10 @@ function createEmptyTermGradeEntry() {
     return { numericScore: '', levelId: '', isManual: false, noteSymbols: [], isLocked: false };
 }
 
+function createEmptyNpSummary() {
+    return { npCount: 0, totalCount: 0, percentage: 0 };
+}
+
 function ensureTermGradeRecordStructure(classId, termId) {
     if (!state.termGradeRecords || typeof state.termGradeRecords !== 'object') {
         state.termGradeRecords = {};
@@ -146,11 +150,15 @@ function ensureTermGradeStudent(record, studentId) {
             criteria: {},
             competencies: {},
             final: createEmptyTermGradeEntry(),
+            npSummary: createEmptyNpSummary(),
         };
     }
     const studentRecord = record.students[studentId];
     if (!studentRecord.final || typeof studentRecord.final !== 'object') {
         studentRecord.final = createEmptyTermGradeEntry();
+    }
+    if (!studentRecord.npSummary || typeof studentRecord.npSummary !== 'object') {
+        studentRecord.npSummary = createEmptyNpSummary();
     }
     if (!studentRecord.criteria || typeof studentRecord.criteria !== 'object') {
         studentRecord.criteria = {};
@@ -353,7 +361,9 @@ function computeStudentNumericScoreForActivity(activity, studentId) {
     });
 
     if (!hasValues || totalMax <= 0) {
-        return Boolean(flags.notPresented) ? { score: 0, maxScore: 0 } : null;
+        return Boolean(flags.notPresented)
+            ? { score: 0, maxScore: 0, notPresented: true }
+            : null;
     }
 
     return { score: totalScore, maxScore: totalMax, notPresented: Boolean(flags.notPresented) };
@@ -390,8 +400,10 @@ function calculateNumericTermGrades(targetClass, normalizedConfig, termId, mode 
         });
 
     const studentCategoryTotals = new Map();
+    const studentNpStats = new Map();
     studentIds.forEach(studentId => {
         studentCategoryTotals.set(studentId, new Map());
+        studentNpStats.set(studentId, { np: 0, total: 0 });
     });
 
     relevantActivities.forEach(activity => {
@@ -412,6 +424,14 @@ function calculateNumericTermGrades(targetClass, normalizedConfig, termId, mode 
             }
             if (evaluation.exempt) {
                 return;
+            }
+
+            const npStats = studentNpStats.get(studentId);
+            if (npStats) {
+                npStats.total += 1;
+                if (evaluation.notPresented) {
+                    npStats.np += 1;
+                }
             }
 
             const categoryTotals = studentCategoryTotals.get(studentId);
@@ -455,6 +475,7 @@ function calculateNumericTermGrades(targetClass, normalizedConfig, termId, mode 
             criteria: {},
             competencies: {},
             final: createEmptyTermGradeEntry(),
+            npSummary: createEmptyNpSummary(),
         };
 
         let finalAccumulator = 0;
@@ -508,6 +529,14 @@ function calculateNumericTermGrades(targetClass, normalizedConfig, termId, mode 
             isLocked: false,
         };
 
+        const npStats = studentNpStats.get(studentId) || { np: 0, total: 0 };
+        const percentage = npStats.total > 0 ? Math.round((npStats.np / npStats.total) * 100) : 0;
+        computedStudent.npSummary = {
+            npCount: npStats.np,
+            totalCount: npStats.total,
+            percentage,
+        };
+
         result.students[studentId] = computedStudent;
     });
 
@@ -544,11 +573,13 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
     const studentIds = Array.isArray(targetClass.studentIds) ? targetClass.studentIds : [];
     const studentSet = new Set(studentIds);
     const studentData = new Map();
+    const studentNpStats = new Map();
     studentIds.forEach(studentId => {
         studentData.set(studentId, {
             criteria: new Map(),
             competencies: new Map(),
         });
+        studentNpStats.set(studentId, { np: 0, total: 0 });
     });
 
     const termRange = getTermDateRangeById(termId);
@@ -570,31 +601,33 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
             ? Number(activity.weight)
             : 1;
 
-        rubricItems.forEach(item => {
-            const competencyId = item?.competencyId;
-            const criterionId = item?.criterionId;
-            if (!competencySet.has(competencyId) || !criterionSet.has(criterionId)) {
+        Object.entries(evaluations).forEach(([studentId, evaluation]) => {
+            if (!studentSet.has(studentId)) {
                 return;
             }
-            const criterionWeight = Number.isFinite(Number(item?.weight))
-                ? Number(item.weight)
-                : 1;
+            const studentRecord = studentData.get(studentId);
+            if (!studentRecord) {
+                return;
+            }
+            const flags = evaluation?.flags && typeof evaluation.flags === 'object' ? evaluation.flags : {};
+            const scores = evaluation?.scores && typeof evaluation.scores === 'object' ? evaluation.scores : {};
+            const isNotPresented = Boolean(flags.notPresented);
+            const isExempt = Boolean(flags.exempt);
+            if (isExempt) {
+                return;
+            }
 
-            Object.entries(evaluations).forEach(([studentId, evaluation]) => {
-                if (!studentSet.has(studentId)) {
+            let contributedEvidence = false;
+
+            rubricItems.forEach(item => {
+                const competencyId = item?.competencyId;
+                const criterionId = item?.criterionId;
+                if (!competencySet.has(competencyId) || !criterionSet.has(criterionId)) {
                     return;
                 }
-                const studentRecord = studentData.get(studentId);
-                if (!studentRecord) {
-                    return;
-                }
-                const flags = evaluation?.flags && typeof evaluation.flags === 'object' ? evaluation.flags : {};
-                const scores = evaluation?.scores && typeof evaluation.scores === 'object' ? evaluation.scores : {};
-                const isNotPresented = Boolean(flags.notPresented);
-                const isExempt = Boolean(flags.exempt);
-                if (isExempt) {
-                    return;
-                }
+                const criterionWeight = Number.isFinite(Number(item?.weight))
+                    ? Number(item.weight)
+                    : 1;
                 const scoringMode = item?.scoring?.mode === 'numeric' ? 'numeric' : 'competency';
                 const rawScore = scores[item.id];
                 let levelId = '';
@@ -636,7 +669,18 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
                 }
                 studentRecord.criteria.get(criterionId).push(evidence);
                 studentRecord.competencies.get(competencyId).push(evidence);
+                contributedEvidence = true;
             });
+
+            if (contributedEvidence) {
+                const stats = studentNpStats.get(studentId);
+                if (stats) {
+                    stats.total += 1;
+                    if (isNotPresented) {
+                        stats.np += 1;
+                    }
+                }
+            }
         });
     });
 
@@ -664,8 +708,16 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
             criteria: {},
             competencies: {},
             final: createEmptyTermGradeEntry(),
+            npSummary: createEmptyNpSummary(),
         };
         const previousStudentRecord = recordForOverrides?.students?.[studentId];
+
+        const npStats = studentNpStats.get(studentId) || { np: 0, total: 0 };
+        const npSummary = {
+            npCount: npStats.np,
+            totalCount: npStats.total,
+            percentage: npStats.total > 0 ? Math.round((npStats.np / npStats.total) * 100) : 0,
+        };
 
         let caFails = 0;
         let ceFails = 0;
@@ -694,6 +746,7 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
                         isLocked: true,
                     };
                 });
+                computedStudent.npSummary = npSummary;
                 return;
             }
 
@@ -798,6 +851,7 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
         let finalNumeric = '';
 
         if (ceEvidencesForFinal.length === 0) {
+            computedStudent.npSummary = npSummary;
             computedStudent.final = createEmptyTermGradeEntry();
             result.students[studentId] = computedStudent;
             return;
@@ -840,6 +894,8 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
             noteSymbols: finalNotes,
             isLocked: false,
         };
+
+        computedStudent.npSummary = npSummary;
 
         result.students[studentId] = computedStudent;
     });

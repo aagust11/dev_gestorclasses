@@ -1248,6 +1248,18 @@ function renderEvaluationTermGradesTab(classes) {
         .filter(student => studentIds.includes(student.id))
         .sort(sortStudentsByName);
 
+    const getStudentNpSummary = (studentId) => {
+        const summary = record?.students?.[studentId]?.npSummary || {};
+        const npCount = Number.isFinite(Number(summary.npCount)) ? Number(summary.npCount) : 0;
+        const totalCount = Number.isFinite(Number(summary.totalCount)) ? Number(summary.totalCount) : 0;
+        const percentage = Number.isFinite(Number(summary.percentage)) ? Number(summary.percentage) : 0;
+        return {
+            npCount,
+            totalCount,
+            percentage: totalCount > 0 ? Math.round(percentage) : 0,
+        };
+    };
+
     if (students.length === 0) {
         const calculationHint = `<p class="text-sm text-gray-600 dark:text-gray-300">${t('evaluation_grades_no_students')}</p>`;
         return `
@@ -1382,7 +1394,10 @@ function renderEvaluationTermGradesTab(classes) {
         });
 
         const studentCellsHtml = studentCells.join('');
-        return `<tr class="term-grade-row border-b border-gray-100 dark:border-gray-800"><th scope="row" class="term-grade-student-cell px-3 py-2 text-sm font-medium text-left text-gray-800 dark:text-gray-100 min-w-[12rem]">${escapeHtml(studentName)}</th>${studentCellsHtml}${finalCell}</tr>`;
+        const npSummary = getStudentNpSummary(student.id);
+        const npValue = `${npSummary.npCount}/${npSummary.totalCount} · ${npSummary.percentage}%`;
+        const npCell = `<td class="term-grade-cell term-grade-separator px-3 py-2 text-sm text-center align-middle">${escapeHtml(npValue)}</td>`;
+        return `<tr class="term-grade-row border-b border-gray-100 dark:border-gray-800"><th scope="row" class="term-grade-student-cell px-3 py-2 text-sm font-medium text-left text-gray-800 dark:text-gray-100 min-w-[12rem]">${escapeHtml(studentName)}</th>${npCell}${studentCellsHtml}${finalCell}</tr>`;
     }).join('');
 
     const totalVisibleColumns = competencies.reduce((sum, comp) => {
@@ -1394,7 +1409,7 @@ function renderEvaluationTermGradesTab(classes) {
         const isExpanded = hasCriteria ? (canToggle ? expandedCompetencyIds.has(competencyId) : true) : false;
         const visibleCriteria = isExpanded ? criteriaCount : 0;
         return sum + visibleCriteria + 1;
-    }, 1) + 1;
+    }, 2) + 1;
     const tableBodyHtml = rowsHtml || `<tr class="term-grade-row"><td colspan="${totalVisibleColumns}" class="px-3 py-4 text-sm text-center text-gray-600 dark:text-gray-300">${t('evaluation_grades_no_students')}</td></tr>`;
 
     const tableHtml = `
@@ -1402,6 +1417,7 @@ function renderEvaluationTermGradesTab(classes) {
             <thead class="term-grade-header-group bg-white dark:bg-gray-800">
                 <tr>
                     <th scope="col" rowspan="2" class="term-grade-student-header term-grade-header px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[12rem]">${t('evaluation_grades_student_column')}</th>
+                    <th scope="col" rowspan="2" class="term-grade-header term-grade-separator px-3 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">${t('evaluation_term_grades_np_column')}</th>
                     ${headerRow1}
                     <th scope="col" rowspan="2" class="term-grade-header term-grade-header--final term-grade-separator px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${t('evaluation_term_grades_final_label')}</th>
                 </tr>
