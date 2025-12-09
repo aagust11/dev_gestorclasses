@@ -617,6 +617,14 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
                 return;
             }
 
+            const stats = studentNpStats.get(studentId);
+            if (stats) {
+                stats.total += 1;
+                if (isNotPresented) {
+                    stats.np += 1;
+                }
+            }
+
             let contributedEvidence = false;
 
             rubricItems.forEach(item => {
@@ -671,16 +679,6 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
                 studentRecord.competencies.get(competencyId).push(evidence);
                 contributedEvidence = true;
             });
-
-            if (contributedEvidence) {
-                const stats = studentNpStats.get(studentId);
-                if (stats) {
-                    stats.total += 1;
-                    if (isNotPresented) {
-                        stats.np += 1;
-                    }
-                }
-            }
         });
     });
 
