@@ -2228,6 +2228,163 @@ export function renderStudentDetailView() {
 
     const annotationsHistoryContent = annotationsTimelineHtml || `<p class="text-gray-500 dark:text-gray-400">${t('no_session_notes')}</p>`;
 
+    const evaluationSummaryHtml = (() => {
+        const studentClasses = state.activities
+            .filter(activity => activity?.type === 'class' && Array.isArray(activity.studentIds) && activity.studentIds.includes(student.id))
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        if (studentClasses.length === 0) {
+            return `<p class="text-sm text-gray-500 dark:text-gray-400">${t('student_evaluation_summary_no_classes')}</p>`;
+        }
+
+        const locale = document.documentElement.lang || 'ca';
+        const formatTermRange = (term) => {
+            if (!term?.startDate || !term?.endDate) {
+                return '';
+            }
+            const start = new Date(`${term.startDate}T00:00:00`);
+            const end = new Date(`${term.endDate}T23:59:59`);
+            if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+                return '';
+            }
+            const startLabel = start.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const endLabel = end.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+            return `${startLabel} - ${endLabel}`;
+        };
+
+        const termEntries = [
+            { id: 'all', name: t('student_evaluation_summary_course_label'), startDate: '', endDate: '' },
+            ...(Array.isArray(state.terms) ? state.terms : []),
+        ];
+
+        return studentClasses.map(targetClass => {
+            const normalizedConfig = normalizeEvaluationConfig(state.evaluationSettings?.[targetClass.id]);
+            const levelOptions = Array.isArray(normalizedConfig?.competency?.levels)
+                ? normalizedConfig.competency.levels
+                : [];
+            const modality = normalizedConfig.modality;
+            const competencyItems = modality === EVALUATION_MODALITIES.NUMERIC
+                ? (Array.isArray(normalizedConfig.numeric?.categories) ? normalizedConfig.numeric.categories : [])
+                : (Array.isArray(targetClass.competencies) ? targetClass.competencies : []);
+
+            const termSectionsHtml = termEntries.map(term => {
+                const termLabel = term.id === 'all'
+                    ? t('student_evaluation_summary_course_label')
+                    : (term.name || t('student_evaluation_summary_term_label'));
+                const termRange = term.id === 'all' ? '' : formatTermRange(term);
+                const termRangeLabel = termRange ? `(${termRange})` : '';
+                const record = state.termGradeRecords?.[targetClass.id]?.[term.id] || null;
+                const entriesExist = Boolean(record && Object.keys(record.students || {}).length > 0);
+
+                const rowsHtml = competencyItems.map(item => {
+                    const itemId = item?.id || '';
+                    const label = modality === EVALUATION_MODALITIES.NUMERIC
+                        ? (item?.name?.trim() || t('student_evaluation_summary_category_fallback'))
+                        : (item?.code?.trim() || t('competency_without_code'));
+                    const description = modality === EVALUATION_MODALITIES.NUMERIC
+                        ? ''
+                        : (item?.description?.trim() || '');
+                    const entry = getTermGradeEntry(record, student.id, 'competencies', itemId);
+
+                    return `
+                        <tr class="border-b border-gray-100 dark:border-gray-800">
+                            <th scope="row" class="px-3 py-2 text-left align-middle">
+                                <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(label)}</div>
+                                ${description ? `<div class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(description)}</div>` : ''}
+                            </th>
+                            ${renderTermGradeCell(entry, {
+                                classId: targetClass.id,
+                                termId: term.id,
+                                studentId: student.id,
+                                scope: 'competencies',
+                                targetId: itemId,
+                                label,
+                                studentName: student.name,
+                                levelOptions,
+                            })}
+                        </tr>
+                    `;
+                }).join('');
+
+                const finalEntry = getTermGradeEntry(record, student.id, 'final', 'final');
+                const finalRowHtml = `
+                    <tr class="border-t border-gray-200 dark:border-gray-700">
+                        <th scope="row" class="px-3 py-2 text-left align-middle text-sm font-semibold text-gray-800 dark:text-gray-100">
+                            ${escapeHtml(t('evaluation_term_grades_final_label'))}
+                        </th>
+                        ${renderTermGradeCell(finalEntry, {
+                            classId: targetClass.id,
+                            termId: term.id,
+                            studentId: student.id,
+                            scope: 'final',
+                            targetId: 'final',
+                            label: t('evaluation_term_grades_final_label'),
+                            studentName: student.name,
+                            levelOptions,
+                            cellClasses: 'term-grade-cell--final term-grade-separator',
+                        })}
+                    </tr>
+                `;
+
+                const tableContent = competencyItems.length > 0
+                    ? `
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-left">
+                            <thead class="bg-gray-50 dark:bg-gray-800">
+                                <tr>
+                                    <th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">${t('student_evaluation_summary_competency_column')}</th>
+                                    <th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${t('student_evaluation_summary_grade_column')}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+                                ${rowsHtml}
+                                ${finalRowHtml}
+                            </tbody>
+                        </table>
+                    `
+                    : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('student_evaluation_summary_no_competencies')}</p>`;
+
+                const calculateButtonHtml = `
+                    <button data-action="calculate-term-grades" data-class-id="${escapeAttribute(targetClass.id)}" data-term-id="${escapeAttribute(term.id)}" class="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        <i data-lucide="calculator" class="w-4 h-4"></i>
+                        ${t('evaluation_term_grades_calculate_button')}
+                    </button>
+                `;
+                const recalcButtonHtml = `
+                    <button data-action="recalculate-term-final-grades" data-class-id="${escapeAttribute(targetClass.id)}" data-term-id="${escapeAttribute(term.id)}" class="inline-flex items-center gap-2 px-3 py-1.5 border border-blue-600 text-blue-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        ${t('evaluation_term_grades_recalculate_final_button')}
+                    </button>
+                `;
+                const emptyHint = entriesExist
+                    ? ''
+                    : `<p class="text-xs text-gray-500 dark:text-gray-400">${t('student_evaluation_summary_term_empty')}</p>`;
+
+                return `
+                    <div class="space-y-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <p class="text-sm font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(termLabel)} ${termRangeLabel ? `<span class="text-xs text-gray-500 dark:text-gray-400 ml-1">${escapeHtml(termRangeLabel)}</span>` : ''}</p>
+                                ${emptyHint}
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                ${calculateButtonHtml}
+                                ${recalcButtonHtml}
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">${tableContent}</div>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="space-y-4">
+                    <h4 class="text-base font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(targetClass.name || t('student_evaluation_summary_term_label'))}</h4>
+                    <div class="space-y-4">${termSectionsHtml}</div>
+                </div>
+            `;
+        }).join('');
+    })();
+
     return `
         <div class="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900/50 min-h-full">
             <div class="hidden sm:flex justify-between items-center mb-6 no-print">
@@ -2255,6 +2412,11 @@ export function renderStudentDetailView() {
                     <div>
                         <label for="edit-student-notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300">${t('general_notes_label')}</label>
                         <textarea id="edit-student-notes" data-action="edit-student-notes" data-student-id="${student.id}" placeholder="${t('general_notes_placeholder')}" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 h-32">${student.generalNotes || ''}</textarea>
+                    </div>
+                    <div class="border-t border-gray-200 dark:border-gray-700 pt-6">
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-200 mb-2">${t('student_evaluation_summary_title')}</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">${t('student_evaluation_summary_description')}</p>
+                        <div class="space-y-6">${evaluationSummaryHtml}</div>
                     </div>
                     <div class="border-t border-gray-200 dark:border-gray-700 pt-6">
                         <h3 class="text-lg font-medium text-gray-900 dark:text-gray-200 mb-3">${t('session_notes_history_title')}</h3>
