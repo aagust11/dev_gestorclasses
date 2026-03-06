@@ -211,6 +211,7 @@ function handleAction(action, element, event) {
         'filter-learning-activity-rubric-students', 'set-evaluation-tab', 'select-evaluation-class',
         'go-to-evaluation-for-learning-activity', 'select-settings-evaluation-class',
         'change-evaluation-modality', 'update-competency-level-value', 'update-competency-minimum',
+        'update-competency-weight',
         'update-competency-max-not-achieved', 'update-competency-aggregation',
         'set-evaluation-no-evidence-behavior', 'set-evaluation-no-evidence-level',
         'set-evaluation-np-treatment', 'save-evaluation-config', 'reset-evaluation-config', 'update-class-template',

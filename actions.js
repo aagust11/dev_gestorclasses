@@ -808,11 +808,15 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
             if (levelForAggregation && evidenceWeight <= 0 && compManual) {
                 evidenceWeight = 1;
             }
+
+            const customCompWeight = normalizedConfig.competency.competencyWeights?.[compId];
+            const finalCriterionWeight = typeof customCompWeight === 'number' ? customCompWeight : 1;
+
             if (levelForAggregation) {
                 ceEvidencesForFinal.push({
                     levelId: levelForAggregation,
                     activityWeight: evidenceWeight,
-                    criterionWeight: 1,
+                    criterionWeight: finalCriterionWeight,
                 });
             }
 
@@ -1363,6 +1367,25 @@ export const actionHandlers = {
         draft.competency.maxNotAchieved[scope] = rawValue === '' ? '' : Number(rawValue);
         if (Number.isNaN(draft.competency.maxNotAchieved[scope])) {
             draft.competency.maxNotAchieved[scope] = '';
+        }
+        clearEvaluationFeedback(classId);
+    },
+
+    'update-competency-weight': (id, element) => {
+        const classId = element?.dataset?.classId;
+        const competencyId = element?.dataset?.competencyId;
+        if (!classId || !competencyId) {
+            return;
+        }
+        const draft = ensureEvaluationDraft(classId);
+        if (!draft) return;
+        const rawValue = element.value;
+        if (!draft.competency.competencyWeights) {
+            draft.competency.competencyWeights = {};
+        }
+        draft.competency.competencyWeights[competencyId] = rawValue === '' ? '' : Number(rawValue);
+        if (Number.isNaN(draft.competency.competencyWeights[competencyId])) {
+            draft.competency.competencyWeights[competencyId] = '';
         }
         clearEvaluationFeedback(classId);
     },

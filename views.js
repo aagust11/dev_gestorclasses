@@ -3313,6 +3313,43 @@ export function renderSettingsView() {
                         </div>
                     </div>
                     <div>
+                        <h4 class="text-base font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_competency_weights_title')}</h4>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${t('evaluation_competency_weights_description')}</p>
+                        <div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            ${(() => {
+                                const selectedClass = state.activities.find(a => a.id === selectedClassId);
+                                const competencies = selectedClass?.competencies || [];
+                                if (competencies.length === 0) {
+                                    return `<p class="text-sm text-gray-500 dark:text-gray-400 col-span-full">${t('no_competencies_in_class')}</p>`;
+                                }
+                                return competencies.map(comp => {
+                                    const rawValue = draft?.competency?.competencyWeights?.[comp.id];
+                                    const inputValue = rawValue === '' || typeof rawValue === 'undefined' ? '' : rawValue;
+                                    return `
+                                        <div class="p-3 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50/50 dark:bg-gray-900/20">
+                                            <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1" for="comp-weight-${comp.id}">${escapeHtml(comp.code || comp.id)}</label>
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs text-gray-500 dark:text-gray-400">${t('evaluation_competency_weight_label')}</span>
+                                                <input
+                                                    id="comp-weight-${comp.id}"
+                                                    type="number"
+                                                    inputmode="decimal"
+                                                    min="0"
+                                                    step="0.1"
+                                                    value="${inputValue === '' ? '' : escapeAttribute(inputValue)}"
+                                                    data-action="update-competency-weight"
+                                                    data-class-id="${selectedClassId}"
+                                                    data-competency-id="${comp.id}"
+                                                    class="w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800"
+                                                />
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('');
+                            })()}
+                        </div>
+                    </div>
+                    <div>
                         <h4 class="text-base font-semibold text-gray-800 dark:text-gray-200">${t('evaluation_aggregation_label')}</h4>
                         <div class="mt-3 space-y-3">
                             ${aggregationHtml}

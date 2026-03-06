@@ -75,9 +75,10 @@ export function createDefaultEvaluationConfig() {
                 AE: 4,
             },
             maxNotAchieved: {
-                term: 0,
-                course: 0,
+                term: 2,
+                course: 2,
             },
+            competencyWeights: {},
             aggregation: COMPETENCY_AGGREGATIONS.WEIGHTED_AVERAGE,
             calculation: {
                 noEvidenceBehavior: NO_EVIDENCE_BEHAVIOR.LOWEST_LEVEL,
@@ -144,6 +145,17 @@ export function normalizeEvaluationConfig(rawConfig) {
         course: normalizeNumber(competency?.maxNotAchieved?.course, baseMax.course, { allowEmpty: false, min: 0 }),
     };
 
+    const rawCompetencyWeights = competency?.competencyWeights && typeof competency.competencyWeights === 'object'
+        ? competency.competencyWeights
+        : {};
+    const normalizedCompetencyWeights = {};
+    Object.entries(rawCompetencyWeights).forEach(([compId, weight]) => {
+        const normalizedWeight = Number(weight);
+        if (Number.isFinite(normalizedWeight) && normalizedWeight >= 0) {
+            normalizedCompetencyWeights[compId] = normalizedWeight;
+        }
+    });
+
     const aggregation = Object.values(COMPETENCY_AGGREGATIONS).includes(competency.aggregation)
         ? competency.aggregation
         : base.competency.aggregation;
@@ -201,6 +213,7 @@ export function normalizeEvaluationConfig(rawConfig) {
             levels: normalizedLevels,
             minimums: normalizedMinimums,
             maxNotAchieved: normalizedMax,
+            competencyWeights: normalizedCompetencyWeights,
             aggregation,
             calculation: {
                 noEvidenceBehavior,
