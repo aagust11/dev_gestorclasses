@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <title>Diario de clase (Local)</title>
+    <title>Diari de classe</title>
     
     <script>
       const stored = localStorage.getItem('theme');
@@ -18,7 +20,6 @@
 <script>
   tailwind.config = {
     darkMode: 'class'
-    // aquí puedes añadir más opciones
   };
 </script>
 
@@ -30,6 +31,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://unpkg.com/docx@7.3.0/build/index.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-200">
@@ -62,6 +64,18 @@
                     <button data-view="evaluation" class="nav-button flex items-center justify-start gap-3 w-full p-3 text-sm font-medium rounded-md transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white">
                         <div data-lucide="check-circle-2" class="w-5 h-5"></div>
                         <span data-i18n-key="nav_evaluation">Avaluació</span>
+                    </button>
+                    <button data-view="analytics" class="nav-button flex items-center justify-start gap-3 w-full p-3 text-sm font-medium rounded-md transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white">
+                        <div data-lucide="bar-chart-3" class="w-5 h-5"></div>
+                        <span data-i18n-key="nav_analytics">Rendiment</span>
+                    </button>
+                    <button data-view="seatingChart" class="nav-button flex items-center justify-start gap-3 w-full p-3 text-sm font-medium rounded-md transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white">
+                        <div data-lucide="layout-grid" class="w-5 h-5"></div>
+                        <span data-i18n-key="nav_seating_chart">Plànol</span>
+                    </button>
+                    <button data-view="search" class="nav-button flex items-center justify-start gap-3 w-full p-3 text-sm font-medium rounded-md transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white">
+                        <div data-lucide="search" class="w-5 h-5"></div>
+                        <span data-i18n-key="nav_search">Cerca</span>
                     </button>
                     <button data-view="settings" class="nav-button flex items-center justify-start gap-3 w-full p-3 text-sm font-medium rounded-md transition-colors text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white">
                         <div data-lucide="settings" class="w-5 h-5"></div>

@@ -1810,6 +1810,36 @@ export function renderLearningActivityEditorView() {
             <i data-lucide="trash-2" class="w-4 h-4"></i>
         </button>
     `;
+
+    const resources = Array.isArray(draft.resources) ? draft.resources : [];
+    const resourcesHtml = `
+        <div class="space-y-4 border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+            <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                <i data-lucide="link" class="w-4 h-4"></i>
+                ${t('resources_title')}
+            </h3>
+            <div class="space-y-2">
+                ${resources.map((res, index) => `
+                    <div class="flex items-center justify-between gap-2 p-2 bg-gray-50 dark:bg-gray-900/50 rounded border border-gray-100 dark:border-gray-800">
+                        <a href="${res.url}" target="_blank" class="text-sm text-blue-600 dark:text-blue-400 hover:underline truncate flex-1">
+                            ${res.title || res.url}
+                        </a>
+                        <button type="button" data-action="delete-resource" data-index="${index}" class="text-red-500 hover:text-red-700 p-1">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="flex gap-2">
+                <input type="text" id="new-resource-url" placeholder="${t('resource_url_label')}" class="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800">
+                <input type="text" id="new-resource-title" placeholder="${t('resource_title_label')}" class="w-1/3 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800">
+                <button type="button" data-action="add-resource" class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
+                    ${t('add')}
+                </button>
+            </div>
+        </div>
+    `;
+
     const criteriaModalHtml = !isCriteriaModalOpen ? '' : `
         <div class="fixed inset-0 z-40 flex items-center justify-center px-4 py-6">
             <div class="absolute inset-0 bg-gray-900/50 dark:bg-gray-900/70" data-action="close-learning-activity-criteria"></div>
@@ -1927,6 +1957,7 @@ export function renderLearningActivityEditorView() {
                         ${competencyGuideHtml}
                     </div>
 
+                    ${resourcesHtml}
                 </div>
             </div>
         </div>
@@ -4191,6 +4222,34 @@ export function renderActivityDetailView() {
         }).join('')}</ul>`
         : `<p class="text-sm text-gray-500 dark:text-gray-400">${t('no_active_learning_activities')}</p>`;
 
+    const resources = Array.isArray(entry.resources) ? entry.resources : [];
+    const resourcesHtml = `
+        <div class="space-y-3">
+            <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                <i data-lucide="link" class="w-4 h-4"></i>
+                ${t('resources_title')}
+            </h3>
+            <ul class="space-y-1">
+                ${resources.map((res, index) => `
+                    <li class="flex items-center justify-between gap-2 p-2 bg-gray-50 dark:bg-gray-900/50 rounded border border-gray-100 dark:border-gray-800">
+                        <a href="${res.url}" target="_blank" class="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate flex-1">
+                            ${res.title || res.url}
+                        </a>
+                        <button type="button" data-action="delete-session-resource" data-entry-id="${entryId}" data-index="${index}" class="text-red-500 hover:text-red-700 p-1">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </li>
+                `).join('')}
+            </ul>
+            <div class="flex gap-2">
+                <input type="text" id="new-session-resource-url" placeholder="${t('resource_url_label')}" class="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800">
+                <button type="button" data-action="add-session-resource" data-entry-id="${entryId}" class="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">
+                    ${t('add')}
+                </button>
+            </div>
+        </div>
+    `;
+
     const attendanceOptions = [
         {
             status: STUDENT_ATTENDANCE_STATUS.LATE_SHORT,
@@ -4394,4 +4453,230 @@ export function renderActivityDetailView() {
             </div>
         </div>
     `;
+}
+
+export function renderAnalyticsView() {
+    const classes = state.activities.filter(a => !a.parentId);
+    const selectedClassId = state.analyticsSelectedClassId || (classes[0]?.id);
+    const selectedClass = classes.find(c => c.id === selectedClassId);
+    const students = selectedClass ? state.students.filter(s => selectedClass.studentIds?.includes(s.id)) : [];
+    
+    const tabs = [
+        { id: 'class', label: t('analytics_class_tab'), icon: 'users' },
+        { id: 'student', label: t('analytics_student_tab'), icon: 'user' }
+    ];
+    const activeTab = state.analyticsTab || 'class';
+
+    const classOptions = classes.map(c => `<option value="${c.id}" ${c.id === selectedClassId ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+    const studentOptions = students.map(s => `<option value="${s.id}" ${s.id === state.analyticsSelectedStudentId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+
+    return `
+        <div class="p-6 space-y-6 bg-gray-50 dark:bg-gray-900/50 min-h-full">
+            <div class="max-w-7xl mx-auto space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">${t('analytics_view_title')}</h2>
+                    <div class="flex flex-wrap gap-3">
+                        <select data-action="analytics-change-class" class="p-2 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700">
+                            ${classOptions}
+                        </select>
+                        ${activeTab === 'student' ? `
+                            <select data-action="analytics-change-student" class="p-2 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700">
+                                <option value="">${t('select_student')}</option>
+                                ${studentOptions}
+                            </select>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <div class="flex border-b border-gray-200 dark:border-gray-700">
+                    ${tabs.map(tab => `
+                        <button data-action="analytics-change-tab" data-tab="${tab.id}" class="px-6 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}">
+                            <i data-lucide="${tab.icon}" class="w-4 h-4"></i>
+                            ${tab.label}
+                        </button>
+                    `).join('')}
+                </div>
+
+                <div id="analytics-content" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 min-h-[400px]">
+                        <h3 class="text-lg font-semibold mb-4">${t('analytics_average_score')}</h3>
+                        <div id="analytics-chart-main" class="w-full h-[300px]"></div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 min-h-[400px]">
+                        <h3 class="text-lg font-semibold mb-4">${t('analytics_competency_distribution')}</h3>
+                        <div id="analytics-chart-secondary" class="w-full h-[300px]"></div>
+                    </div>
+                    <div class="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 min-h-[400px]">
+                        <h3 class="text-lg font-semibold mb-4">${t('analytics_evolution_over_time')}</h3>
+                        <div id="analytics-chart-evolution" class="w-full h-[300px]"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+export function renderSeatingChartView() {
+    const classes = state.activities.filter(a => !a.parentId);
+    const selectedClassId = state.seatingChartSelectedClassId || (classes[0]?.id);
+    const selectedClass = classes.find(c => c.id === selectedClassId);
+    const students = selectedClass ? state.students.filter(s => selectedClass.studentIds?.includes(s.id)) : [];
+    
+    const chartData = state.seatingCharts[selectedClassId] || { positions: {}, rows: 5, cols: 6 };
+    const isEditMode = state.seatingChartEditMode;
+
+    const classOptions = classes.map(c => `<option value="${c.id}" ${c.id === selectedClassId ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+
+    return `
+        <div class="p-6 space-y-6 bg-gray-50 dark:bg-gray-900/50 min-h-full">
+            <div class="max-w-7xl mx-auto space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">${t('seating_chart_view_title')}</h2>
+                    <div class="flex flex-wrap gap-3">
+                        <select data-action="seating-chart-change-class" class="p-2 border rounded-md bg-white dark:bg-gray-800 dark:border-gray-700">
+                            ${classOptions}
+                        </select>
+                        <button data-action="seating-chart-toggle-edit" class="px-4 py-2 rounded-md ${isEditMode ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'} flex items-center gap-2">
+                            <i data-lucide="${isEditMode ? 'check' : 'edit-2'}" class="w-4 h-4"></i>
+                            ${isEditMode ? t('seating_chart_save') : t('seating_chart_edit_mode')}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-inner border border-gray-200 dark:border-gray-700 min-h-[600px] relative overflow-auto">
+                    <div class="mx-auto border-4 border-gray-300 dark:border-gray-600 w-48 h-12 flex items-center justify-center rounded-b-xl mb-12 text-gray-400 font-bold uppercase tracking-widest">
+                        ${t('teacher_desk')}
+                    </div>
+                    
+                    <div id="seating-grid" class="grid gap-4" style="grid-template-columns: repeat(${chartData.cols}, 1fr); grid-template-rows: repeat(${chartData.rows}, 1fr);">
+                        ${Array.from({ length: chartData.rows * chartData.cols }).map((_, i) => {
+                            const studentId = Object.keys(chartData.positions).find(id => chartData.positions[id] === i);
+                            const student = students.find(s => s.id === studentId);
+                            
+                            return `
+                                <div data-slot="${i}" class="aspect-square border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg flex items-center justify-center p-2 transition-colors ${isEditMode ? 'hover:border-blue-400 cursor-pointer' : ''}">
+                                    ${student ? `
+                                        <div data-student-id="${student.id}" class="w-full h-full bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-700 rounded-md p-2 flex flex-col items-center justify-center text-center shadow-sm ${isEditMode ? 'cursor-move' : ''}">
+                                            <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold mb-1">
+                                                ${student.name.charAt(0)}
+                                            </div>
+                                            <span class="text-[10px] font-medium leading-tight truncate w-full">${escapeHtml(student.name)}</span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+
+                    ${isEditMode ? `
+                        <div class="mt-8 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                            <p class="text-sm text-blue-800 dark:text-blue-200 flex items-center gap-2">
+                                <i data-lucide="info" class="w-4 h-4"></i>
+                                ${t('seating_chart_drag_hint')}
+                            </p>
+                            <div class="flex flex-wrap gap-2 mt-4">
+                                ${students.filter(s => !chartData.positions[s.id]).map(student => `
+                                    <div data-student-id="${student.id}" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2 text-xs cursor-move shadow-sm">
+                                        ${escapeHtml(student.name)}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+export function renderSearchView() {
+    const query = state.searchQuery || '';
+    const results = query.length >= 2 ? performGlobalSearch(query) : [];
+
+    return `
+        <div class="p-6 space-y-6 bg-gray-50 dark:bg-gray-900/50 min-h-full">
+            <div class="max-w-4xl mx-auto space-y-6">
+                <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">${t('search_view_title')}</h2>
+                
+                <div class="relative">
+                    <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5"></i>
+                    <input type="text" id="global-search-input" data-action="search-input" value="${escapeAttribute(query)}" placeholder="${t('search_placeholder')}" class="w-full pl-12 pr-4 py-4 text-lg border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+
+                <div id="search-results" class="space-y-4">
+                    ${query.length < 2 ? '' : results.length === 0 ? `
+                        <div class="text-center py-12">
+                            <i data-lucide="search-x" class="w-12 h-12 text-gray-300 mx-auto mb-4"></i>
+                            <p class="text-gray-500">${t('search_no_results')}</p>
+                        </div>
+                    ` : `
+                        <p class="text-sm text-gray-50">${t('search_results_count').replace('%COUNT%', results.length)}</p>
+                        <div class="space-y-3">
+                            ${results.map(res => `
+                                <div data-action="go-to-search-result" data-type="${res.type}" data-id="${res.id}" data-date="${res.date || ''}" class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:border-blue-400 cursor-pointer transition-colors">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${res.type === 'activity' ? 'bg-purple-100 text-purple-700' : res.type === 'student' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}">
+                                            ${res.type}
+                                        </span>
+                                        <span class="text-xs text-gray-400">${res.context}</span>
+                                    </div>
+                                    <h4 class="font-semibold text-gray-800 dark:text-gray-100">${escapeHtml(res.title)}</h4>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">${escapeHtml(res.snippet)}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function performGlobalSearch(query) {
+    const results = [];
+    const q = query.toLowerCase();
+
+    // Search in Activities
+    state.learningActivities.forEach(act => {
+        if (act.title?.toLowerCase().includes(q) || act.description?.toLowerCase().includes(q)) {
+            results.push({
+                type: 'activity',
+                id: act.id,
+                title: act.title,
+                snippet: act.description || '',
+                context: t('nav_activities')
+            });
+        }
+    });
+
+    // Search in Students
+    state.students.forEach(student => {
+        if (student.name?.toLowerCase().includes(q)) {
+            results.push({
+                type: 'student',
+                id: student.id,
+                title: student.name,
+                snippet: student.email || '',
+                context: t('nav_students')
+            });
+        }
+    });
+
+    // Search in Session Notes
+    Object.entries(state.classEntries).forEach(([id, entry]) => {
+        if (entry.planned?.toLowerCase().includes(q) || entry.completed?.toLowerCase().includes(q)) {
+            const [activityId, date] = id.split('_');
+            const activity = state.activities.find(a => a.id === activityId);
+            results.push({
+                type: 'session',
+                id: activityId,
+                date: date,
+                title: `${activity?.name || ''} (${date})`,
+                snippet: entry.planned || entry.completed,
+                context: t('nav_schedule')
+            });
+        }
+    });
+
+    return results;
 }

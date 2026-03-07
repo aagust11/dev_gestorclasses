@@ -69,6 +69,10 @@ export const state = {
     evaluationSettingsFeedback: {},
     termGradeRecords: {},
     termGradeExpandedCompetencies: {},
+    seatingCharts: {},
+    searchQuery: '',
+    analyticsSelectedClassId: null,
+    analyticsSelectedStudentId: null,
     dataFileHandle: null,
     dataFileName: '',
     dataPersistenceSupported: isFilePersistenceSupported,
@@ -543,6 +547,7 @@ function buildPersistedDataPayload() {
         settingsEvaluationSelectedClassId: state.settingsEvaluationSelectedClassId,
         termGradeRecords: state.termGradeRecords,
         termGradeExpandedCompetencies: state.termGradeExpandedCompetencies,
+        seatingCharts: state.seatingCharts,
     };
 }
 
@@ -605,6 +610,9 @@ function populateStateFromPersistedData(parsedData = {}, { resetUIState = true }
         : {};
     state.termGradeExpandedCompetencies = (parsedData.termGradeExpandedCompetencies && typeof parsedData.termGradeExpandedCompetencies === 'object')
         ? parsedData.termGradeExpandedCompetencies
+        : {};
+    state.seatingCharts = (parsedData.seatingCharts && typeof parsedData.seatingCharts === 'object')
+        ? parsedData.seatingCharts
         : {};
     state.evaluationSettingsFeedback = {};
 

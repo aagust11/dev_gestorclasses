@@ -3554,5 +3554,116 @@ export const actionHandlers = {
     'select-term': (id, element) => {
         state.selectedTermId = element.value;
         saveState();
+    },
+    'analytics-change-tab': (id, element) => {
+        state.analyticsTab = element.dataset.tab;
+    },
+    'analytics-change-class': (id, element) => {
+        state.analyticsSelectedClassId = element.value;
+        state.analyticsSelectedStudentId = null;
+    },
+    'analytics-change-student': (id, element) => {
+        state.analyticsSelectedStudentId = element.value;
+    },
+    'seating-chart-change-class': (id, element) => {
+        state.seatingChartSelectedClassId = element.value;
+    },
+    'seating-chart-toggle-edit': () => {
+        state.seatingChartEditMode = !state.seatingChartEditMode;
+        if (!state.seatingChartEditMode) {
+            saveState();
+        }
+    },
+    'seating-chart-move-student': (studentId, slotIndex) => {
+        const classId = state.seatingChartSelectedClassId || state.activities.filter(a => !a.parentId)[0]?.id;
+        if (!classId) return;
+        
+        if (!state.seatingCharts[classId]) {
+            state.seatingCharts[classId] = { positions: {}, rows: 5, cols: 6 };
+        }
+        
+        // Remove from old position if any
+        Object.keys(state.seatingCharts[classId].positions).forEach(id => {
+            if (state.seatingCharts[classId].positions[id] === slotIndex) {
+                delete state.seatingCharts[classId].positions[id];
+            }
+        });
+        
+        state.seatingCharts[classId].positions[studentId] = slotIndex;
+    },
+    'seating-chart-reset': () => {
+        const classId = state.seatingChartSelectedClassId;
+        if (classId && state.seatingCharts[classId]) {
+            state.seatingCharts[classId].positions = {};
+            saveState();
+        }
+    },
+    'search-input': (id, element) => {
+        state.searchQuery = element.value;
+    },
+    'go-to-search-result': (id, element) => {
+        const type = element.dataset.type;
+        const resultId = element.dataset.id;
+        const date = element.dataset.date;
+
+        if (type === 'activity') {
+            state.activeView = 'learningActivityEditor';
+            state.learningActivityDraft = JSON.parse(JSON.stringify(state.learningActivities.find(a => a.id === resultId)));
+        } else if (type === 'student') {
+            state.activeView = 'studentDetail';
+            state.selectedStudentId = resultId;
+        } else if (type === 'session') {
+            state.activeView = 'activityDetail';
+            state.selectedActivity = {
+                ...state.activities.find(a => a.id === resultId),
+                date: date
+            };
+        }
+    },
+    'add-resource': () => {
+        const urlInput = document.getElementById('new-resource-url');
+        const titleInput = document.getElementById('new-resource-title');
+        const url = urlInput?.value.trim();
+        const title = titleInput?.value.trim();
+
+        if (url && state.learningActivityDraft) {
+            if (!state.learningActivityDraft.resources) {
+                state.learningActivityDraft.resources = [];
+            }
+            state.learningActivityDraft.resources.push({ url, title });
+            urlInput.value = '';
+            titleInput.value = '';
+        }
+    },
+    'delete-resource': (id, element) => {
+        const index = parseInt(element.dataset.index);
+        if (state.learningActivityDraft && state.learningActivityDraft.resources) {
+            state.learningActivityDraft.resources.splice(index, 1);
+        }
+    },
+    'add-session-resource': (id, element) => {
+        const entryId = element.dataset.entryId;
+        const urlInput = document.getElementById('new-session-resource-url');
+        const url = urlInput?.value.trim();
+
+        if (url && entryId) {
+            if (!state.classEntries[entryId]) {
+                state.classEntries[entryId] = { planned: '', completed: '', annotations: {}, resources: [] };
+            }
+            if (!state.classEntries[entryId].resources) {
+                state.classEntries[entryId].resources = [];
+            }
+            state.classEntries[entryId].resources.push({ url });
+            urlInput.value = '';
+            saveState();
+        }
+    },
+    'delete-session-resource': (id, element) => {
+        const entryId = element.dataset.entryId;
+        const index = parseInt(element.dataset.index);
+        if (entryId && state.classEntries[entryId] && state.classEntries[entryId].resources) {
+            state.classEntries[entryId].resources.splice(index, 1);
+            saveState();
+        }
     }
 };

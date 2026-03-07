@@ -105,6 +105,9 @@ async function render() {
         case 'competencyDetail': viewContent = views.renderCompetencyDetailView(); break;
         case 'activityDetail': viewContent = views.renderActivityDetailView(); break;
         case 'studentDetail': viewContent = views.renderStudentDetailView(); break;
+        case 'analytics': viewContent = views.renderAnalyticsView(); break;
+        case 'seatingChart': viewContent = views.renderSeatingChartView(); break;
+        case 'search': viewContent = views.renderSearchView(); break;
         default: viewContent = views.renderScheduleView();
     }
     mainContent.innerHTML = `<div class="animate-fade-in">${viewContent}</div>`;
@@ -112,6 +115,14 @@ async function render() {
     updateMobileHeader();
     lucide.createIcons();
     attachEventListeners();
+
+    if (state.activeView === 'analytics') {
+        renderAnalyticsCharts();
+    }
+
+    if (state.activeView === 'seatingChart') {
+        initSeatingChartDragAndDrop();
+    }
 
     if (state.activeView === 'evaluation' && state.pendingEvaluationHighlightActivityId) {
         const activityId = state.pendingEvaluationHighlightActivityId;
@@ -157,7 +168,10 @@ function updateMobileHeader() {
         studentDetail: 'student_detail_view_title',
         competencyDetail: 'competency_detail_view_title',
         learningActivityEditor: 'activities_editor_header',
-        learningActivityRubric: 'learning_activity_rubric_view_title'
+        learningActivityRubric: 'learning_activity_rubric_view_title',
+        analytics: 'analytics_view_title',
+        seatingChart: 'seating_chart_view_title',
+        search: 'search_view_title'
     };
     mobileHeaderTitle.textContent = t(keyMap[state.activeView] || 'app_title');
 }
@@ -217,7 +231,11 @@ function handleAction(action, element, event) {
         'set-evaluation-np-treatment', 'save-evaluation-config', 'reset-evaluation-config', 'update-class-template',
         'set-term-grade-calculation-mode', 'calculate-term-grades', 'recalculate-term-final-grades', 'clear-term-grades', 'update-term-grade-numeric', 'update-term-grade-level',
         'update-learning-activity-term',
-        'choose-data-file', 'create-data-file', 'reload-data-file', 'clear-data-file-selection'
+        'choose-data-file', 'create-data-file', 'reload-data-file', 'clear-data-file-selection',
+        'analytics-change-tab', 'analytics-change-class', 'analytics-change-student',
+        'seating-chart-change-class', 'seating-chart-toggle-edit', 'seating-chart-reset',
+        'search-input', 'go-to-search-result', 'add-resource', 'delete-resource',
+        'add-session-resource', 'delete-session-resource'
     ];
     const forceRenderActions = ['toggle-rubric-not-presented', 'toggle-rubric-delivered-late'];
     const shouldForceRender = forceRenderActions.includes(action);
@@ -415,4 +433,173 @@ async function init() {
     });
 }
 
+function renderAnalyticsCharts() {
+    const mainChartContainer = document.getElementById('analytics-chart-main');
+    const secondaryChartContainer = document.getElementById('analytics-chart-secondary');
+    const evolutionChartContainer = document.getElementById('analytics-chart-evolution');
+
+    if (!mainChartContainer || !secondaryChartContainer || !evolutionChartContainer) return;
+
+    // Mock data for now, in a real app we would compute this from state
+    const data = [
+        { label: 'AE', value: 30 },
+        { label: 'AN', value: 45 },
+        { label: 'AS', value: 20 },
+        { label: 'NA', value: 5 }
+    ];
+
+    // Simple D3 Bar Chart for Main
+    const width = mainChartContainer.clientWidth;
+    const height = 300;
+    const margin = { top: 20, right: 20, bottom: 40, left: 40 };
+
+    d3.select(mainChartContainer).selectAll('*').remove();
+    const svg = d3.select(mainChartContainer)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+    const x = d3.scaleBand()
+        .domain(data.map(d => d.label))
+        .range([margin.left, width - margin.right])
+        .padding(0.1);
+
+    const y = d3.scaleLinear()
+        .domain([0, d3.max(data, d => d.value)])
+        .nice()
+        .range([height - margin.bottom, margin.top]);
+
+    svg.append('g')
+        .attr('fill', 'steelblue')
+        .selectAll('rect')
+        .data(data)
+        .join('rect')
+        .attr('x', d => x(d.label))
+        .attr('y', d => y(d.value))
+        .attr('height', d => y(0) - y(d.value))
+        .attr('width', x.bandwidth());
+
+    svg.append('g')
+        .attr('transform', `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(x));
+
+    svg.append('g')
+        .attr('transform', `translate(${margin.left},0)`)
+        .call(d3.axisLeft(y));
+
+    // Secondary Chart (Pie)
+    d3.select(secondaryChartContainer).selectAll('*').remove();
+    const radius = Math.min(width, height) / 2 - margin.top;
+    const g = d3.select(secondaryChartContainer)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height)
+        .append('g')
+        .attr('transform', `translate(${width / 2},${height / 2})`);
+
+    const color = d3.scaleOrdinal()
+        .domain(data.map(d => d.label))
+        .range(d3.schemeCategory10);
+
+    const pie = d3.pie().value(d => d.value);
+    const arc = d3.arc().innerRadius(0).outerRadius(radius);
+
+    const arcs = g.selectAll('.arc')
+        .data(pie(data))
+        .enter().append('g')
+        .attr('class', 'arc');
+
+    arcs.append('path')
+        .attr('d', arc)
+        .attr('fill', d => color(d.data.label));
+
+    // Evolution Chart (Line)
+    d3.select(evolutionChartContainer).selectAll('*').remove();
+    const evolutionData = [
+        { date: new Date(2023, 8, 1), value: 5 },
+        { date: new Date(2023, 9, 1), value: 6 },
+        { date: new Date(2023, 10, 1), value: 7 },
+        { date: new Date(2023, 11, 1), value: 6.5 },
+        { date: new Date(2024, 0, 1), value: 8 }
+    ];
+
+    const xEv = d3.scaleTime()
+        .domain(d3.extent(evolutionData, d => d.date))
+        .range([margin.left, width - margin.right]);
+
+    const yEv = d3.scaleLinear()
+        .domain([0, 10])
+        .range([height - margin.bottom, margin.top]);
+
+    const line = d3.line()
+        .x(d => xEv(d.date))
+        .y(d => yEv(d.value));
+
+    const svgEv = d3.select(evolutionChartContainer)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+    svgEv.append('path')
+        .datum(evolutionData)
+        .attr('fill', 'none')
+        .attr('stroke', 'steelblue')
+        .attr('stroke-width', 2)
+        .attr('d', line);
+
+    svgEv.append('g')
+        .attr('transform', `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(xEv));
+
+    svgEv.append('g')
+        .attr('transform', `translate(${margin.left},0)`)
+        .call(d3.axisLeft(yEv));
+}
+
+function initSeatingChartDragAndDrop() {
+    const grid = document.getElementById('seating-grid');
+    if (!grid || !state.seatingChartEditMode) return;
+
+    const students = document.querySelectorAll('[data-student-id]');
+    const slots = document.querySelectorAll('[data-slot]');
+
+    students.forEach(student => {
+        student.setAttribute('draggable', 'true');
+        student.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', student.dataset.studentId);
+            student.classList.add('opacity-50');
+        });
+        student.addEventListener('dragend', () => {
+            student.classList.remove('opacity-50');
+        });
+    });
+
+    slots.forEach(slot => {
+        slot.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            slot.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
+        });
+        slot.addEventListener('dragleave', () => {
+            slot.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
+        });
+        slot.addEventListener('drop', (e) => {
+            e.preventDefault();
+            slot.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
+            const studentId = e.dataTransfer.getData('text/plain');
+            const slotIndex = parseInt(slot.dataset.slot);
+            
+            actionHandlers['seating-chart-move-student'](studentId, slotIndex);
+            render();
+        });
+    });
+}
+
 init();
+
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(err => {
+            console.log('ServiceWorker registration failed: ', err);
+        });
+    });
+}
