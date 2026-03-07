@@ -276,9 +276,12 @@ function getActivityEffectiveEndDate(activity) {
     return null;
 }
 
-function isActivityWithinTerm(activity, termRange, mode = 'dates') {
+function isActivityWithinTerm(activity, termRange, mode = 'dates', termId = null) {
     if (!termRange) {
         return true;
+    }
+    if (activity.termId) {
+        return activity.termId === termId;
     }
     const effectiveEnd = getActivityEffectiveEndDate(activity);
     if (!effectiveEnd) {
@@ -393,7 +396,7 @@ function calculateNumericTermGrades(targetClass, normalizedConfig, termId, mode 
     const calculationMode = mode === 'accumulated' ? 'accumulated' : 'dates';
     const relevantActivities = state.learningActivities
         .filter(activity => activity && activity.classId === classId)
-        .filter(activity => isActivityWithinTerm(activity, termRange, calculationMode))
+        .filter(activity => isActivityWithinTerm(activity, termRange, calculationMode, termId))
         .filter(activity => {
             const rubricItems = Array.isArray(activity?.rubric?.items) ? activity.rubric.items : [];
             return rubricItems.some(item => item?.scoring?.mode === 'numeric');
@@ -543,6 +546,25 @@ function calculateNumericTermGrades(targetClass, normalizedConfig, termId, mode 
     return result;
 }
 
+function recalculateTermFinalGrades(classId, termId) {
+    if (!classId) return;
+    const record = ensureTermGradeRecordStructure(classId, termId);
+    const calculated = calculateTermGradesForClassTerm(classId, termId, state.termGradeCalculationMode, record);
+
+    Object.entries(calculated.students || {}).forEach(([studentId, computedStudent]) => {
+        const targetStudent = ensureTermGradeStudent(record, studentId);
+        const finalEntry = computedStudent?.final || createEmptyTermGradeEntry();
+        targetStudent.final = {
+            numericScore: finalEntry.numericScore,
+            levelId: finalEntry.levelId,
+            isManual: false,
+            noteSymbols: Array.isArray(finalEntry.noteSymbols) ? [...finalEntry.noteSymbols] : [],
+            isLocked: Boolean(finalEntry.isLocked),
+        };
+        targetStudent.npSummary = computedStudent.npSummary;
+    });
+}
+
 export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates', existingRecord = null) {
     const targetClass = state.activities.find(activity => activity && activity.type === 'class' && activity.id === classId);
     if (!targetClass) {
@@ -586,7 +608,7 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
     const calculationMode = mode === 'accumulated' ? 'accumulated' : 'dates';
     const relevantActivities = state.learningActivities
         .filter(activity => activity && activity.classId === classId)
-        .filter(activity => isActivityWithinTerm(activity, termRange, calculationMode));
+        .filter(activity => isActivityWithinTerm(activity, termRange, calculationMode, termId));
 
     relevantActivities.forEach(activity => {
         const rubric = activity?.rubric;
@@ -1533,6 +1555,7 @@ export const actionHandlers = {
                 criteria: {},
                 competencies: {},
                 final: previousStudent?.final?.isManual ? previousStudent.final : computedStudent.final,
+                npSummary: computedStudent.npSummary,
             };
 
             Object.entries(computedStudent.criteria || {}).forEach(([criterionId, computedEntry]) => {
@@ -1554,25 +1577,8 @@ export const actionHandlers = {
 
     'recalculate-term-final-grades': (id, element) => {
         const classId = element?.dataset?.classId;
-        if (!classId) {
-            return;
-        }
         const termId = element?.dataset?.termId || 'all';
-        const record = ensureTermGradeRecordStructure(classId, termId);
-        const calculated = calculateTermGradesForClassTerm(classId, termId, state.termGradeCalculationMode, record);
-
-        Object.entries(calculated.students || {}).forEach(([studentId, computedStudent]) => {
-            const targetStudent = ensureTermGradeStudent(record, studentId);
-            const finalEntry = computedStudent?.final || createEmptyTermGradeEntry();
-            targetStudent.final = {
-                numericScore: finalEntry.numericScore,
-                levelId: finalEntry.levelId,
-                isManual: false,
-                noteSymbols: Array.isArray(finalEntry.noteSymbols) ? [...finalEntry.noteSymbols] : [],
-                isLocked: Boolean(finalEntry.isLocked),
-            };
-        });
-
+        recalculateTermFinalGrades(classId, termId);
         saveState();
     },
 
@@ -1606,8 +1612,9 @@ export const actionHandlers = {
         const record = ensureTermGradeRecordStructure(classId, termId);
         const entry = ensureTermGradeEntry(record, studentId, scope, scope === 'final' ? 'final' : targetId);
         entry.numericScore = element.value;
-        entry.isManual = true;
+        entry.isManual = (element.value !== '');
         entry.noteSymbols = [];
+        recalculateTermFinalGrades(classId, termId);
         saveState();
     },
 
@@ -1623,11 +1630,12 @@ export const actionHandlers = {
         const record = ensureTermGradeRecordStructure(classId, termId);
         const entry = ensureTermGradeEntry(record, studentId, scope, scope === 'final' ? 'final' : targetId);
         entry.levelId = element.value || '';
-        entry.isManual = true;
+        entry.isManual = (element.value !== '');
         entry.noteSymbols = [];
         if (element) {
             element.dataset.selectedLevel = element.value || 'none';
         }
+        recalculateTermFinalGrades(classId, termId);
         saveState();
     },
 
@@ -1910,6 +1918,10 @@ export const actionHandlers = {
         if (!state.learningActivityDraft) return;
         state.learningActivityDraft.endDate = element.value;
     },
+    'update-learning-activity-term': (id, element) => {
+        if (!state.learningActivityDraft) return;
+        state.learningActivityDraft.termId = element.value || '';
+    },
     'update-learning-activity-status': (id, element) => {
         if (!state.learningActivityDraft) return;
         const value = element.value;
@@ -2019,6 +2031,7 @@ export const actionHandlers = {
                 updatedAt: now,
                 startDate: draft.startDate || '',
                 endDate: draft.endDate || '',
+                termId: draft.termId || '',
                 rubric: normalizedRubric,
                 status: persistedStatus,
                 statusIsManual: Boolean(draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)),
@@ -2037,6 +2050,7 @@ export const actionHandlers = {
                 updatedAt: now,
                 startDate: draft.startDate || '',
                 endDate: draft.endDate || '',
+                termId: draft.termId || '',
                 rubric: normalizedRubric,
                 status: persistedStatus,
                 statusIsManual: Boolean(draft.statusIsManual && Object.values(LEARNING_ACTIVITY_STATUS).includes(draft.status)),

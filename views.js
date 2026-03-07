@@ -1877,7 +1877,7 @@ export function renderLearningActivityEditorView() {
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_description_label')}</label>
                             <textarea data-action="update-learning-activity-description" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md h-36" placeholder="${t('activities_form_description_placeholder')}">${draft.description || ''}</textarea>
                         </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('start_date')}</label>
                             <input type="date" id="learning-activity-start-date" value="${startDateValue}" data-action="update-learning-activity-start-date" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
@@ -1885,6 +1885,15 @@ export function renderLearningActivityEditorView() {
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('end_date')}</label>
                             <input type="date" id="learning-activity-end-date" value="${endDateValue}" data-action="update-learning-activity-end-date" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_term_label')}</label>
+                            <select data-action="update-learning-activity-term" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 rounded-md">
+                                <option value="" ${!draft.termId ? 'selected' : ''}>${t('activities_form_term_auto')}</option>
+                                ${state.terms.map(term => `
+                                    <option value="${term.id}" ${draft.termId === term.id ? 'selected' : ''}>${escapeHtml(term.name)}</option>
+                                `).join('')}
+                            </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">${t('activities_form_status_label')}</label>
@@ -2355,6 +2364,11 @@ export function renderStudentDetailView() {
                         ${t('evaluation_term_grades_recalculate_final_button')}
                     </button>
                 `;
+                const clearButtonHtml = `
+                    <button data-action="clear-term-grades" data-class-id="${escapeAttribute(targetClass.id)}" data-term-id="${escapeAttribute(term.id)}" class="inline-flex items-center gap-2 px-3 py-1.5 border border-red-600 text-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20" title="${escapeAttribute(t('evaluation_term_grades_clear_button'))}">
+                        <i data-lucide="eraser" class="w-4 h-4"></i>
+                    </button>
+                `;
                 const emptyHint = entriesExist
                     ? ''
                     : `<p class="text-xs text-gray-500 dark:text-gray-400">${t('student_evaluation_summary_term_empty')}</p>`;
@@ -2369,6 +2383,7 @@ export function renderStudentDetailView() {
                             <div class="flex flex-wrap gap-2">
                                 ${calculateButtonHtml}
                                 ${recalcButtonHtml}
+                                ${clearButtonHtml}
                             </div>
                         </div>
                         <div class="overflow-x-auto">${tableContent}</div>
