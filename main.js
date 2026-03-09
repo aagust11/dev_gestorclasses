@@ -235,7 +235,7 @@ function handleAction(action, element, event) {
         'analytics-change-tab', 'analytics-change-class', 'analytics-change-student',
         'seating-chart-change-class', 'seating-chart-toggle-edit', 'seating-chart-reset',
         'search-input', 'go-to-search-result', 'add-resource', 'delete-resource',
-        'add-session-resource', 'delete-session-resource'
+        'add-session-resource', 'delete-session-resource', 'select-evaluation-term'
     ];
     const forceRenderActions = ['toggle-rubric-not-presented', 'toggle-rubric-delivered-late'];
     const shouldForceRender = forceRenderActions.includes(action);
@@ -245,8 +245,9 @@ function handleAction(action, element, event) {
 
         if (shouldForceRender || reRenderActions.includes(action)) {
             const previousSelection = (() => {
-                if (action === 'filter-learning-activity-rubric-students' && element instanceof HTMLInputElement) {
+                if ((action === 'filter-learning-activity-rubric-students' || action === 'search-input') && element instanceof HTMLInputElement) {
                     return {
+                        id: element.id,
                         start: element.selectionStart,
                         end: element.selectionEnd
                     };
@@ -268,9 +269,9 @@ function handleAction(action, element, event) {
                         targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
                 }
-                if (action === 'filter-learning-activity-rubric-students') {
+                if (action === 'filter-learning-activity-rubric-students' || action === 'search-input') {
                     requestAnimationFrame(() => {
-                        const searchInput = document.getElementById('rubric-student-search');
+                        const searchInput = document.getElementById(action === 'search-input' ? 'global-search-input' : 'rubric-student-search');
                         if (searchInput instanceof HTMLInputElement) {
                             searchInput.focus({ preventScroll: true });
                             const { start, end } = previousSelection || {};

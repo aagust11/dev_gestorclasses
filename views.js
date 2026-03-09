@@ -634,6 +634,9 @@ function renderEvaluationActivitiesTab(classes) {
         if (!termRange) {
             return true;
         }
+        if (activity.termId) {
+            return activity.termId === selectedTermId;
+        }
         const start = activity.startDate ? new Date(`${activity.startDate}T00:00:00`) : null;
         const end = activity.endDate ? new Date(`${activity.endDate}T23:59:59`) : null;
         if (start && end) {
@@ -776,7 +779,14 @@ function renderEvaluationActivitiesTab(classes) {
         `;
     }).join('');
 
-    return `<div class="space-y-6">${classCards}</div>`;
+    const { termFilterHtml } = buildEvaluationTermFilter(selectedTermId);
+
+    return `
+        <div class="space-y-6">
+            ${termFilterHtml}
+            ${classCards}
+        </div>
+    `;
 }
 
 function buildEvaluationClassSelection(classes) {
@@ -854,6 +864,9 @@ function renderEvaluationGradesTab(classes) {
     const filterBySelectedTerm = (activity) => {
         if (!termRange) {
             return true;
+        }
+        if (activity.termId) {
+            return activity.termId === selectedTermId;
         }
         const start = activity.startDate ? new Date(`${activity.startDate}T00:00:00`) : null;
         const end = activity.endDate ? new Date(`${activity.endDate}T23:59:59`) : null;

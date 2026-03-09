@@ -1296,7 +1296,28 @@ function handleRecordEdit(array, recordId, result) {
     return false;
 }
 
-export const actionHandlers = {
+export function markStudentExemptForCorrectedActivities(classId, studentId) {
+    if (!classId || !studentId) return;
+    
+    state.learningActivities.forEach(activity => {
+        if (activity.classId === classId && activity.status === LEARNING_ACTIVITY_STATUS.CORRECTED) {
+            if (!activity.rubric) {
+                activity.rubric = createEmptyRubric();
+            }
+            if (!activity.rubric.evaluations) {
+                activity.rubric.evaluations = {};
+            }
+            if (!activity.rubric.evaluations[studentId]) {
+                activity.rubric.evaluations[studentId] = { flags: {} };
+            } else if (!activity.rubric.evaluations[studentId].flags) {
+                activity.rubric.evaluations[studentId].flags = {};
+            }
+            activity.rubric.evaluations[studentId].flags.exempt = true;
+        }
+    });
+}
+
+const actionHandlers = {
     // --- Settings Tab Action ---
     'select-settings-tab': (id, element) => {
         const tabId = element.dataset.tabId;
@@ -2488,6 +2509,7 @@ export const actionHandlers = {
         
         if (!activity.studentIds?.includes(student.id)) {
             activity.studentIds = [...(activity.studentIds || []), student.id];
+            markStudentExemptForCorrectedActivities(activity.id, student.id);
         }
         
         nameInput.value = '';
@@ -2501,6 +2523,7 @@ export const actionHandlers = {
 
         if (activity && studentId && !activity.studentIds?.includes(studentId)) {
             activity.studentIds.push(studentId);
+            markStudentExemptForCorrectedActivities(activity.id, studentId);
             saveState();
         }
     },
@@ -3319,6 +3342,7 @@ export const actionHandlers = {
             }
             if (!activity.studentIds?.includes(student.id)) {
                 activity.studentIds = [...(activity.studentIds || []), student.id];
+                markStudentExemptForCorrectedActivities(activity.id, student.id);
             }
         });
         
@@ -3667,3 +3691,5 @@ export const actionHandlers = {
         }
     }
 };
+
+export { actionHandlers };
