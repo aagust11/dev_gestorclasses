@@ -648,7 +648,7 @@ function renderEvaluationActivitiesTab(classes) {
         if (end) {
             return end >= termRange.start && end <= termRange.end;
         }
-        return true;
+        return false;
     };
 
     if (classes.length === 0) {
@@ -879,7 +879,7 @@ function renderEvaluationGradesTab(classes) {
         if (end) {
             return end >= termRange.start && end <= termRange.end;
         }
-        return true;
+        return false;
     };
 
     if (!selectedClass) {
@@ -1000,15 +1000,18 @@ function renderEvaluationGradesTab(classes) {
             const identifier = activity.shortCode?.trim();
             const fallbackTitle = activity.title?.trim() || t('activities_untitled_label');
             const headerLabel = identifier || fallbackTitle;
-            return `<th scope="col" colspan="${colSpan}" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">${escapeHtml(headerLabel)}</th>`;
+            return `<th scope="col" colspan="${colSpan}" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 term-grade-separator">${escapeHtml(headerLabel)}</th>`;
         }).join('');
 
         const headerRow2 = learningActivities.map(activity => {
             const rubricItems = Array.isArray(activity.rubric?.items) ? activity.rubric.items : [];
             if (rubricItems.length === 0) {
-                return `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center">${t('evaluation_grades_no_criteria')}</th>`;
+                return `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-center term-grade-separator">${t('evaluation_grades_no_criteria')}</th>`;
             }
-            return rubricItems.map(item => `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-left min-w-[11rem]">${getCriterionHeader(item)}</th>`).join('');
+            return rubricItems.map((item, idx) => {
+                const isLast = idx === rubricItems.length - 1;
+                return `<th scope="col" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 text-left min-w-[11rem] ${isLast ? 'term-grade-separator' : ''}">${getCriterionHeader(item)}</th>`;
+            }).join('');
         }).join('');
 
         const rowsHtml = students.map(student => {
@@ -1061,10 +1064,10 @@ function renderEvaluationGradesTab(classes) {
                             : isDeliveredLate
                                 ? deliveredLateIcon
                                 : '';
-                    return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}><span class="${textClasses}">${escapeHtml(label)}</span>${statusIcon}</td>`;
+                    return `<td class="px-3 py-2 text-sm text-center align-middle term-grade-separator"${tooltipAttr}><span class="${textClasses}">${escapeHtml(label)}</span>${statusIcon}</td>`;
                 }
 
-                return rubricItems.map(item => {
+                return rubricItems.map((item, idx) => {
                     const scoringMode = item.scoring?.mode === 'numeric' ? 'numeric' : 'competency';
                     const rawScore = scores[item.id];
                     const scoreLevel = scoringMode === 'numeric' ? '' : (rawScore || '');
@@ -1166,7 +1169,8 @@ function renderEvaluationGradesTab(classes) {
                             : isDeliveredLate
                                 ? deliveredLateIcon
                                 : '';
-                    return `<td class="px-3 py-2 text-sm text-center align-middle"${tooltipAttr}>${labelHtml}${statusIcon}</td>`;
+                    const isLast = idx === rubricItems.length - 1;
+                    return `<td class="px-3 py-2 text-sm text-center align-middle ${isLast ? 'term-grade-separator' : ''}"${tooltipAttr}>${labelHtml}${statusIcon}</td>`;
                 }).join('');
             }).join('');
 
@@ -1174,7 +1178,7 @@ function renderEvaluationGradesTab(classes) {
             const percentage = summary.total > 0 ? Math.round((summary.np / summary.total) * 100) : 0;
             const npValue = `${summary.np}/${summary.total} · ${percentage}%`;
 
-            return `<tr class="border-b border-gray-100 dark:border-gray-800"><th scope="row" class="px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 text-left min-w-[12rem]">${escapeHtml(student.name)}</th><td class="px-3 py-2 text-sm text-center align-middle">${escapeHtml(npValue)}</td>${activityCells}</tr>`;
+            return `<tr class="border-b border-gray-100 dark:border-gray-800"><th scope="row" class="px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 text-left min-w-[12rem]">${escapeHtml(student.name)}</th><td class="px-3 py-2 text-sm text-center align-middle term-grade-separator">${escapeHtml(npValue)}</td>${activityCells}</tr>`;
         }).join('');
 
         contentHtml = `
@@ -1183,7 +1187,7 @@ function renderEvaluationGradesTab(classes) {
                     <thead class="bg-white dark:bg-gray-800">
                         <tr>
                             <th scope="col" rowspan="2" class="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 min-w-[12rem]">${t('evaluation_grades_student_column')}</th>
-                            <th scope="col" rowspan="2" class="px-3 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">${t('evaluation_term_grades_np_column')}</th>
+                            <th scope="col" rowspan="2" class="px-3 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 term-grade-separator">${t('evaluation_term_grades_np_column')}</th>
                             ${headerRow1}
                         </tr>
                         <tr>

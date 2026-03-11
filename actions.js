@@ -285,7 +285,7 @@ function isActivityWithinTerm(activity, termRange, mode = 'dates', termId = null
     }
     const effectiveEnd = getActivityEffectiveEndDate(activity);
     if (!effectiveEnd) {
-        return true;
+        return false;
     }
     if (mode === 'accumulated') {
         return effectiveEnd <= termRange.end;
@@ -656,14 +656,6 @@ export function calculateTermGradesForClassTerm(classId, termId, mode = 'dates',
             const isExempt = Boolean(flags.exempt);
             if (isExempt) {
                 return;
-            }
-
-            const stats = studentNpStats.get(studentId);
-            if (stats) {
-                stats.total += 1;
-                if (isNotPresented) {
-                    stats.np += 1;
-                }
             }
 
             let contributedEvidence = false;
